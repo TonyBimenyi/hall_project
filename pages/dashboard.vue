@@ -3,148 +3,200 @@
     <div class="container">
       <ReusablePageHeader />
 
+      <!-- LOGIN GATE -->
       <div v-if="!isLoggedIn" class="login-gate card">
         <h2>Connexion requise</h2>
-        <p>Connectez-vous pour accéder à votre tableau de bord et voir vos réservations.</p>
+        <p>
+          Connectez-vous pour accéder à votre tableau de bord et voir vos réservations.
+        </p>
         <div class="login-actions">
           <NuxtLink to="/login" class="btn btn-primary btn-sm">Se connecter</NuxtLink>
           <NuxtLink to="/register" class="btn btn-outline btn-sm">Créer un compte</NuxtLink>
         </div>
       </div>
 
+      <!-- DASHBOARD -->
       <template v-else>
-      <div class="head-row">
-        <div>
-          <h2 class="page-title">Bonjour {{ displayName }}</h2>
-          <p class="page-subtitle">Suivez vos réservations et vos paiements en un coup d’œil.</p>
-        </div>
-        <NuxtLink to="/book" class="btn btn-primary">Nouvelle réservation</NuxtLink>
-      </div>
+        <div class="head-row">
+          <div>
+            <h2 class="page-title">Bonjour {{ displayName }}</h2>
+            <p class="page-subtitle">
+              Suivez vos réservations et vos paiements en un coup d’œil.
+            </p>
+          </div>
 
-      <div class="stats-grid">
-        <article class="card stat-card">
-          <span class="label">Mes réservations</span>
-          <strong>{{ myBookings.length }}</strong>
-        </article>
-        <article class="card stat-card">
-          <span class="label">En attente</span>
-          <strong>{{ pendingCount }}</strong>
-        </article>
-        <article class="card stat-card">
-          <span class="label">Confirmées</span>
-          <strong>{{ confirmedCount }}</strong>
-        </article>
-        <article class="card stat-card">
-          <span class="label">Montant total</span>
-          <strong>{{ totalAmount.toLocaleString() }} Fbu</strong>
-        </article>
-      </div>
+          <NuxtLink to="/book" class="btn btn-primary">
+            Nouvelle réservation
+          </NuxtLink>
+        </div>
 
-      <div class="card table-card">
-        <div class="table-head">
-          <h3>Historique de réservation</h3>
-          <button class="btn btn-outline btn-sm" @click="fetchBookings">Actualiser</button>
+        <!-- STATS -->
+        <div class="stats-grid">
+          <article class="card stat-card">
+            <span class="label">Mes réservations</span>
+            <strong>{{ myBookings.length }}</strong>
+          </article>
+
+          <article class="card stat-card">
+            <span class="label">En attente</span>
+            <strong>{{ pendingCount }}</strong>
+          </article>
+
+          <article class="card stat-card">
+            <span class="label">Confirmées</span>
+            <strong>{{ confirmedCount }}</strong>
+          </article>
+
+          <article class="card stat-card">
+            <span class="label">Montant total</span>
+            <strong>{{ totalAmount.toLocaleString() }} Fbu</strong>
+          </article>
         </div>
-        <div class="table-wrap">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>Référence</th>
-                <th>Événement</th>
-                <th>Période</th>
-                <th>Montant</th>
-                <th>Statut</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="booking in myBookings" :key="booking.id">
-                <td>#BR-{{ booking.id }}</td>
-                <td>{{ booking.event_type }}</td>
-                <td>{{ booking.start_date }} → {{ booking.end_date }}</td>
-                <td>{{ Number(booking.total_price || 0).toLocaleString() }} Fbu</td>
-                <td>
-                  <span class="badge" :class="statusClass(booking.status)">
-                    {{ statusText(booking.status) }}
-                  </span>
-                </td>
-              </tr>
-              <tr v-if="!loading && myBookings.length === 0">
-                <td colspan="5" class="empty">Aucune réservation trouvée.</td>
-              </tr>
-              <tr v-if="loading">
-                <td colspan="5" class="empty">Chargement...</td>
-              </tr>
-            </tbody>
-          </table>
+
+        <!-- TABLE -->
+        <div class="card table-card">
+          <div class="table-head">
+            <h3>Historique de réservation</h3>
+            <button class="btn btn-outline btn-sm" @click="fetchBookings">
+              Actualiser
+            </button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Référence</th>
+                  <th>Événement</th>
+                  <th>Période</th>
+                  <th>Montant</th>
+                  <th>Statut</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <tr v-for="booking in myBookings" :key="booking.id">
+                  <td>#BR-{{ booking.id }}</td>
+                  <td>{{ booking.event_type }}</td>
+                  <td>{{ booking.start_date }} → {{ booking.end_date }}</td>
+                  <td>{{ Number(booking.total_price || 0).toLocaleString() }} Fbu</td>
+                  <td>
+                    <span class="badge" :class="statusClass(booking.status)">
+                      {{ statusText(booking.status) }}
+                    </span>
+                  </td>
+                </tr>
+
+                <tr v-if="!loading && myBookings.length === 0">
+                  <td colspan="5" class="empty">Aucune réservation trouvée.</td>
+                </tr>
+
+                <tr v-if="loading">
+                  <td colspan="5" class="empty">Chargement...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
       </template>
     </div>
   </section>
 </template>
 
-<script setup>
+<script>
 import { api } from '~/composables/useApi'
 import { notify } from '~/composables/useNotification'
 
-const loading = ref(false)
-const bookings = ref([])
-const currentUser = ref({})
-const isLoggedIn = ref(false)
+export default {
+  data() {
+    return {
+      loading: false,
+      bookings: [],
+      currentUser: {},
+      isLoggedIn: false
+    }
+  },
 
-const displayName = computed(() => {
-  const username = currentUser.value?.username
-  if (!username) return 'Client'
-  return username.charAt(0).toUpperCase() + username.slice(1)
-})
+  computed: {
+    myBookings() {
+      return this.bookings
+    },
 
-const myBookings = computed(() => {
-  return bookings.value
-})
+    pendingCount() {
+      return this.myBookings.filter(b => b.status === 'pending').length
+    },
 
-const pendingCount = computed(() => myBookings.value.filter(b => b.status === 'pending').length)
-const confirmedCount = computed(() => myBookings.value.filter(b => b.status === 'confirmed').length)
-const totalAmount = computed(() => myBookings.value.reduce((sum, b) => sum + Number(b.total_price || 0), 0))
+    confirmedCount() {
+      return this.myBookings.filter(b => b.status === 'confirmed').length
+    },
 
-const statusClass = (status) => {
-  if (status === 'confirmed') return 'success'
-  if (status === 'cancelled') return 'danger'
-  if (status === 'paid') return 'info'
-  return 'warning'
-}
+    totalAmount() {
+      return this.myBookings.reduce(
+        (sum, b) => sum + Number(b.total_price || 0),
+        0
+      )
+    },
 
-const statusText = (status) => {
-  if (status === 'confirmed') return 'Confirmée'
-  if (status === 'cancelled') return 'Annulée'
-  if (status === 'paid') return 'Payée'
-  return 'En attente'
-}
+    displayName() {
+      const first = this.currentUser?.first_name || ''
+      const last = this.currentUser?.last_name || ''
 
-const fetchBookings = async () => {
-  if (!isLoggedIn.value) return
-  loading.value = true
-  try {
-    const response = await api.get('bookings/')
-    bookings.value = Array.isArray(response.data) ? response.data : []
-  } catch {
-    notify('Impossible de charger les réservations', 'danger')
-    bookings.value = []
-  } finally {
-    loading.value = false
+      if (!first && !last) return 'Client'
+
+      const safeFirst = first ? first.charAt(0).toUpperCase() + first.slice(1) : ''
+      const safeLast = last ? last.charAt(0).toUpperCase() + last.slice(1) : ''
+
+      return `${safeFirst} ${safeLast}`.trim()
+    }
+  },
+
+  methods: {
+    statusClass(status) {
+      if (status === 'confirmed') return 'success'
+      if (status === 'cancelled') return 'danger'
+      if (status === 'paid') return 'info'
+      return 'warning'
+    },
+
+    statusText(status) {
+      if (status === 'confirmed') return 'Confirmée'
+      if (status === 'cancelled') return 'Annulée'
+      if (status === 'paid') return 'Payée'
+      return 'En attente'
+    },
+
+    async fetchBookings() {
+      if (!this.isLoggedIn) return
+
+      this.loading = true
+
+      try {
+        const response = await api.get('bookings/')
+        this.bookings = Array.isArray(response.data) ? response.data : []
+      } catch {
+        notify('Impossible de charger les réservations', 'danger')
+        this.bookings = []
+      } finally {
+        this.loading = false
+      }
+    }
+  },
+
+  mounted() {
+    try {
+      this.currentUser = JSON.parse(localStorage.getItem('user') || '{}')
+    } catch {
+      this.currentUser = {}
+    }
+
+    this.isLoggedIn = !!localStorage.getItem('access_token')
+
+    if (this.isLoggedIn) {
+      this.fetchBookings()
+    }
   }
 }
-
-onMounted(() => {
-  try {
-    currentUser.value = JSON.parse(localStorage.getItem('user') || '{}')
-  } catch {
-    currentUser.value = {}
-  }
-  isLoggedIn.value = !!localStorage.getItem('access_token')
-  if (isLoggedIn.value) fetchBookings()
-})
 </script>
-
 <style scoped>
 .client-page {
   background: #f8fafc;

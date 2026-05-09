@@ -1,4 +1,3 @@
-<!-- layouts/admin.vue -->
 <template>
   <div class="layout">
     <!-- Sidebar -->
@@ -7,6 +6,7 @@
         <div class="logo">
           <i class="fa-solid fa-building"></i>
         </div>
+
         <div class="title" v-if="!isCollapsed">
           <span class="name">Admin Hall</span>
           <span class="sub">Tableau de bord Réception</span>
@@ -27,28 +27,34 @@
       </nav>
     </aside>
 
-    <!-- Main area -->
+    <!-- Main -->
     <div class="main">
       <header class="header">
         <button class="menu-btn" @click="toggleSidebar">
           <i class="fa-solid fa-bars"></i>
         </button>
+
         <h1 class="page-title">
           {{ currentPageTitle }}
         </h1>
 
-        <!-- User profile section on the right -->
+        <!-- USER -->
         <div class="user-profile" @click="showProfileMenu = !showProfileMenu">
           <div class="avatar-wrapper">
-            <div class="avatar">MN</div>
+            <div class="avatar">
+              {{ userInitials }}
+            </div>
             <div class="status-dot"></div>
           </div>
+
           <div class="user-info">
-            <span class="user-name"> Mike Niyonkuru <i class="fas fa-chevron-down"></i>
-</span>
+            <span class="user-name">
+              {{ currentUserName }}
+              <i class="fas fa-chevron-down"></i>
+            </span>
           </div>
 
-          <!-- Dropdown menu (appears on click/hover) -->
+          <!-- Dropdown -->
           <div v-if="showProfileMenu" class="profile-dropdown">
             <button class="dropdown-item logout" @click="logout">
               <i class="fas fa-sign-out-alt"></i>
@@ -73,82 +79,120 @@
 </template>
 
 <script>
+import { api } from '~/composables/useApi'
+
 export default {
   data() {
     return {
       isCollapsed: false,
       isMobile: false,
       showProfileMenu: false,
+
+      currentUser: {},
+
       navigation: [
-        { title: 'Tableau de bord',   url: '/admin',          icon: 'fa-solid fa-house' },
-        { title: 'Calendrier',        url: '/admin/calendar', icon: 'fa-solid fa-calendar-alt' },
-        { title: 'Salles',            url: '/admin/halls',    icon: 'fa-solid fa-building' },
-        { title: 'Réservations',      url: '/admin/bookings', icon: 'fa-solid fa-calendar-days' },
-        { title: 'Paiements',         url: '/admin/payments', icon: 'fa-solid fa-credit-card' },
-        { title: 'Matériel',          url: '/admin/materials',icon: 'fa-solid fa-box-open' },
-        { title: 'Dépenses',          url: '/admin/expenses', icon: 'fa-solid fa-money-bill-transfer' },
-        { title: 'Personnel',         url: '/admin/personnel',icon: 'fa-solid fa-users' },
-        { title: 'Rapports',          url: '/admin/reports',  icon: 'fa-solid fa-chart-line' }
+        { title: 'Tableau de bord', url: '/admin', icon: 'fa-solid fa-house' },
+        { title: 'Calendrier', url: '/admin/calendar', icon: 'fa-solid fa-calendar-alt' },
+        { title: 'Salles', url: '/admin/halls', icon: 'fa-solid fa-building' },
+        { title: 'Réservations', url: '/admin/bookings', icon: 'fa-solid fa-calendar-days' },
+        { title: 'Paiements', url: '/admin/payments', icon: 'fa-solid fa-credit-card' },
+        { title: 'Matériel', url: '/admin/materials', icon: 'fa-solid fa-box-open' },
+        { title: 'Dépenses', url: '/admin/expenses', icon: 'fa-solid fa-money-bill-transfer' },
+        { title: 'Personnel', url: '/admin/personnel', icon: 'fa-solid fa-users' },
+        { title: 'Rapports', url: '/admin/reports', icon: 'fa-solid fa-chart-line' }
       ]
     }
   },
+
   computed: {
     currentPageTitle() {
       const item = this.navigation.find(i =>
-        this.$route.path === i.url || this.$route.path.startsWith(i.url + '/')
+        this.$route.path === i.url ||
+        this.$route.path.startsWith(i.url + '/')
       )
       return item ? item.title : 'Tableau de bord'
+    },
+
+    currentUserName() {
+      if (!this.currentUser) return 'Utilisateur'
+
+      const first = this.currentUser.first_name || ''
+      const last = this.currentUser.last_name || ''
+
+      const full = `${first} ${last}`.trim()
+
+      return full || this.currentUser.email || 'Utilisateur'
+    },
+
+    userInitials() {
+      const first = this.currentUser?.first_name?.[0] || ''
+      const last = this.currentUser?.last_name?.[0] || ''
+
+      return (first + last).toUpperCase() || 'U'
     }
   },
+
   mounted() {
     if (process.client) {
       this.isMobile = window.innerWidth <= 992
-      if (this.isMobile) {
-        this.isCollapsed = true
-      }
+      if (this.isMobile) this.isCollapsed = true
+
       window.addEventListener('resize', this.handleResize)
+      document.addEventListener('click', this.handleOutsideClick)
     }
 
-    // Close dropdown when clicking outside
-    document.addEventListener('click', this.handleOutsideClick)
+    this.fetchMe()
   },
+
   beforeDestroy() {
     if (process.client) {
       window.removeEventListener('resize', this.handleResize)
     }
     document.removeEventListener('click', this.handleOutsideClick)
   },
+
   methods: {
+    async fetchMe() {
+      try {
+        const res = await api.get('me/')
+        this.currentUser = res.data
+      } catch {
+        this.currentUser = {}
+      }
+    },
+
     toggleSidebar() {
       this.isCollapsed = !this.isCollapsed
     },
+
     isActive(url) {
       if (url === '/admin') {
         return this.$route.path === '/admin'
       }
       return this.$route.path.startsWith(url)
     },
+
     handleResize() {
       this.isMobile = window.innerWidth <= 992
       if (this.isMobile && !this.isCollapsed) {
         this.isCollapsed = true
       }
     },
+
     handleOutsideClick(e) {
       if (!this.$el.contains(e.target)) {
         this.showProfileMenu = false
       }
     },
+
     logout() {
-      // Add your logout logic here (e.g. clear token, redirect to login)
-      console.log('Logging out...')
+      localStorage.removeItem('access_token')
       this.$router.push('/login')
       this.showProfileMenu = false
     }
   }
 }
 </script>
-
 <style scoped>
 .layout {
   display: flex;
