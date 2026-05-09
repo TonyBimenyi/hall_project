@@ -4,19 +4,25 @@
       <ReusablePageHeader />
 
       <div class="book-layout">
+        <!-- CALENDAR -->
         <article class="card calendar-card">
           <div class="calendar-top">
             <h2>Calendrier</h2>
             <div class="calendar-nav">
-              <button class="icon-btn" @click="prevMonth"><i class="fas fa-chevron-left"></i></button>
+              <button class="icon-btn" @click="prevMonth">
+                <i class="fas fa-chevron-left"></i>
+              </button>
               <strong>{{ monthLabel }}</strong>
-              <button class="icon-btn" @click="nextMonth"><i class="fas fa-chevron-right"></i></button>
+              <button class="icon-btn" @click="nextMonth">
+                <i class="fas fa-chevron-right"></i>
+              </button>
             </div>
           </div>
 
           <div class="weekday-row">
-            <span v-for="d in ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']" :key="d">{{ d }}</span>
+            <span v-for="d in weekdays" :key="d">{{ d }}</span>
           </div>
+
           <div class="calendar-grid">
             <button
               v-for="cell in calendarCells"
@@ -47,64 +53,123 @@
             <span>Début</span>
             <strong>{{ startDate || 'Non sélectionné' }}</strong>
           </div>
+
           <div class="summary-item">
             <span>Fin</span>
             <strong>{{ endDate || startDate || 'Non sélectionné' }}</strong>
           </div>
+
           <div class="summary-item controls">
-            <button class="btn btn-outline btn-sm" @click="clearDates">Effacer</button>
+            <button class="btn btn-outline btn-sm" @click="clearDates">
+              Effacer
+            </button>
           </div>
         </article>
 
+        <!-- SUMMARY -->
         <article class="card summary-card">
           <h2>Résumé de réservation</h2>
-          <div class="summary-item"><span>Salle</span><strong>{{ selectedHall?.name || 'Sélectionnez une salle' }}</strong></div>
-          <div class="summary-item"><span>Capacité</span><strong>{{ selectedHall ? `${selectedHall.capacity} pers.` : '-' }}</strong></div>
-          <div class="summary-item"><span>Prix / jour</span><strong>{{ selectedHall ? `${Number(selectedHall.price_per_day || 0).toLocaleString()} Fbu` : '-' }}</strong></div>
-          <div class="summary-item"><span>Durée</span><strong>{{ totalDays }} jour(s)</strong></div>
+
+          <div class="summary-item">
+            <span>Salle</span>
+            <strong>{{ selectedHall?.name || 'Sélectionnez une salle' }}</strong>
+          </div>
+
+          <div class="summary-item">
+            <span>Capacité</span>
+            <strong>
+              {{ selectedHall ? `${selectedHall.capacity} pers.` : '-' }}
+            </strong>
+          </div>
+
+          <div class="summary-item">
+            <span>Prix / jour</span>
+            <strong>
+              {{
+                selectedHall
+                  ? `${Number(selectedHall.price_per_day || 0).toLocaleString()} Fbu`
+                  : '-'
+              }}
+            </strong>
+          </div>
+
+          <div class="summary-item">
+            <span>Durée</span>
+            <strong>{{ totalDays }} jour(s)</strong>
+          </div>
+
           <div class="summary-total">
             <span>Total estimé</span>
             <strong>{{ totalPrice.toLocaleString() }} Fbu</strong>
           </div>
         </article>
 
+        <!-- FORM -->
         <article class="card form-card">
           <h2>Informations client</h2>
+
           <div v-if="!isLoggedIn" class="login-gate">
             <div class="login-gate-title">Connexion requise</div>
             <div class="login-gate-text">
               Veuillez vous connecter pour confirmer une réservation en ligne.
             </div>
             <div class="login-gate-actions">
-              <NuxtLink to="/login" class="btn btn-primary btn-sm">Se connecter</NuxtLink>
-              <NuxtLink to="/register" class="btn btn-outline btn-sm">Créer un compte</NuxtLink>
+              <NuxtLink to="/login" class="btn btn-primary btn-sm"
+                >Se connecter</NuxtLink
+              >
+              <NuxtLink to="/register" class="btn btn-outline btn-sm"
+                >Créer un compte</NuxtLink
+              >
             </div>
           </div>
+
           <form class="admin-form" @submit.prevent="submitBooking">
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label">Nom complet</label>
-                <input v-model="form.customer_name" class="form-input" required placeholder="Ex: Jean Dupont" />
+                <input
+                  v-model="form.customer_name"
+                  class="form-input"
+                  required
+                />
               </div>
+
               <div class="form-group">
                 <label class="form-label">Email</label>
-                <input v-model="form.customer_email" type="email" class="form-input" required placeholder="email@exemple.com" />
+                <input
+                  v-model="form.customer_email"
+                  type="email"
+                  class="form-input"
+                  required
+                />
               </div>
             </div>
 
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label">Salle</label>
-                <select v-model.number="form.hall" class="form-select" required @change="clearDates">
+                <select
+                  v-model.number="form.hall"
+                  class="form-select"
+                  required
+                  @change="clearDates"
+                >
                   <option disabled value="">Sélectionner une salle</option>
-                  <option v-for="hall in halls" :key="hall.id" :value="hall.id">
-                    {{ hall.name }} - {{ Number(hall.price_per_day || 0).toLocaleString() }} Fbu/jour
+                  <option
+                    v-for="hall in halls"
+                    :key="hall.id"
+                    :value="hall.id"
+                  >
+                    {{ hall.name }} -
+                    {{ Number(hall.price_per_day || 0).toLocaleString() }}
+                    Fbu/jour
                   </option>
                 </select>
               </div>
+
               <div class="form-group">
                 <label class="form-label">Type d'événement</label>
-                <select v-model="form.event_type" class="form-select" required>
+                <select v-model="form.event_type" class="form-select">
                   <option value="Mariage">Mariage</option>
                   <option value="Séminaire">Séminaire</option>
                   <option value="Conférence">Conférence</option>
@@ -118,17 +183,27 @@
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label">Date début</label>
-                <input :value="startDate" type="text" class="form-input" readonly />
+                <input :value="startDate" class="form-input" readonly />
               </div>
+
               <div class="form-group">
                 <label class="form-label">Date fin</label>
-                <input :value="endDate || startDate" type="text" class="form-input" readonly />
+                <input :value="endDate || startDate" class="form-input" readonly />
               </div>
             </div>
 
             <div class="actions">
-              <button class="btn btn-primary" :disabled="isSubmitting || !isLoggedIn">
-                {{ !isLoggedIn ? 'Connectez-vous pour réserver' : (isSubmitting ? 'Envoi en cours...' : 'Confirmer la réservation') }}
+              <button
+                class="btn btn-primary"
+                :disabled="isSubmitting || !isLoggedIn"
+              >
+                {{
+                  !isLoggedIn
+                    ? 'Connectez-vous pour réserver'
+                    : isSubmitting
+                    ? 'Envoi en cours...'
+                    : 'Confirmer la réservation'
+                }}
               </button>
             </div>
           </form>
@@ -138,217 +213,294 @@
   </section>
 </template>
 
-<script setup>
+<script>
 import { api } from '~/composables/useApi'
 import { notify } from '~/composables/useNotification'
 
-const halls = ref([])
-const calendarRanges = ref([])
-const isSubmitting = ref(false)
-const isLoggedIn = ref(false)
-const viewMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
-const rangeStart = ref(null)
-const rangeEnd = ref(null)
-const currentUser = ref({})
-
-const router = useRouter()
-
-const form = ref({
-  customer_name: '',
-  customer_email: '',
-  hall: '',
-  event_type: 'Mariage',
-  status: 'pending'
-})
-
-const selectedHall = computed(() => halls.value.find(h => h.id === form.value.hall))
-const startDate = computed(() => rangeStart.value ? formatYMD(rangeStart.value) : '')
-const endDate = computed(() => rangeEnd.value ? formatYMD(rangeEnd.value) : '')
-const monthLabel = computed(() => viewMonth.value.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }))
-
-const bookedSet = computed(() => {
-  if (!form.value.hall) return new Set()
-  const set = new Set()
-  const ranges = calendarRanges.value.filter(r => Number(r.hall_id) === Number(form.value.hall))
-  for (const r of ranges) {
-    const start = new Date(r.start_date)
-    const end = new Date(r.end_date)
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      set.add(formatYMD(new Date(d)))
-    }
-  }
-  return set
-})
-
-const calendarCells = computed(() => {
-  const first = new Date(viewMonth.value.getFullYear(), viewMonth.value.getMonth(), 1)
-  const firstWeekday = (first.getDay() + 6) % 7
-  const start = new Date(first)
-  start.setDate(first.getDate() - firstWeekday)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(start)
-    d.setDate(start.getDate() + i)
-    const ymd = formatYMD(d)
+export default {
+  data() {
     return {
-      key: ymd + '-' + i,
-      date: d,
-      currentMonth: d.getMonth() === viewMonth.value.getMonth(),
-      isPast: d < today,
-      isBooked: bookedSet.value.has(ymd)
+      halls: [],
+      calendarRanges: [],
+      isSubmitting: false,
+      isLoggedIn: false,
+      viewMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      rangeStart: null,
+      rangeEnd: null,
+      currentUser: {},
+      form: {
+        customer_name: '',
+        customer_email: '',
+        hall: '',
+        event_type: 'Mariage',
+        status: 'pending'
+      },
+      weekdays: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
     }
-  })
-})
+  },
 
-const totalDays = computed(() => {
-  if (!rangeStart.value) return 0
-  if (!rangeEnd.value) return 1
-  return Math.floor((rangeEnd.value - rangeStart.value) / (1000 * 60 * 60 * 24)) + 1
-})
+  computed: {
+    selectedHall() {
+      return this.halls.find(h => h.id === this.form.hall)
+    },
 
-const totalPrice = computed(() => {
-  if (!selectedHall.value || totalDays.value <= 0) return 0
-  return Math.round(Number(selectedHall.value.price_per_day || 0) * totalDays.value)
-})
+    startDate() {
+      return this.rangeStart ? this.formatYMD(this.rangeStart) : ''
+    },
 
-const fetchHalls = async () => {
-  try {
-    const response = await api.get('halls/')
-    halls.value = response.data
-    if (halls.value.length && !form.value.hall) {
-      form.value.hall = halls.value[0].id
+    endDate() {
+      return this.rangeEnd ? this.formatYMD(this.rangeEnd) : ''
+    },
+
+    monthLabel() {
+      return this.viewMonth.toLocaleDateString('fr-FR', {
+        month: 'long',
+        year: 'numeric'
+      })
+    },
+
+    bookedSet() {
+      const set = new Set()
+      if (!this.form.hall) return set
+
+      const ranges = this.calendarRanges.filter(
+        r => Number(r.hall_id) === Number(this.form.hall)
+      )
+
+      for (const r of ranges) {
+        const start = new Date(r.start_date)
+        const end = new Date(r.end_date)
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          set.add(this.formatYMD(new Date(d)))
+        }
+      }
+      return set
+    },
+
+    calendarCells() {
+      const first = new Date(
+        this.viewMonth.getFullYear(),
+        this.viewMonth.getMonth(),
+        1
+      )
+
+      const firstWeekday = (first.getDay() + 6) % 7
+      const start = new Date(first)
+      start.setDate(first.getDate() - firstWeekday)
+
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      return Array.from({ length: 42 }, (_, i) => {
+        const d = new Date(start)
+        d.setDate(start.getDate() + i)
+
+        const ymd = this.formatYMD(d)
+
+        return {
+          key: ymd + '-' + i,
+          date: d,
+          currentMonth: d.getMonth() === this.viewMonth.getMonth(),
+          isPast: d < today,
+          isBooked: this.bookedSet.has(ymd)
+        }
+      })
+    },
+
+    totalDays() {
+      if (!this.rangeStart) return 0
+      if (!this.rangeEnd) return 1
+
+      return (
+        Math.floor(
+          (this.rangeEnd - this.rangeStart) / (1000 * 60 * 60 * 24)
+        ) + 1
+      )
+    },
+
+    totalPrice() {
+      if (!this.selectedHall || this.totalDays <= 0) return 0
+      return Math.round(
+        Number(this.selectedHall.price_per_day || 0) * this.totalDays
+      )
     }
-  } catch {
-    notify('Impossible de charger les salles', 'danger')
-  }
-}
+  },
 
-const fetchCalendar = async () => {
-  try {
-    const response = await api.get('bookings/calendar/', {
-      params: form.value.hall ? { hall: form.value.hall } : {}
-    })
-    calendarRanges.value = Array.isArray(response.data) ? response.data : []
-  } catch {
-    calendarRanges.value = []
-  }
-}
+  methods: {
+    formatYMD(d) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        '0'
+      )}-${String(d.getDate()).padStart(2, '0')}`
+    },
 
-const fetchMe = async () => {
-  try {
-    const response = await api.get('me/')
-    currentUser.value = response.data
-    if (!form.value.customer_email && response.data?.email) form.value.customer_email = response.data.email
-    const fullName = `${response.data?.first_name || ''} ${response.data?.last_name || ''}`.trim()
-    if (!form.value.customer_name && fullName) form.value.customer_name = fullName
-  } catch {
-    currentUser.value = {}
-  }
-}
+    isSameDate(a, b) {
+      return (
+        a &&
+        b &&
+        this.formatYMD(a) === this.formatYMD(b)
+      )
+    },
 
-const formatYMD = (d) => {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+    isInRange(d, s, e) {
+      return s && e && d > s && d < e
+    },
 
-const isSameDate = (a, b) => !!a && !!b && formatYMD(a) === formatYMD(b)
-const isInRange = (d, s, e) => !!s && !!e && d > s && d < e
+    prevMonth() {
+      this.viewMonth = new Date(
+        this.viewMonth.getFullYear(),
+        this.viewMonth.getMonth() - 1,
+        1
+      )
+    },
 
-const prevMonth = () => {
-  viewMonth.value = new Date(viewMonth.value.getFullYear(), viewMonth.value.getMonth() - 1, 1)
-}
+    nextMonth() {
+      this.viewMonth = new Date(
+        this.viewMonth.getFullYear(),
+        this.viewMonth.getMonth() + 1,
+        1
+      )
+    },
 
-const nextMonth = () => {
-  viewMonth.value = new Date(viewMonth.value.getFullYear(), viewMonth.value.getMonth() + 1, 1)
-}
+    clearDates() {
+      this.rangeStart = null
+      this.rangeEnd = null
+    },
 
-const clearDates = () => {
-  rangeStart.value = null
-  rangeEnd.value = null
-}
+    hasConflict(start, end) {
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        if (this.bookedSet.has(this.formatYMD(new Date(d)))) return true
+      }
+      return false
+    },
 
-const hasConflict = (start, end) => {
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    if (bookedSet.value.has(formatYMD(new Date(d)))) return true
-  }
-  return false
-}
+    onDayClick(date) {
+      if (!this.rangeStart || this.rangeEnd) {
+        this.rangeStart = date
+        this.rangeEnd = null
+        return
+      }
 
-const onDayClick = (date) => {
-  if (!rangeStart.value || (rangeStart.value && rangeEnd.value)) {
-    rangeStart.value = date
-    rangeEnd.value = null
-    return
-  }
-  if (date < rangeStart.value) {
-    rangeStart.value = date
-    rangeEnd.value = null
-    return
-  }
-  if (hasConflict(rangeStart.value, date)) {
-    notify('Cette période contient des dates déjà réservées', 'warning')
-    return
-  }
-  rangeEnd.value = date
-}
+      if (date < this.rangeStart) {
+        this.rangeStart = date
+        this.rangeEnd = null
+        return
+      }
 
-const submitBooking = async () => {
-  if (!isLoggedIn.value) {
-    notify('Veuillez vous connecter pour réserver', 'warning')
-    router.push('/login')
-    return
-  }
-  if (!rangeStart.value) {
-    notify('Veuillez sélectionner au moins une date', 'warning')
-    return
-  }
-  if (totalPrice.value <= 0) {
-    notify('Montant total invalide', 'warning')
-    return
-  }
+      if (this.hasConflict(this.rangeStart, date)) {
+        notify('Cette période contient des dates déjà réservées', 'warning')
+        return
+      }
 
-  try {
-    isSubmitting.value = true
-    const finalEnd = rangeEnd.value || rangeStart.value
-    if (hasConflict(rangeStart.value, finalEnd)) {
-      notify('Cette période est déjà réservée', 'warning')
-      isSubmitting.value = false
-      return
+      this.rangeEnd = date
+    },
+
+    async fetchHalls() {
+      try {
+        const res = await api.get('halls/')
+        this.halls = res.data
+
+        if (this.halls.length && !this.form.hall) {
+          this.form.hall = this.halls[0].id
+        }
+      } catch {
+        notify('Impossible de charger les salles', 'danger')
+      }
+    },
+
+    async fetchCalendar() {
+      try {
+        const res = await api.get('bookings/calendar/', {
+          params: this.form.hall ? { hall: this.form.hall } : {}
+        })
+        this.calendarRanges = Array.isArray(res.data) ? res.data : []
+      } catch {
+        this.calendarRanges = []
+      }
+    },
+
+    async fetchMe() {
+      try {
+        const res = await api.get('me/')
+        this.currentUser = res.data
+
+        if (!this.form.customer_email && res.data?.email) {
+          this.form.customer_email = res.data.email
+        }
+
+        const fullName =
+          `${res.data?.first_name || ''} ${res.data?.last_name || ''}`.trim()
+
+        if (!this.form.customer_name && fullName) {
+          this.form.customer_name = fullName
+        }
+      } catch {
+        this.currentUser = {}
+      }
+    },
+
+    async submitBooking() {
+      if (!this.isLoggedIn) {
+        notify('Veuillez vous connecter pour réserver', 'warning')
+        this.$router.push('/login')
+        return
+      }
+
+      if (!this.rangeStart) {
+        notify('Veuillez sélectionner au moins une date', 'warning')
+        return
+      }
+
+      try {
+        this.isSubmitting = true
+
+        const finalEnd = this.rangeEnd || this.rangeStart
+
+        if (this.hasConflict(this.rangeStart, finalEnd)) {
+          notify('Cette période est déjà réservée', 'warning')
+          this.isSubmitting = false
+          return
+        }
+
+        await api.post('bookings/', {
+          ...this.form,
+          start_date: this.formatYMD(this.rangeStart),
+          end_date: this.formatYMD(finalEnd),
+          total_price: this.totalPrice
+        })
+
+        notify('Réservation enregistrée avec succès', 'success')
+
+        this.form.customer_name = ''
+        this.form.customer_email = ''
+        this.form.event_type = 'Mariage'
+        this.clearDates()
+
+        await this.fetchCalendar()
+      } catch {
+        notify('Échec de la réservation', 'danger')
+      } finally {
+        this.isSubmitting = false
+      }
     }
-    await api.post('bookings/', {
-      ...form.value,
-      start_date: formatYMD(rangeStart.value),
-      end_date: formatYMD(finalEnd),
-      total_price: totalPrice.value
-    })
-    notify('Votre demande de réservation a été enregistrée avec succès', 'success')
-    form.value.customer_name = ''
-    form.value.customer_email = ''
-    form.value.event_type = 'Mariage'
-    clearDates()
-    await fetchCalendar()
-  } catch {
-    notify('Échec de la réservation. Vérifiez vos informations.', 'danger')
-  } finally {
-    isSubmitting.value = false
+  },
+
+  mounted() {
+    this.isLoggedIn = !!localStorage.getItem('access_token')
+    this.fetchHalls()
+    this.fetchCalendar()
+
+    if (this.isLoggedIn) this.fetchMe()
+  },
+
+  watch: {
+    'form.hall'() {
+      this.fetchCalendar()
+    }
   }
 }
-
-onMounted(() => {
-  isLoggedIn.value = !!localStorage.getItem('access_token')
-  fetchHalls()
-  fetchCalendar()
-  if (isLoggedIn.value) fetchMe()
-})
-
-watch(
-  () => form.value.hall,
-  () => {
-    fetchCalendar()
-  }
-)
 </script>
-
 <style scoped>
 .book-page {
   background: #f8fafc;
@@ -420,7 +572,11 @@ watch(
   grid-template-columns: repeat(7, 1fr);
   gap: .25rem;
 }
-
+button:disabled {
+  pointer-events: none;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .day-cell {
   height: 38px;
   border-radius: 8px;
