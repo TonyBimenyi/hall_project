@@ -98,6 +98,37 @@
             </table>
           </div>
         </div>
+
+        <div class="card table-card">
+          <div class="table-head">
+            <h3>Sécurité</h3>
+          </div>
+          <p class="security-subtitle">
+            Optionnel : définissez un mot de passe permanent. Sinon, vous pouvez continuer à vous connecter via lien magique.
+          </p>
+
+          <div class="security-form">
+            <div class="security-grid">
+              <div class="security-field">
+                <label>Nouveau mot de passe</label>
+                <input type="password" v-model="newPassword" placeholder="Minimum 6 caractères" />
+              </div>
+
+              <div class="security-field">
+                <label>Confirmer le mot de passe</label>
+                <input type="password" v-model="confirmPassword" placeholder="Répétez le mot de passe" />
+              </div>
+            </div>
+
+            <p v-if="passwordError" class="field-error">{{ passwordError }}</p>
+
+            <div class="security-actions">
+              <button class="btn btn-primary btn-sm" @click="setPassword" :disabled="passwordLoading">
+                {{ passwordLoading ? 'Enregistrement...' : 'Enregistrer' }}
+              </button>
+            </div>
+          </div>
+        </div>
       </template>
     </div>
   </section>
@@ -113,7 +144,11 @@ export default {
       loading: false,
       bookings: [],
       currentUser: {},
-      isLoggedIn: false
+      isLoggedIn: false,
+      newPassword: '',
+      confirmPassword: '',
+      passwordLoading: false,
+      passwordError: ''
     }
   },
 
@@ -178,6 +213,32 @@ export default {
         this.bookings = []
       } finally {
         this.loading = false
+      }
+    },
+    async setPassword() {
+      if (!this.isLoggedIn) return
+      this.passwordError = ''
+      if (!this.newPassword || this.newPassword.length < 6) {
+        this.passwordError = 'Mot de passe (min 6 caractères) requis'
+        return
+      }
+      if (this.newPassword !== this.confirmPassword) {
+        this.passwordError = 'Les mots de passe ne correspondent pas'
+        return
+      }
+
+      this.passwordLoading = true
+      try {
+        await api.post('auth/set-password/', { password: this.newPassword })
+        this.newPassword = ''
+        this.confirmPassword = ''
+        notify('Mot de passe défini avec succès', 'success')
+      } catch (e) {
+        const msg = e?.response?.data?.password || e?.response?.data?.detail || 'Impossible de définir le mot de passe'
+        this.passwordError = msg
+        notify(msg, 'danger')
+      } finally {
+        this.passwordLoading = false
       }
     }
   },
@@ -304,6 +365,63 @@ export default {
   padding: 1rem;
 }
 
+.security-subtitle {
+  margin: 0 0 0.9rem;
+  color: #64748b;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.security-form {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 1rem;
+}
+
+.security-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+
+.security-field label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #334155;
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.security-field input {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  outline: none;
+  background: #fff;
+}
+
+.security-field input:focus {
+  border-color: #cbd5e1;
+  box-shadow: 0 0 0 4px rgba(226, 232, 240, 0.7);
+}
+
+.security-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.9rem;
+}
+
+.field-error {
+  margin: 0.75rem 0 0;
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
 @media (max-width: 960px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -317,6 +435,10 @@ export default {
 
 @media (max-width: 560px) {
   .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .security-grid {
     grid-template-columns: 1fr;
   }
 }

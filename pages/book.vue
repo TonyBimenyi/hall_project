@@ -108,21 +108,6 @@
         <article class="card form-card">
           <h2>Informations client</h2>
 
-          <div v-if="!isLoggedIn" class="login-gate">
-            <div class="login-gate-title">Connexion requise</div>
-            <div class="login-gate-text">
-              Veuillez vous connecter pour confirmer une réservation en ligne.
-            </div>
-            <div class="login-gate-actions">
-              <NuxtLink to="/login" class="btn btn-primary btn-sm"
-                >Se connecter</NuxtLink
-              >
-              <NuxtLink to="/register" class="btn btn-outline btn-sm"
-                >Créer un compte</NuxtLink
-              >
-            </div>
-          </div>
-
           <form class="admin-form" @submit.prevent="submitBooking">
             <div class="form-grid">
               <div class="form-group">
@@ -146,6 +131,15 @@
             </div>
 
             <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Téléphone</label>
+                <input
+                  v-model="form.customer_phone"
+                  class="form-input"
+                  required
+                />
+              </div>
+
               <div class="form-group">
                 <label class="form-label">Salle</label>
                 <select
@@ -195,14 +189,10 @@
             <div class="actions">
               <button
                 class="btn btn-primary"
-                :disabled="isSubmitting || !isLoggedIn"
+                :disabled="isSubmitting"
               >
                 {{
-                  !isLoggedIn
-                    ? 'Connectez-vous pour réserver'
-                    : isSubmitting
-                    ? 'Envoi en cours...'
-                    : 'Confirmer la réservation'
+                  isSubmitting ? 'Envoi en cours...' : 'Confirmer la réservation'
                 }}
               </button>
             </div>
@@ -231,6 +221,7 @@ export default {
       form: {
         customer_name: '',
         customer_email: '',
+        customer_phone: '',
         hall: '',
         event_type: 'Mariage',
         status: 'pending'
@@ -363,6 +354,7 @@ export default {
       )
     },
 
+
     clearDates() {
       this.rangeStart = null
       this.rangeEnd = null
@@ -441,12 +433,6 @@ export default {
     },
 
     async submitBooking() {
-      if (!this.isLoggedIn) {
-        notify('Veuillez vous connecter pour réserver', 'warning')
-        this.$router.push('/login')
-        return
-      }
-
       if (!this.rangeStart) {
         notify('Veuillez sélectionner au moins une date', 'warning')
         return
@@ -463,17 +449,21 @@ export default {
           return
         }
 
-        await api.post('bookings/', {
-          ...this.form,
+        const response = await api.post('bookings/guest/', {
+          hall: this.form.hall,
+          full_name: this.form.customer_name,
+          email: this.form.customer_email,
+          phone: this.form.customer_phone,
+          event_type: this.form.event_type,
           start_date: this.formatYMD(this.rangeStart),
           end_date: this.formatYMD(finalEnd),
-          total_price: this.totalPrice
         })
 
-        notify('Réservation enregistrée avec succès', 'success')
+        notify(response?.data?.message || 'Réservation enregistrée avec succès', 'success')
 
         this.form.customer_name = ''
         this.form.customer_email = ''
+        this.form.customer_phone = ''
         this.form.event_type = 'Mariage'
         this.clearDates()
 

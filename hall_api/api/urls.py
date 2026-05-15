@@ -15,4 +15,7 @@ urlpatterns = [
     path('summary/', views.SummaryView.as_view(), name='summary'),
     path('me/', views.MeView.as_view(), name='me'),
     path('register/', views.RegisterView.as_view(), name='register'),
+    path('auth/magic-link/request/', views.MagicLinkRequestView.as_view(), name='magic_link_request'),
+    path('auth/magic-link/verify/', views.MagicLinkVerifyView.as_view(), name='magic_link_verify'),
+    path('auth/set-password/', views.SetPasswordView.as_view(), name='set_password'),
 ]

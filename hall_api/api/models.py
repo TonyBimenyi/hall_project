@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from decimal import Decimal
+from django.utils import timezone
 
 class Hall(models.Model):
     name = models.CharField(max_length=100)
@@ -20,6 +21,7 @@ class Booking(models.Model):
     hall = models.ForeignKey(Hall, on_delete=models.CASCADE)
     customer_name = models.CharField(max_length=100)
     customer_email = models.EmailField()
+    customer_phone = models.CharField(max_length=30, blank=True, default='')
     event_type = models.CharField(max_length=100)
     start_date = models.DateField()
     end_date = models.DateField()
@@ -96,3 +98,13 @@ class Payment(models.Model):
 
     def __str__(self):
         return self.reference
+
+class MagicLoginToken(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='magic_login_tokens')
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"MagicLoginToken(user_id={self.user_id}, expires_at={self.expires_at}, used={bool(self.used_at)})"

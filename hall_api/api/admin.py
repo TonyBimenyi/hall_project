@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Hall, Booking, Personnel, Material, Expense, Payment
+from .models import Hall, Booking, Personnel, Material, Expense, Payment, MagicLoginToken
 
 admin.site.site_header = 'Hall Management'
 admin.site.site_title = 'Hall Management'
@@ -20,6 +20,7 @@ class BookingAdmin(admin.ModelAdmin):
         'hall',
         'customer_name',
         'customer_email',
+        'customer_phone',
         'event_type',
         'start_date',
         'end_date',
@@ -66,3 +67,11 @@ class PaymentAdmin(admin.ModelAdmin):
     search_fields = ('reference', 'method', 'booking__customer_name', 'booking__customer_email')
     date_hierarchy = 'date'
     ordering = ('-date', '-id')
+
+
+@admin.register(MagicLoginToken)
+class MagicLoginTokenAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'expires_at', 'used_at', 'created_at')
+    list_filter = ('used_at', 'expires_at', 'created_at')
+    search_fields = ('user__username', 'user__email', 'token_hash')
+    ordering = ('-created_at', '-id')

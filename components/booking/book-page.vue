@@ -70,6 +70,15 @@
           </div>
           <div class="quick-info mt-32">
             <div class="form-group">
+              <label>Salle</label>
+              <select v-model="hallId" :class="{ 'error-border': fieldErrors.hall }">
+                <option v-for="h in halls" :key="h.id" :value="h.id">
+                  {{ h.name }}
+                </option>
+              </select>
+              <p v-if="fieldErrors.hall" class="field-error">{{ fieldErrors.hall }}</p>
+            </div>
+            <div class="form-group">
               <label>{{ $t('book.event_type') }}</label>
               <select v-model="eventType" :class="{ 'error-border': fieldErrors.event_type }">
                 <option value="">{{ $t('book.select_event_type') }}</option>
@@ -94,13 +103,13 @@
           <div class="form-grid">
             <div class="form-group">
               <label>{{ $t('book.start_date') }}</label>
-              <input type="text" :value="startDate" readonly :class="{ 'error-border': fieldErrors.date_start }" />
-              <p v-if="fieldErrors.date_start" class="field-error">{{ fieldErrors.date_start }}</p>
+              <input type="text" :value="startDate" readonly :class="{ 'error-border': fieldErrors.start_date }" />
+              <p v-if="fieldErrors.start_date" class="field-error">{{ fieldErrors.start_date }}</p>
             </div>
             <div class="form-group">
               <label>{{ $t('book.end_date') }}</label>
-              <input type="text" :value="endDate" readonly :class="{ 'error-border': fieldErrors.date_end }" />
-              <p v-if="fieldErrors.date_end" class="field-error">{{ fieldErrors.date_end }}</p>
+              <input type="text" :value="endDate" readonly :class="{ 'error-border': fieldErrors.end_date }" />
+              <p v-if="fieldErrors.end_date" class="field-error">{{ fieldErrors.end_date }}</p>
             </div>
             <div class="form-group">
               <label>{{ $t('book.number_of_guests') }}</label>
@@ -114,11 +123,13 @@
             </div>
             <div class="form-group">
               <label>{{ $t('book.your_name') }}</label>
-              <input type="text" v-model="name" readonly />
+              <input type="text" v-model="name" :class="{ 'error-border': fieldErrors.full_name }" />
+              <p v-if="fieldErrors.full_name" class="field-error">{{ fieldErrors.full_name }}</p>
             </div>
             <div class="form-group">
               <label>{{ $t('book.email_address') }}</label>
-              <input type="email" v-model="email" readonly />
+              <input type="email" v-model="email" :class="{ 'error-border': fieldErrors.email }" />
+              <p v-if="fieldErrors.email" class="field-error">{{ fieldErrors.email }}</p>
             </div>
             <div class="form-group">
               <label>{{ $t('book.phone_number') }} <span class="required">*</span></label>
@@ -181,7 +192,8 @@ export default {
       phone: "",
       notes: "",
       hallPrice: 0,
-      hallId: 1,
+      hallId: null,
+      halls: [],
       fieldErrors: {},
       loading: false,
       reservedDates: [],
@@ -218,46 +230,68 @@ export default {
       return (days * this.hallPrice).toFixed(2)
     }
   },
+  watch: {
+    hallId() {
+      this.updateHallPrice()
+      this.clearRange()
+      this.fetchReservedDates()
+    }
+  },
   mounted() {
-    const user = JSON.parse(localStorage.getItem('user') || '{}')
-    this.name = `${user.first_name || ''} ${user.last_name || ''}`
+    let user = {}
+    try {
+      user = JSON.parse(localStorage.getItem('user') || '{}')
+    } catch {
+      user = {}
+    }
+    this.name = `${user.first_name || ''} ${user.last_name || ''}`.trim()
     this.email = user.email || ''
-    this.fetchHall()
-    this.fetchReservedDates()
+    this.fetchHalls()
   },
   methods: {
-    async fetchHall() {
+    async fetchHalls() {
       try {
         const res = await api.get('halls/')
-        const hall = res.data.find(h => h.id === this.hallId)
-        this.hallPrice = hall ? Number(hall.price_per_day) : 0
+        this.halls = Array.isArray(res.data) ? res.data : []
+        if (!this.hallId && this.halls.length) {
+          this.hallId = this.halls[0].id
+        } else {
+          this.updateHallPrice()
+          this.fetchReservedDates()
+        }
       } catch (err) {
         console.error('Failed to fetch hall', err)
       }
     },
+    updateHallPrice() {
+      const hall = this.halls.find(h => h.id === this.hallId)
+      this.hallPrice = hall ? Number(hall.price_per_day) : 0
+    },
     async submitBooking() {
       this.fieldErrors = {}
-      if (!this.rangeStart) this.fieldErrors.date_start = 'Start date is required'
-      if (!this.rangeEnd) this.fieldErrors.date_end = 'End date is required'
-      if (!this.eventType) this.fieldErrors.event_type = 'Event type is required'
-      if (!this.phone) this.fieldErrors.phone = 'Phone is required'
+      if (!this.rangeStart) this.fieldErrors.start_date = 'Date début requise'
+      if (!this.rangeEnd) this.fieldErrors.end_date = 'Date fin requise'
+      if (!this.eventType) this.fieldErrors.event_type = "Type d'événement requis"
+      if (!this.hallId) this.fieldErrors.hall = 'Salle requise'
+      if (!this.name) this.fieldErrors.full_name = 'Nom complet requis'
+      if (!this.email) this.fieldErrors.email = 'Email requis'
+      if (!this.phone) this.fieldErrors.phone = 'Téléphone requis'
       if (Object.keys(this.fieldErrors).length) {
-        notify('Please correct the errors in the form.', 'danger')
+        notify('Veuillez corriger les erreurs du formulaire.', 'danger')
         return
       }
       try {
         this.loading = true
-        const response = await api.post('bookings/', {
+        const response = await api.post('bookings/guest/', {
           hall: this.hallId,
-          agency: 1,
-          date_start: this.startDate,
-          date_end: this.endDate,
+          full_name: this.name,
+          email: this.email,
+          phone: this.phone,
           event_type: this.eventType,
-          total_cost: this.totalCost,
-          notes: this.notes
+          start_date: this.startDate,
+          end_date: this.endDate
         })
-        notify(this.$t('book.booking_created_success'), 'success')
-        this.fetchReservedDates()
+        notify(response?.data?.message || 'Réservation confirmée. Vérifiez votre email.', 'success')
         this.clearRange()
         this.eventType = ''
         this.guestCount = 100
@@ -270,13 +304,15 @@ export default {
             if (Array.isArray(data[key])) {
               const msg = data[key][0]
               if (key === 'hall') {
-                this.fieldErrors.date_start = msg
-                this.fieldErrors.date_end = msg
+                this.fieldErrors.hall = msg
                 notify(msg, 'danger')
               } else {
                 this.fieldErrors[key] = msg
                 notify(msg, 'danger')
               }
+            } else if (typeof data[key] === 'string') {
+              this.fieldErrors[key] = data[key]
+              notify(data[key], 'danger')
             }
           })
         } else {
@@ -289,10 +325,14 @@ export default {
     },
     async fetchReservedDates() {
       try {
-        const res = await api.get(`bookings/?hall=${this.hallId}`)
-        this.reservedDates = res.data.flatMap(b => {
-          const start = new Date(b.date_start)
-          const end = new Date(b.date_end)
+        if (!this.hallId) {
+          this.reservedDates = []
+          return
+        }
+        const res = await api.get(`bookings/calendar/?hall=${this.hallId}`)
+        this.reservedDates = (Array.isArray(res.data) ? res.data : []).flatMap(b => {
+          const start = new Date(b.start_date)
+          const end = new Date(b.end_date)
           const dates = []
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             dates.push(this.formatYMD(new Date(d)))

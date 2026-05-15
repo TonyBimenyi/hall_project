@@ -1,6 +1,6 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
-from .models import Hall, Booking, Personnel, Material, Expense, Payment
+from .models import Hall, Booking, Personnel, Material, Expense, Payment, MagicLoginToken
 from .serializers import (
     HallSerializer, BookingSerializer, PersonnelSerializer,
     MaterialSerializer, ExpenseSerializer, PaymentSerializer
@@ -16,9 +16,15 @@ from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
+from django.conf import settings
+from django.core.mail import send_mail
+from datetime import timedelta, date
+import hashlib
+import secrets
 
 class SummaryView(APIView):
     def get(self, request):
@@ -56,6 +62,69 @@ class SummaryView(APIView):
             'monthly_revenue': monthly_revenue,
             'occupation_data': occupation_data
         })
+
+def _hash_magic_token(raw_token: str) -> str:
+    token = '' if raw_token is None else str(raw_token)
+    material = f"{token}{settings.SECRET_KEY}".encode('utf-8')
+    return hashlib.sha256(material).hexdigest()
+
+def _issue_magic_token(user):
+    raw = secrets.token_urlsafe(32)
+    token_hash = _hash_magic_token(raw)
+    now = timezone.now()
+    expires_at = now + timedelta(minutes=15)
+    record = MagicLoginToken.objects.create(
+        user=user,
+        token_hash=token_hash,
+        expires_at=expires_at,
+    )
+    return raw, record
+
+def _split_full_name(full_name: str):
+    value = (full_name or '').strip()
+    if not value:
+        return '', ''
+    parts = [p for p in value.split(' ') if p]
+    if len(parts) == 1:
+        return parts[0], ''
+    return parts[0], ' '.join(parts[1:])
+
+def _build_magic_login_url(request, raw_token: str):
+    origin = (getattr(settings, 'FRONTEND_URL', '') or getattr(settings, 'FRONTEND_ORIGIN', '') or '').strip() or 'http://localhost:3000'
+    return f"{origin.rstrip('/')}/login?token={raw_token}"
+
+def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, magic_url: str, account_created: bool):
+    first_name, _ = _split_full_name(full_name)
+    greeting_name = first_name or full_name or 'Client'
+    subject = 'Confirmation de réservation'
+    account_line = (
+        "Nous avons également créé automatiquement votre compte afin que vous puissiez gérer facilement vos réservations, consulter votre historique et effectuer vos prochaines réservations plus rapidement.\n\n"
+        if account_created
+        else ""
+    )
+    body = (
+        f"Bonjour {greeting_name},\n\n"
+        "Votre réservation a été confirmée avec succès.\n\n"
+        "Détails de la réservation :\n"
+        f"- Salle : {booking.hall.name}\n"
+        f"- Type d evenement : {booking.event_type}\n"
+        f"- date debbut : {booking.start_date}\n"
+        f"- date fin : {booking.end_date}\n\n"
+        f"{account_line}"
+        "Utilisez le lien sécurisé ci-dessous pour accéder instantanément à votre compte :\n\n"
+        "[Gérer mes réservations]\n\n"
+        f"{magic_url}\n\n"
+        "Pour des raisons de sécurité, ce lien d’accès expirera dans 15 minutes.\n\n"
+        "Si vous le souhaitez, vous pourrez ensuite définir un mot de passe permanent dans les paramètres de votre compte.\n\n"
+        "Merci de votre confiance et à bientôt.\n"
+    )
+    send_mail(
+        subject=subject,
+        message=body,
+        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@hall.local',
+        recipient_list=[to_email],
+        fail_silently=False,
+    )
 
 def _phone_username_candidates(raw_username):
     raw = '' if raw_username is None else str(raw_username)
@@ -186,6 +255,110 @@ class BookingViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny], url_path='guest')
+    def guest(self, request):
+        payload = request.data or {}
+
+        full_name = (payload.get('full_name') or payload.get('customer_name') or '').strip()
+        email = (payload.get('email') or payload.get('customer_email') or '').strip().lower()
+        phone = (payload.get('phone') or payload.get('customer_phone') or '').strip()
+        hall_id = payload.get('hall')
+        event_type = (payload.get('event_type') or '').strip()
+        start_date = payload.get('start_date') or payload.get('date_debut') or payload.get('date_start')
+        end_date = payload.get('end_date') or payload.get('date_fin') or payload.get('date_end')
+
+        if not full_name:
+            return Response({'full_name': 'Nom complet requis'}, status=status.HTTP_400_BAD_REQUEST)
+        if not email:
+            return Response({'email': 'Email requis'}, status=status.HTTP_400_BAD_REQUEST)
+        if not phone:
+            return Response({'phone': 'Téléphone requis'}, status=status.HTTP_400_BAD_REQUEST)
+        if not hall_id:
+            return Response({'hall': 'Salle requise'}, status=status.HTTP_400_BAD_REQUEST)
+        if not event_type:
+            return Response({'event_type': "Type d'événement requis"}, status=status.HTTP_400_BAD_REQUEST)
+        if not start_date:
+            return Response({'start_date': 'Date début requise'}, status=status.HTTP_400_BAD_REQUEST)
+        if not end_date:
+            return Response({'end_date': 'Date fin requise'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            hall = Hall.objects.get(id=hall_id)
+        except Hall.DoesNotExist:
+            return Response({'hall': 'Salle introuvable'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            start_dt = date.fromisoformat(str(start_date))
+            end_dt = date.fromisoformat(str(end_date))
+        except ValueError:
+            return Response({'dates': 'Format de date invalide (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if end_dt < start_dt:
+            return Response({'dates': 'La date fin doit être après la date début'}, status=status.HTTP_400_BAD_REQUEST)
+
+        overlap_exists = Booking.objects.filter(
+            hall=hall,
+            status__in=['pending', 'confirmed', 'paid'],
+            start_date__lte=end_dt,
+            end_date__gte=start_dt,
+        ).exists()
+        if overlap_exists:
+            return Response({'dates': 'Ces dates ne sont pas disponibles pour cette salle'}, status=status.HTTP_400_BAD_REQUEST)
+
+        days = (end_dt - start_dt).days + 1
+        total_price = (Decimal(days) * (hall.price_per_day or Decimal('0.00'))).quantize(Decimal('0.01'))
+
+        User = get_user_model()
+        user = User.objects.filter(email__iexact=email).first()
+        account_created = False
+        if user is None:
+            account_created = True
+            phone_digits = ''.join(ch for ch in phone if ch.isdigit())
+            base_username = phone_digits or email
+            username = base_username
+            suffix = 1
+            while User.objects.filter(username=username).exists():
+                suffix += 1
+                username = f"{base_username}-{suffix}"
+
+            first_name, last_name = _split_full_name(full_name)
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=None,
+                first_name=first_name,
+                last_name=last_name,
+                is_active=True,
+            )
+        elif not user.is_active:
+            user.is_active = True
+            user.save(update_fields=['is_active'])
+
+        booking = Booking.objects.create(
+            hall=hall,
+            customer_name=full_name,
+            customer_email=email,
+            customer_phone=phone,
+            event_type=event_type,
+            start_date=start_dt,
+            end_date=end_dt,
+            total_price=total_price,
+            status='confirmed',
+            created_by=user,
+        )
+
+        raw_token, _ = _issue_magic_token(user)
+        magic_url = _build_magic_login_url(request, raw_token)
+        _send_reservation_email(to_email=email, full_name=full_name, booking=booking, magic_url=magic_url, account_created=account_created)
+
+        return Response(
+            {
+                'booking': BookingSerializer(booking).data,
+                'message': "Réservation confirmée. Un email avec un lien sécurisé a été envoyé.",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], url_path='calendar')
     def calendar(self, request):
         hall_id = request.query_params.get('hall')
@@ -194,6 +367,83 @@ class BookingViewSet(viewsets.ModelViewSet):
             qs = qs.filter(hall_id=hall_id)
         qs = qs.exclude(status='cancelled').values('hall_id', 'start_date', 'end_date')
         return Response(list(qs))
+
+class MagicLinkRequestView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        payload = request.data or {}
+        email = (payload.get('email') or '').strip().lower()
+        if not email:
+            return Response({'email': 'Email requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+        User = get_user_model()
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user is None:
+            return Response({'message': "Si ce compte existe, un lien a été envoyé."}, status=status.HTTP_200_OK)
+
+        raw_token, _ = _issue_magic_token(user)
+        magic_url = _build_magic_login_url(request, raw_token)
+        subject = "Votre lien de connexion"
+        body = (
+            "Bonjour,\n\n"
+            "Utilisez le lien sécurisé ci-dessous pour vous connecter :\n\n"
+            f"{magic_url}\n\n"
+            "Pour des raisons de sécurité, ce lien d’accès expirera dans 15 minutes.\n"
+        )
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@hall.local',
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        return Response({'message': "Si ce compte existe, un lien a été envoyé."}, status=status.HTTP_200_OK)
+
+class MagicLinkVerifyView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        payload = request.data or {}
+        raw_token = payload.get('token') or ''
+        token_hash = _hash_magic_token(raw_token)
+        now = timezone.now()
+
+        record = MagicLoginToken.objects.select_related('user').filter(token_hash=token_hash).first()
+        if record is None:
+            return Response({'detail': 'Lien invalide ou expiré'}, status=status.HTTP_400_BAD_REQUEST)
+        if record.used_at is not None:
+            return Response({'detail': 'Lien déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
+        if record.expires_at < now:
+            return Response({'detail': 'Lien expiré'}, status=status.HTTP_400_BAD_REQUEST)
+
+        record.used_at = now
+        record.save(update_fields=['used_at'])
+
+        refresh = RefreshToken.for_user(record.user)
+        access = str(refresh.access_token)
+        return Response(
+            {
+                'refresh': str(refresh),
+                'access': access,
+                'redirect_to': '/dashboard',
+            },
+            status=status.HTTP_200_OK,
+        )
+
+class SetPasswordView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        payload = request.data or {}
+        password = payload.get('password') or ''
+        if not password or len(password) < 6:
+            return Response({'password': 'Mot de passe (min 6 caractères) requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        user.set_password(password)
+        user.save(update_fields=['password'])
+        return Response({'message': 'Mot de passe défini avec succès'}, status=status.HTTP_200_OK)
 
 class PersonnelViewSet(viewsets.ModelViewSet):
     queryset = Personnel.objects.all()
