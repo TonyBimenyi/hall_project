@@ -7,7 +7,7 @@
         <span class="highlight">Souvenirs</span>
       </h1>
       <p class="subtitle">
-        Belta Réception & Salle de Conférence – Votre destination privilégiée pour les mariages, les événements d'entreprise et les célébrations inoubliables
+        LaBertha Villa – Votre destination privilégiée pour les mariages, les événements d'entreprise et les célébrations inoubliables
       </p>
       <div class="buttons">
         <NuxtLink to="/book" class="btn-dashboard">

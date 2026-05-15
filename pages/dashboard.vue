@@ -76,7 +76,7 @@
 
               <tbody>
                 <tr v-for="booking in myBookings" :key="booking.id">
-                  <td>#BR-{{ booking.id }}</td>
+                  <td>#LV-{{ booking.id }}</td>
                   <td>{{ booking.event_type }}</td>
                   <td>{{ booking.start_date }} → {{ booking.end_date }}</td>
                   <td>{{ Number(booking.total_price || 0).toLocaleString() }} Fbu</td>

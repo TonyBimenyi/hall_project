@@ -2,16 +2,19 @@
   <footer class="footer">
     <div class="container top">
       <div class="brand">
-        <h3>Belta Réception</h3>
+        <h3>LaBertha Villa</h3>
         <p>Espaces élégants et service professionnel pour mariages, conférences et événements privés.</p>
       </div>
 
       <div class="links">
         <h4>Navigation</h4>
         <NuxtLink to="/">Accueil</NuxtLink>
-        <NuxtLink to="/about">À propos</NuxtLink>
+        <NuxtLink to="/about">A Propos</NuxtLink>
         <NuxtLink to="/services">Services</NuxtLink>
-        <NuxtLink to="/book">Réserver</NuxtLink>
+        <NuxtLink to="/book">Reserver la salle</NuxtLink>
+        <NuxtLink to="/gallery">Gallerie</NuxtLink>
+        <NuxtLink to="/package">Package</NuxtLink>
+        <NuxtLink to="/hotel">Hotel</NuxtLink>
       </div>
 
       <div class="contact">
@@ -23,7 +26,7 @@
     </div>
 
     <div class="container bottom">
-      <span>© {{ currentYear }} Belta Réception</span>
+      <span>© {{ currentYear }} LaBertha Villa</span>
       <span>Tous droits réservés</span>
     </div>
   </footer>

@@ -7,7 +7,7 @@
 
       <div class="story-content fade-up" ref="storyEl">
         <p>
-          Fondée en 2013, <strong>Belta Réception & Salle de Conférence</strong> est devenue le lieu le plus fiable et le plus apprécié de la ville pour les célébrations les plus marquantes de la vie.
+          Fondée en 2013, <strong>LaBertha Villa</strong> est devenue le lieu le plus fiable et le plus apprécié de la ville pour les célébrations les plus marquantes de la vie.
         </p>
         <p>
           Ce qui a commencé comme une vision passionnée pour créer un espace où naissent des souvenirs inoubliables a évolué en un chef-d'œuvre d'élégance et de fonctionnalité de plus de 2 000 mètres carrés.

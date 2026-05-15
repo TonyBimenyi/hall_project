@@ -16,7 +16,7 @@ const route = useRoute()
 const headers = {
   '/about': {
     title: 'À propos',
-    subtitle: 'Découvrez Belta Réception et notre engagement qualité',
+    subtitle: 'Découvrez LaBertha Villa et notre engagement qualité',
     image: 'https://images.unsplash.com/photo-1478146059778-26028b07395a?auto=format&fit=crop&w=1400&q=80'
   },
   '/services': {
@@ -39,6 +39,16 @@ const headers = {
     subtitle: 'Choisissez vos dates et confirmez en ligne',
     image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1400&q=80'
   },
+  '/package': {
+    title: 'Package',
+    subtitle: 'Des formules prêtes pour votre événement',
+    image: 'https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=1400&q=80'
+  },
+  '/hotel': {
+    title: 'Hotel',
+    subtitle: 'Coming soon',
+    image: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1400&q=80'
+  },
   '/dashboard': {
     title: 'Tableau de bord',
     subtitle: 'Gérez vos réservations personnelles',
@@ -47,7 +57,7 @@ const headers = {
 }
 
 const header = computed(() => headers[route.path] || {
-  title: 'Belta Réception',
+  title: 'LaBertha Villa',
   subtitle: 'Des espaces élégants pour vos événements',
   image: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1400&q=80'
 })

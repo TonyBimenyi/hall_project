@@ -24,9 +24,37 @@
       </div>
     </section>
 
+    <section class="welcome-section">
+      <div class="welcome-inner card">
+        <div class="welcome-grid">
+          <div class="welcome-media">
+            <img
+              class="welcome-image"
+              src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80"
+              alt="Welcome"
+              loading="lazy"
+            />
+          </div>
+          <div class="welcome-content">
+            <div class="welcome-kicker">Welcome</div>
+            <h2>Bienvenue chez LaBertha Villa</h2>
+            <p>
+              Réservez une salle en quelques clics, recevez une confirmation par email et gérez
+              vos réservations facilement. Nous mettons l’accent sur la simplicité, la transparence
+              et une expérience moderne pour vos événements.
+            </p>
+            <div class="welcome-actions">
+              <NuxtLink to="/book" class="btn btn-primary">Réserver maintenant</NuxtLink>
+              <NuxtLink to="/contact" class="btn btn-outline">Nous contacter</NuxtLink>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="section clean">
       <div class="section-head">
-        <h2>Pourquoi choisir Belta Réception</h2>
+        <h2>Pourquoi choisir LaBertha Villa</h2>
         <p>Une expérience fluide, moderne et professionnelle pour tous vos événements.</p>
       </div>
       <div class="feature-grid">
@@ -78,7 +106,7 @@
       </div>
       <div class="map card">
         <iframe
-          title="Carte Belta Réception"
+          title="Carte LaBertha Villa"
           :src="mapSrc"
           loading="lazy"
           referrerpolicy="no-referrer-when-downgrade"
@@ -97,7 +125,7 @@ let sliderTimer
 const slides = [
   {
     title: 'Des événements élégants dans des espaces premium',
-    subtitle: 'Belta Réception vous accompagne pour mariages, séminaires et célébrations privées.',
+    subtitle: 'LaBertha Villa vous accompagne pour mariages, séminaires et célébrations privées.',
     image: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1900&q=80'
   },
   {
@@ -155,7 +183,7 @@ onBeforeUnmount(() => {
 }
 
 .hero {
-  min-height: 100vh;
+  height: clamp(560px, 82vh, 860px);
   position: relative;
   display: flex;
   align-items: center;
@@ -237,6 +265,106 @@ onBeforeUnmount(() => {
 
 .section.clean {
   padding-top: 5rem;
+}
+
+.welcome-section {
+  max-width: 1240px;
+  margin: -3.25rem auto 0;
+  padding: 0 1.25rem;
+  position: relative;
+  z-index: 2;
+}
+
+.welcome-inner {
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+  padding: 1.25rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.welcome-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 1.4rem;
+  align-items: center;
+}
+
+.welcome-media {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.welcome-image {
+  width: 100%;
+  height: 100%;
+  max-height: 340px;
+  display: block;
+  object-fit: cover;
+}
+
+.welcome-content {
+  text-align: left;
+  padding: 0.2rem 0.2rem 0.2rem 0.4rem;
+}
+
+.welcome-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 800;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.75rem;
+}
+
+.welcome-content h2 {
+  margin: 0 0 0.6rem;
+  font-size: clamp(1.55rem, 3vw, 2.05rem);
+  line-height: 1.2;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.welcome-content p {
+  margin: 0 0 1.1rem;
+  color: #64748b;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.welcome-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 980px) {
+  .welcome-section {
+    margin-top: -2.2rem;
+  }
+
+  .welcome-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-content {
+    text-align: center;
+    padding: 0;
+  }
+
+  .welcome-actions {
+    justify-content: center;
+  }
 }
 
 .section-head {

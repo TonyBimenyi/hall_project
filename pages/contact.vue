@@ -36,7 +36,7 @@
         <h2>Nous trouver</h2>
         <div class="map-wrap">
           <iframe
-            title="Carte Belta Réception"
+            title="Carte LaBertha Villa"
             :src="mapSrc"
             loading="lazy"
             referrerpolicy="no-referrer-when-downgrade"

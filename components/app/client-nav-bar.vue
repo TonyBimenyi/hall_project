@@ -2,13 +2,33 @@
   <header class="navbar" :class="{ scrolled: isScrolled }">
     <nav class="container">
       <NuxtLink to="/" class="logo">
-        <span class="mark">BR</span>
-        <span class="name">Belta Réception</span>
+        <span class="mark">LV</span>
+        <span class="name">LaBertha Villa</span>
       </NuxtLink>
 
       <ul class="links desktop-only">
         <li v-for="link in navLinks" :key="link.name">
-          <NuxtLink :to="link.to" active-class="active">{{ link.name }}</NuxtLink>
+          <template v-if="link.children">
+            <div class="dropdown" :class="{ active: isGroupActive(link) }">
+              <div class="dropdown-trigger" tabindex="0">
+                <span>{{ link.name }}</span>
+                <i class="fas fa-chevron-down"></i>
+              </div>
+              <div class="dropdown-menu">
+                <NuxtLink
+                  v-for="child in link.children"
+                  :key="child.name"
+                  :to="child.to"
+                  active-class="active"
+                >
+                  {{ child.name }}
+                </NuxtLink>
+              </div>
+            </div>
+          </template>
+          <template v-else>
+            <NuxtLink :to="link.to" active-class="active">{{ link.name }}</NuxtLink>
+          </template>
         </li>
       </ul>
 
@@ -26,9 +46,27 @@
     </nav>
 
     <div class="mobile-menu" :class="{ open: isMenuOpen }">
-      <NuxtLink v-for="link in navLinks" :key="link.name" :to="link.to" @click="isMenuOpen = false">
-        {{ link.name }}
-      </NuxtLink>
+      <template v-for="link in navLinks" :key="link.name">
+        <template v-if="link.children">
+          <div class="mobile-group">
+            <div class="mobile-group-title">{{ link.name }}</div>
+            <NuxtLink
+              v-for="child in link.children"
+              :key="child.name"
+              :to="child.to"
+              class="mobile-sub-link"
+              @click="isMenuOpen = false"
+            >
+              {{ child.name }}
+            </NuxtLink>
+          </div>
+        </template>
+        <template v-else>
+          <NuxtLink :to="link.to" @click="isMenuOpen = false">
+            {{ link.name }}
+          </NuxtLink>
+        </template>
+      </template>
       <NuxtLink v-if="!isLoggedIn" to="/login" @click="isMenuOpen = false">Se connecter</NuxtLink>
       <NuxtLink v-else to="/dashboard" @click="isMenuOpen = false">Tableau de bord</NuxtLink>
       <button v-if="isLoggedIn" @click="logout">Déconnexion</button>
@@ -45,11 +83,19 @@ export default {
       isLoggedIn: false,
       navLinks: [
         { name: 'Accueil', to: '/' },
-        { name: 'À propos', to: '/about' },
+        { name: 'A Propos', to: '/about' },
         { name: 'Services', to: '/services' },
-        { name: 'Galerie', to: '/gallery' },
-        { name: 'Réserver', to: '/book' },
-        { name: 'Contact', to: '/contact' }
+      
+        {
+          name: 'Salles',
+          children: [
+            { name: 'Reserver la salle', to: '/book' },
+            { name: 'Gallerie', to: '/gallery' },
+            { name: 'Package', to: '/package' }
+          ]
+        },
+        { name: 'Hotel', to: '/hotel' },
+        { name: 'Contact', to: '/contact' },
       ]
     }
   },
@@ -75,6 +121,11 @@ export default {
       this.isLoggedIn = false
       this.isMenuOpen = false
       this.$router.push('/login')
+    },
+    isGroupActive(link) {
+      if (!link || !Array.isArray(link.children)) return false
+      const current = this.$route?.path || ''
+      return link.children.some(child => child.to === current)
     }
   }
 }
@@ -136,6 +187,7 @@ export default {
 .links {
   display: flex;
   gap: .2rem;
+  align-items: center;
 }
 
 .links a {
@@ -150,6 +202,73 @@ export default {
 .links a:hover {
   background: rgba(212, 175, 55, .18);
   color: #d4af37;
+}
+
+.dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: .45rem .8rem;
+  border-radius: 8px;
+  color: #334155;
+  font-weight: 600;
+  font-size: .92rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dropdown.active .dropdown-trigger,
+.dropdown-trigger:hover {
+  background: rgba(212, 175, 55, .18);
+  color: #d4af37;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  min-width: 220px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.12);
+  padding: 0.45rem;
+  display: none;
+  z-index: 30;
+}
+
+.dropdown-menu::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+}
+
+.dropdown:hover .dropdown-menu,
+.dropdown:focus-within .dropdown-menu {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.dropdown-menu a {
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  color: #334155;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.dropdown-menu a:hover,
+.dropdown-menu a.active {
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 .right {
@@ -198,6 +317,23 @@ export default {
   padding: .55rem .2rem;
   color: #334155;
   font-weight: 600;
+}
+
+.mobile-group {
+  padding: .55rem .2rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.mobile-group-title {
+  font-weight: 900;
+  color: #0f172a;
+  margin-bottom: 0.35rem;
+}
+
+.mobile-sub-link {
+  padding-left: 0.9rem;
+  font-weight: 600;
+  color: #475569;
 }
 
 @media (max-width: 1024px) {

@@ -46,7 +46,7 @@
 
         <button class="submit-btn secondary" @click="requestMagicLink" :disabled="magicLoading">
           <span v-if="magicLoading" class="spinner"></span>
-          <span v-else>Recevoir un lien magique</span>
+          <span v-else>Recevoir un lien de connexion</span>
         </button>
 
         <p class="magic-hint">

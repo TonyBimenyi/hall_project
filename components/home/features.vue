@@ -1,7 +1,7 @@
 <template>
   <section class="features-section">
     <div class="container">
-      <h2 class="section-title">Pourquoi choisir Belta Réception</h2>
+      <h2 class="section-title">Pourquoi choisir LaBertha Villa</h2>
       
       <div class="features-grid">
         <div
