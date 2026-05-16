@@ -6,9 +6,17 @@
         <h1>Gestion du Personnel</h1>
         <p>Suivi des employés et assignation des tâches</p>
       </div>
-      <button class="btn btn-primary" @click="openAddModal">
-        <i class="fas fa-user-plus"></i> Ajouter un employé
-      </button>
+      <div class="header-actions">
+        <button class="btn btn-export btn-sm" @click="exportPdf">
+          <i class="fas fa-file-pdf"></i> Export PDF
+        </button>
+        <button class="btn btn-export btn-sm" @click="exportXls">
+          <i class="fas fa-file-excel"></i> Export XLS
+        </button>
+        <button class="btn btn-primary" @click="openAddModal">
+          <i class="fas fa-user-plus"></i> Ajouter un employé
+        </button>
+      </div>
     </div>
 
     <div class="stats-grid mb-8">
@@ -43,7 +51,7 @@
     </div>
 
     <div class="table-container card">
-      <table class="admin-table">
+      <table ref="tableRef" class="admin-table">
         <thead>
           <tr>
             <th>Employé</th>
@@ -173,6 +181,35 @@ import { api } from '~/composables/useApi'
 definePageMeta({ layout: 'admin' })
 
 const personnel = ref([])
+const tableRef = ref(null)
+
+const exportXls = () => {
+  if (!tableRef.value) return
+  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableRef.value.outerHTML}</body></html>`
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'personnel.xls'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const exportPdf = () => {
+  if (!tableRef.value) return
+  const win = window.open('', '_blank')
+  if (!win) return
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Personnel</title><style>
+  body{font-family:Arial, sans-serif; padding:20px}
+  table{width:100%; border-collapse:collapse}
+  th,td{border:1px solid #e2e8f0; padding:8px; text-align:left; font-size:12px}
+  th{background:#f8fafc}
+  </style></head><body><h2>Personnel</h2>${tableRef.value.outerHTML}</body></html>`)
+  win.document.close()
+  win.focus()
+  win.print()
+  win.close()
+}
 const showFormModal = ref(false)
 const showViewModal = ref(false)
 const showDeleteModal = ref(false)

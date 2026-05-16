@@ -2,9 +2,17 @@
   <div class="admin-expenses">
     <div class="header-actions">
       <h1>Suivi des Dépenses Internes</h1>
-      <button class="btn btn-primary" @click="openAddModal">
-        <i class="fas fa-plus"></i> Enregistrer une dépense
-      </button>
+      <div class="header-buttons">
+        <button class="btn btn-export btn-sm" @click="exportPdf">
+          <i class="fas fa-file-pdf"></i> Export PDF
+        </button>
+        <button class="btn btn-export btn-sm" @click="exportXls">
+          <i class="fas fa-file-excel"></i> Export XLS
+        </button>
+        <button class="btn btn-primary" @click="openAddModal">
+          <i class="fas fa-plus"></i> Enregistrer une dépense
+        </button>
+      </div>
     </div>
 
     <div class="stats-grid mb-8">
@@ -38,8 +46,36 @@
       </div>
     </div>
 
+    <div class="controls card">
+      <div class="search-wrapper">
+        <i class="fas fa-search search-icon"></i>
+        <input
+          type="text"
+          v-model="search"
+          placeholder="Rechercher (description, bénéficiaire, payé par)..."
+          class="search-input-clean"
+        />
+      </div>
+      <select v-model="categoryFilter" class="filter-select-clean">
+        <option value="">Toutes les catégories</option>
+        <option value="Maintenance">Maintenance</option>
+        <option value="Équipement">Équipement</option>
+        <option value="Salaires">Salaires</option>
+        <option value="Fournitures">Fournitures</option>
+        <option value="Utilités">Utilités</option>
+        <option value="Autre">Autre</option>
+      </select>
+      <select v-model="statusFilter" class="filter-select-clean">
+        <option value="">Tous les statuts</option>
+        <option value="paid">Payé</option>
+        <option value="pending">En attente</option>
+      </select>
+      <input v-model="dateFrom" type="date" class="filter-input-clean" />
+      <input v-model="dateTo" type="date" class="filter-input-clean" />
+    </div>
+
     <div class="table-container card">
-      <table class="admin-table">
+      <table ref="tableRef" class="admin-table">
         <thead>
           <tr>
             <th>Date</th>
@@ -52,7 +88,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="expense in expenses" :key="expense.id">
+          <tr v-for="expense in filteredExpenses" :key="expense.id">
             <td>{{ expense.date }}</td>
             <td><strong>{{ expense.description }}</strong></td>
             <td>{{ expense.category }}</td>
@@ -194,6 +230,40 @@ import { api } from '~/composables/useApi'
 definePageMeta({ layout: 'admin' })
 
 const expenses = ref([])
+const tableRef = ref(null)
+const search = ref('')
+const categoryFilter = ref('')
+const statusFilter = ref('')
+const dateFrom = ref('')
+const dateTo = ref('')
+
+const exportXls = () => {
+  if (!tableRef.value) return
+  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableRef.value.outerHTML}</body></html>`
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'expenses.xls'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const exportPdf = () => {
+  if (!tableRef.value) return
+  const win = window.open('', '_blank')
+  if (!win) return
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Dépenses</title><style>
+  body{font-family:Arial, sans-serif; padding:20px}
+  table{width:100%; border-collapse:collapse}
+  th,td{border:1px solid #e2e8f0; padding:8px; text-align:left; font-size:12px}
+  th{background:#f8fafc}
+  </style></head><body><h2>Dépenses</h2>${tableRef.value.outerHTML}</body></html>`)
+  win.document.close()
+  win.focus()
+  win.print()
+  win.close()
+}
 
 const fetchExpenses = async () => {
   try {
@@ -212,6 +282,22 @@ const totalMonthlyExpenses = computed(() => expenses.value.reduce((acc, exp) => 
 const maintenanceTotal = computed(() => expenses.value.filter(e => e.category === 'Maintenance').reduce((acc, exp) => acc + parseFloat(exp.amount), 0))
 const equipmentTotal = computed(() => expenses.value.filter(e => e.category === 'Équipement').reduce((acc, exp) => acc + parseFloat(exp.amount), 0))
 const salariesTotal = computed(() => expenses.value.filter(e => e.category === 'Salaires').reduce((acc, exp) => acc + parseFloat(exp.amount), 0))
+
+const filteredExpenses = computed(() => {
+  const q = search.value.toLowerCase().trim()
+  return (expenses.value || []).filter((e) => {
+    const matchesSearch = q === '' ||
+      String(e.description || '').toLowerCase().includes(q) ||
+      String(e.paid_to || '').toLowerCase().includes(q) ||
+      String(e.paid_by || '').toLowerCase().includes(q)
+    const matchesCategory = categoryFilter.value === '' || e.category === categoryFilter.value
+    const matchesStatus = statusFilter.value === '' || e.status === statusFilter.value
+    const date = e.date ? new Date(e.date) : null
+    const fromOk = !dateFrom.value || (date && date >= new Date(dateFrom.value))
+    const toOk = !dateTo.value || (date && date <= new Date(dateTo.value))
+    return matchesSearch && matchesCategory && matchesStatus && fromOk && toOk
+  })
+})
 
 const showFormModal = ref(false)
 const showViewModal = ref(false)
@@ -311,6 +397,80 @@ const translateStatus = (status) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--space-10);
+}
+
+.header-buttons {
+  display: inline-flex;
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.controls {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+  padding: var(--space-4) var(--space-6);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-wrapper {
+  flex: 1 1 360px;
+  position: relative;
+}
+
+.search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.search-input-clean {
+  width: 100%;
+  padding: 0.625rem 1rem 0.625rem 2.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--rounded-md);
+  font-size: 0.9rem;
+  background: #f8fafc;
+  transition: var(--transition-fast);
+}
+
+.search-input-clean:focus {
+  background: white;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+}
+
+.filter-select-clean {
+  padding: 0.625rem 2rem 0.625rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--rounded-md);
+  font-size: 0.9rem;
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filter-input-clean {
+  padding: 0.625rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--rounded-md);
+  font-size: 0.9rem;
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+
+.filter-input-clean:focus {
+  background: white;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
 .header-actions h1 {

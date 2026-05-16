@@ -5,11 +5,44 @@
         <h1>Paiements</h1>
         <p>Choisir une réservation non soldée, payer en avance ou en totalité</p>
       </div>
-      <button class="btn btn-primary" @click="openAddModal()">
-        <i class="fas fa-plus"></i> Nouveau paiement
-      </button>
+      <div class="header-actions">
+        <button class="btn btn-export btn-sm" @click="exportPdf">
+          <i class="fas fa-file-pdf"></i> Export PDF
+        </button>
+        <button class="btn btn-export btn-sm" @click="exportXls">
+          <i class="fas fa-file-excel"></i> Export XLS
+        </button>
+        <button class="btn btn-primary" @click="openAddModal()">
+          <i class="fas fa-plus"></i> Nouveau paiement
+        </button>
+      </div>
     </div>
 
+    <div class="controls card">
+      <div class="search-wrapper">
+        <i class="fas fa-search search-icon"></i>
+        <input
+          type="text"
+          v-model="search"
+          placeholder="Rechercher (client, email, référence)..."
+          class="search-input-clean"
+        />
+      </div>
+      <select v-model="statusFilter" class="filter-select-clean">
+        <option value="">Tous les statuts</option>
+        <option value="paid">Payé</option>
+        <option value="pending">En attente</option>
+        <option value="failed">Échoué</option>
+      </select>
+      <select v-model="methodFilter" class="filter-select-clean">
+        <option value="">Toutes les méthodes</option>
+        <option v-for="m in methods" :key="m" :value="m">{{ m }}</option>
+      </select>
+      <input v-model="dateFrom" type="date" class="filter-input-clean" />
+      <input v-model="dateTo" type="date" class="filter-input-clean" />
+    </div>
+
+    <div ref="exportRef" class="export-scope">
     <div class="stats-grid">
       <div class="stat-card card">
         <div class="stat-icon success"><i class="fas fa-hand-holding-usd"></i></div>
@@ -58,7 +91,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="booking in unpaidBookings" :key="booking.id">
+          <tr v-for="booking in filteredUnpaidBookings" :key="booking.id">
             <td>
               <div class="customer-name">{{ booking.customer_name }}</div>
               <div class="customer-email">{{ booking.customer_email }}</div>
@@ -99,7 +132,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="payment in payments" :key="payment.id">
+          <tr v-for="payment in filteredPayments" :key="payment.id">
             <td>{{ payment.date }}</td>
             <td>{{ payment.booking_customer_name }}</td>
             <td><code>{{ payment.reference }}</code></td>
@@ -114,11 +147,12 @@
               </div>
             </td>
           </tr>
-          <tr v-if="payments.length === 0">
+          <tr v-if="filteredPayments.length === 0">
             <td colspan="8" class="empty-cell">Aucun paiement enregistré</td>
           </tr>
         </tbody>
       </table>
+    </div>
     </div>
 
     <AdminAppModal v-model="showFormModal" title="Enregistrer un paiement" width="560px">
@@ -212,6 +246,40 @@ const route = useRoute()
 
 const payments = ref([])
 const bookings = ref([])
+const exportRef = ref(null)
+const search = ref('')
+const statusFilter = ref('')
+const methodFilter = ref('')
+const dateFrom = ref('')
+const dateTo = ref('')
+
+const exportXls = () => {
+  if (!exportRef.value) return
+  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${exportRef.value.innerHTML}</body></html>`
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'payments.xls'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const exportPdf = () => {
+  if (!exportRef.value) return
+  const win = window.open('', '_blank')
+  if (!win) return
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Paiements</title><style>
+  body{font-family:Arial, sans-serif; padding:20px}
+  table{width:100%; border-collapse:collapse; margin-bottom:16px}
+  th,td{border:1px solid #e2e8f0; padding:8px; text-align:left; font-size:12px}
+  th{background:#f8fafc}
+  </style></head><body><h2>Paiements</h2>${exportRef.value.innerHTML}</body></html>`)
+  win.document.close()
+  win.focus()
+  win.print()
+  win.close()
+}
 const showFormModal = ref(false)
 const showViewModal = ref(false)
 const showDeleteModal = ref(false)
@@ -229,9 +297,36 @@ const form = ref({
 
 const toNumber = (v) => Number(v || 0)
 const unpaidBookings = computed(() => bookings.value.filter(b => toNumber(b.remaining_amount) > 0 && b.status !== 'cancelled'))
+const filteredUnpaidBookings = computed(() => {
+  const q = search.value.toLowerCase().trim()
+  return unpaidBookings.value.filter((b) => {
+    const matchesSearch = q === '' ||
+      String(b.customer_name || '').toLowerCase().includes(q) ||
+      String(b.customer_email || '').toLowerCase().includes(q) ||
+      String(b.hall_name || '').toLowerCase().includes(q)
+    return matchesSearch
+  })
+})
+
 const selectedBookingForForm = computed(() => unpaidBookings.value.find(b => b.id === form.value.booking) || null)
 const totalRevenue = computed(() => payments.value.filter(p => p.status === 'paid').reduce((a, p) => a + toNumber(p.amount), 0))
 const totalRemaining = computed(() => unpaidBookings.value.reduce((a, b) => a + toNumber(b.remaining_amount), 0))
+const methods = computed(() => Array.from(new Set((payments.value || []).map(p => p.method).filter(Boolean))).sort())
+
+const filteredPayments = computed(() => {
+  const q = search.value.toLowerCase().trim()
+  return (payments.value || []).filter((p) => {
+    const matchesSearch = q === '' ||
+      String(p.booking_customer_name || '').toLowerCase().includes(q) ||
+      String(p.reference || '').toLowerCase().includes(q)
+    const matchesStatus = statusFilter.value === '' || p.status === statusFilter.value
+    const matchesMethod = methodFilter.value === '' || p.method === methodFilter.value
+    const date = p.date ? new Date(p.date) : null
+    const fromOk = !dateFrom.value || (date && date >= new Date(dateFrom.value))
+    const toOk = !dateTo.value || (date && date <= new Date(dateTo.value))
+    return matchesSearch && matchesStatus && matchesMethod && fromOk && toOk
+  })
+})
 
 const fetchPayments = async () => {
   try {
@@ -349,6 +444,17 @@ onMounted(async () => {
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-8); }
 .page-header h1 { font-size: 1.75rem; font-weight: 800; margin: 0; color: #0f172a; }
 .page-header p { color: #64748b; margin-top: .35rem; }
+.header-actions { display: inline-flex; gap: .5rem; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+
+.controls { display: flex; gap: var(--space-4); margin-bottom: var(--space-8); padding: var(--space-4) var(--space-6); align-items: center; flex-wrap: wrap; }
+.search-wrapper { flex: 1 1 320px; position: relative; }
+.search-icon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.9rem; }
+.search-input-clean { width: 100%; padding: 0.625rem 1rem 0.625rem 2.5rem; border: 1px solid #e2e8f0; border-radius: var(--rounded-md); font-size: 0.9rem; background: #f8fafc; transition: var(--transition-fast); }
+.search-input-clean:focus { background: white; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1); }
+.filter-select-clean { padding: 0.625rem 2rem 0.625rem 1rem; border: 1px solid #e2e8f0; border-radius: var(--rounded-md); font-size: 0.9rem; background: #f8fafc; color: #475569; font-weight: 600; cursor: pointer; }
+.filter-input-clean { padding: 0.625rem 1rem; border: 1px solid #e2e8f0; border-radius: var(--rounded-md); font-size: 0.9rem; background: #f8fafc; color: #475569; font-weight: 600; transition: var(--transition-fast); }
+.filter-input-clean:focus { background: white; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1); }
+
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-5); margin-bottom: var(--space-8); }
 .stat-card { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5); }
 .stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }

@@ -2,51 +2,60 @@
   <div class="admin-materials">
     <div class="header-actions">
       <h1>Gestion du Matériel</h1>
-      <button class="btn btn-primary" @click="openAddModal">
-        <i class="fas fa-plus"></i> Ajouter du matériel
-      </button>
+      <div class="header-buttons">
+        <button class="btn btn-export btn-sm" @click="exportPdf">
+          <i class="fas fa-file-pdf"></i> Export PDF
+        </button>
+        <button class="btn btn-export btn-sm" @click="exportXls">
+          <i class="fas fa-file-excel"></i> Export XLS
+        </button>
+        <button class="btn btn-primary btn-sm" @click="openAddModal">
+          <i class="fas fa-plus"></i> Ajouter du matériel
+        </button>
+      </div>
     </div>
 
     <div class="stats-grid mb-8">
       <div class="stat-card card">
         <div class="stat-icon primary"><i class="fas fa-boxes"></i></div>
         <div class="stat-info">
-          <span class="stat-label">Total Articles</span>
+          <span class="stat-label">Articles</span>
           <span class="stat-value">{{ materials.length }}</span>
         </div>
       </div>
       <div class="stat-card card">
         <div class="stat-icon success"><i class="fas fa-check-circle"></i></div>
         <div class="stat-info">
-          <span class="stat-label">Bon état</span>
-          <span class="stat-value success">{{ materials.filter(m => m.status === 'good').length }}</span>
+          <span class="stat-label">En Stock</span>
+          <span class="stat-value success">{{ totalAvailable.toLocaleString() }}</span>
         </div>
       </div>
       <div class="stat-card card">
         <div class="stat-icon warning"><i class="fas fa-tools"></i></div>
         <div class="stat-info">
           <span class="stat-label">Endommagé</span>
-          <span class="stat-value warning">{{ materials.filter(m => m.status === 'damaged').length }}</span>
+          <span class="stat-value warning">{{ totalDamaged.toLocaleString() }}</span>
         </div>
       </div>
       <div class="stat-card card">
         <div class="stat-icon danger"><i class="fas fa-times-circle"></i></div>
         <div class="stat-info">
           <span class="stat-label">Perdu</span>
-          <span class="stat-value danger">{{ materials.filter(m => m.status === 'lost').length }}</span>
+          <span class="stat-value danger">{{ totalLost.toLocaleString() }}</span>
         </div>
       </div>
     </div>
 
     <div class="table-container card">
-      <table class="admin-table">
+      <table ref="tableRef" class="admin-table">
         <thead>
           <tr>
             <th>Nom</th>
             <th>Catégorie</th>
             <th>Quantité Totale</th>
             <th>En Stock</th>
-            <th>État</th>
+            <th>Endommagé</th>
+            <th>Perdu</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -56,13 +65,24 @@
             <td>{{ item.category }}</td>
             <td>{{ item.total_quantity }}</td>
             <td>{{ item.available_quantity }}</td>
-            <td>
-              <span :class="['badge', getBadgeClass(item.status)]">
-                {{ translateStatus(item.status) }}
-              </span>
-            </td>
+            <td>{{ (item.damaged_quantity || 0).toLocaleString() }}</td>
+            <td>{{ (item.lost_quantity || 0).toLocaleString() }}</td>
             <td>
               <div class="btn-group">
+                <button
+                  class="btn-icon"
+                  title="Modifier Endommagé"
+                  @click="openQtyModal(item, 'damaged')"
+                >
+                  <i class="fas fa-tools"></i>
+                </button>
+                <button
+                  class="btn-icon"
+                  title="Modifier Perdu"
+                  @click="openQtyModal(item, 'lost')"
+                >
+                  <i class="fas fa-times-circle"></i>
+                </button>
                 <button class="btn-icon view" title="Voir détails" @click="viewMaterial(item)">
                   <i class="fas fa-eye"></i>
                 </button>
@@ -103,21 +123,42 @@
           </div>
           <div class="form-group">
             <label class="form-label">Quantité Disponible</label>
-            <input v-model.number="form.available_quantity" type="number" class="form-input" required />
+            <input :value="availablePreview" type="number" class="form-input" disabled />
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">État</label>
-          <select v-model="form.status" class="form-select" required>
-            <option value="good">Bon état</option>
-            <option value="damaged">Endommagé</option>
-            <option value="lost">Perdu</option>
-          </select>
+        <div class="form-group" v-if="isEditing">
+          <label class="form-label">Quantités (gestion)</label>
+          <div class="qty-hint">
+            <span>Endommagé: <strong>{{ (form.damaged_quantity || 0).toLocaleString() }}</strong></span>
+            <span>Perdu: <strong>{{ (form.lost_quantity || 0).toLocaleString() }}</strong></span>
+            <span class="hint">Utiliser les boutons Endommagé / Perdu dans la liste pour modifier.</span>
+          </div>
         </div>
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showFormModal = false">Annuler</button>
         <button class="btn btn-primary" @click="saveMaterial">{{ isEditing ? 'Mettre à jour' : 'Ajouter' }}</button>
+      </template>
+    </AdminAppModal>
+
+    <AdminAppModal v-model="showQtyModal" :title="qtyTitle" width="420px">
+      <form class="admin-form" @submit.prevent="saveQty">
+        <div v-if="qtyMaterial" class="qty-summary">
+          <div><strong>Article:</strong> {{ qtyMaterial.name }}</div>
+          <div><strong>Total:</strong> {{ qtyMaterial.total_quantity }}</div>
+          <div><strong>En Stock:</strong> {{ qtyMaterial.available_quantity }}</div>
+          <div><strong>Endommagé:</strong> {{ qtyMaterial.damaged_quantity || 0 }}</div>
+          <div><strong>Perdu:</strong> {{ qtyMaterial.lost_quantity || 0 }}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ qtyLabel }}</label>
+          <input v-model.number="qtyValue" type="number" min="0" class="form-input" required />
+          <small class="form-hint">La quantité disponible est recalculée automatiquement.</small>
+        </div>
+      </form>
+      <template #footer>
+        <button class="btn btn-outline" @click="showQtyModal = false">Annuler</button>
+        <button class="btn btn-primary" @click="saveQty">Enregistrer</button>
       </template>
     </AdminAppModal>
 
@@ -141,10 +182,12 @@
           <span class="detail-val">{{ selectedMaterial.available_quantity }}</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">État</span>
-          <span :class="['badge', getBadgeClass(selectedMaterial.status)]">
-            {{ translateStatus(selectedMaterial.status) }}
-          </span>
+          <span class="detail-label">Endommagé</span>
+          <span class="detail-val">{{ selectedMaterial.damaged_quantity || 0 }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Perdu</span>
+          <span class="detail-val">{{ selectedMaterial.lost_quantity || 0 }}</span>
         </div>
       </div>
       <template #footer>
@@ -174,19 +217,52 @@ import { api } from '~/composables/useApi'
 definePageMeta({ layout: 'admin' })
 
 const materials = ref([])
+const tableRef = ref(null)
+
+const exportXls = () => {
+  if (!tableRef.value) return
+  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableRef.value.outerHTML}</body></html>`
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'materials.xls'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const exportPdf = () => {
+  if (!tableRef.value) return
+  const win = window.open('', '_blank')
+  if (!win) return
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Matériel</title><style>
+  body{font-family:Arial, sans-serif; padding:20px}
+  table{width:100%; border-collapse:collapse}
+  th,td{border:1px solid #e2e8f0; padding:8px; text-align:left; font-size:12px}
+  th{background:#f8fafc}
+  </style></head><body><h2>Matériel</h2>${tableRef.value.outerHTML}</body></html>`)
+  win.document.close()
+  win.focus()
+  win.print()
+  win.close()
+}
 const showFormModal = ref(false)
+const showQtyModal = ref(false)
 const showViewModal = ref(false)
 const showDeleteModal = ref(false)
 const isEditing = ref(false)
 const selectedMaterial = ref(null)
+const qtyMaterial = ref(null)
+const qtyMode = ref('damaged')
+const qtyValue = ref(0)
 
 const form = ref({
   id: null,
   name: '',
   category: 'Mobilier',
   total_quantity: 0,
-  available_quantity: 0,
-  status: 'good'
+  damaged_quantity: 0,
+  lost_quantity: 0
 })
 
 const fetchMaterials = async () => {
@@ -208,8 +284,8 @@ const resetForm = () => {
     name: '',
     category: 'Mobilier',
     total_quantity: 0,
-    available_quantity: 0,
-    status: 'good'
+    damaged_quantity: 0,
+    lost_quantity: 0
   }
 }
 
@@ -226,7 +302,14 @@ const viewMaterial = (item) => {
 
 const editMaterial = (item) => {
   isEditing.value = true
-  form.value = { ...item }
+  form.value = {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    total_quantity: item.total_quantity,
+    damaged_quantity: item.damaged_quantity || 0,
+    lost_quantity: item.lost_quantity || 0,
+  }
   showFormModal.value = true
 }
 
@@ -238,10 +321,21 @@ const confirmDelete = (item) => {
 const saveMaterial = async () => {
   try {
     if (isEditing.value) {
-      await api.put(`materials/${form.value.id}/`, form.value)
+      await api.put(`materials/${form.value.id}/`, {
+        id: form.value.id,
+        name: form.value.name,
+        category: form.value.category,
+        total_quantity: form.value.total_quantity,
+        damaged_quantity: form.value.damaged_quantity || 0,
+        lost_quantity: form.value.lost_quantity || 0,
+      })
       notify('Matériel mis à jour avec succès')
     } else {
-      await api.post('materials/', form.value)
+      await api.post('materials/', {
+        name: form.value.name,
+        category: form.value.category,
+        total_quantity: form.value.total_quantity,
+      })
       notify('Nouveau matériel ajouté avec succès')
     }
     showFormModal.value = false
@@ -262,23 +356,43 @@ const deleteMaterial = async () => {
   }
 }
 
-const translateStatus = (status) => {
-  const map = {
-    good: 'Bon état',
-    damaged: 'Endommagé',
-    lost: 'Perdu'
-  }
-  return map[status] || status
+const openQtyModal = (item, mode) => {
+  qtyMaterial.value = item
+  qtyMode.value = mode
+  qtyValue.value = mode === 'lost' ? Number(item.lost_quantity || 0) : Number(item.damaged_quantity || 0)
+  showQtyModal.value = true
 }
 
-const getBadgeClass = (status) => {
-  const map = {
-    good: 'badge-success',
-    damaged: 'badge-warning',
-    lost: 'badge-danger'
+const qtyTitle = computed(() => qtyMode.value === 'lost' ? 'Modifier Perdu' : 'Modifier Endommagé')
+const qtyLabel = computed(() => qtyMode.value === 'lost' ? 'Quantité perdue' : 'Quantité endommagée')
+
+const availablePreview = computed(() => {
+  const total = Number(form.value.total_quantity || 0)
+  const damaged = Number(form.value.damaged_quantity || 0)
+  const lost = Number(form.value.lost_quantity || 0)
+  return Math.max(0, total - damaged - lost)
+})
+
+const saveQty = async () => {
+  if (!qtyMaterial.value) return
+  try {
+    const payload = qtyMode.value === 'lost'
+      ? { lost_quantity: qtyValue.value }
+      : { damaged_quantity: qtyValue.value }
+    await api.patch(`materials/${qtyMaterial.value.id}/`, payload)
+    notify('Quantité mise à jour', 'success')
+    showQtyModal.value = false
+    qtyMaterial.value = null
+    fetchMaterials()
+  } catch (error) {
+    const msg = error?.response?.data?.non_field_errors?.[0] || 'Erreur lors de la mise à jour'
+    notify(msg, 'danger')
   }
-  return map[status] || ''
 }
+
+const totalAvailable = computed(() => (materials.value || []).reduce((a, m) => a + Number(m.available_quantity || 0), 0))
+const totalDamaged = computed(() => (materials.value || []).reduce((a, m) => a + Number(m.damaged_quantity || 0), 0))
+const totalLost = computed(() => (materials.value || []).reduce((a, m) => a + Number(m.lost_quantity || 0), 0))
 </script>
 
 <style scoped>
@@ -293,11 +407,47 @@ const getBadgeClass = (status) => {
   margin-bottom: var(--space-10);
 }
 
+.header-buttons {
+  display: inline-flex;
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .header-actions h1 {
   font-size: 1.75rem;
   font-weight: 800;
   color: #0f172a;
   margin-bottom: 0;
+}
+
+.qty-summary {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: .85rem 1rem;
+  display: grid;
+  gap: .25rem;
+  margin-bottom: .75rem;
+  color: #0f172a;
+  font-weight: 650;
+}
+
+.qty-hint {
+  display: grid;
+  gap: .35rem;
+  padding: .75rem 1rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 650;
+}
+
+.qty-hint .hint {
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
 .stats-grid {

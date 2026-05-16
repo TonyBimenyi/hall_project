@@ -46,7 +46,7 @@ const headers = {
   },
   '/hotel': {
     title: 'Hotel',
-    subtitle: 'Coming soon',
+    subtitle: 'Bientot Disponible',
     image: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1400&q=80'
   },
   '/dashboard': {

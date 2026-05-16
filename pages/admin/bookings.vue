@@ -8,6 +8,12 @@
         <p>Gérer toutes les réservations de salle</p>
       </div>
       <div class="header-actions">
+        <button class="btn btn-export btn-sm" @click="exportPdf">
+          <i class="fas fa-file-pdf"></i> Export PDF
+        </button>
+        <button class="btn btn-export btn-sm" @click="exportXls">
+          <i class="fas fa-file-excel"></i> Export XLS
+        </button>
         <NuxtLink to="/admin/calendar" class="btn btn-secondary btn-sm">
           <i class="fas fa-calendar-alt"></i> Calendrier global
         </NuxtLink>
@@ -37,6 +43,34 @@
           <option value="cancelled">Annulé</option>
         </select>
       </div>
+      <div class="filter-wrapper">
+        <select v-model="hallFilter" class="filter-select-clean">
+          <option value="">Toutes les salles</option>
+          <option v-for="h in halls" :key="h.id" :value="h.id">{{ h.name }}</option>
+        </select>
+      </div>
+      <div class="filter-wrapper">
+        <select v-model="eventTypeFilter" class="filter-select-clean">
+          <option value="">Tous les événements</option>
+          <option value="Mariage">Mariage</option>
+          <option value="Séminaire">Séminaire</option>
+          <option value="Gala">Gala</option>
+          <option value="Anniversaire">Anniversaire</option>
+          <option value="Réunion">Réunion</option>
+        </select>
+      </div>
+      <div class="filter-wrapper">
+        <input v-model="dateFrom" type="date" class="filter-input-clean" />
+      </div>
+      <div class="filter-wrapper">
+        <input v-model="dateTo" type="date" class="filter-input-clean" />
+      </div>
+      <div class="filter-wrapper">
+        <input v-model.number="minAmount" type="number" class="filter-input-clean" placeholder="Min (Fbu)" />
+      </div>
+      <div class="filter-wrapper">
+        <input v-model.number="maxAmount" type="number" class="filter-input-clean" placeholder="Max (Fbu)" />
+      </div>
     </div>
 
     <!-- Table -->
@@ -45,7 +79,7 @@
         Toutes les réservations ({{ filteredBookings.length }})
       </h2>
       <div class="table-wrapper">
-        <table class="bookings-table admin-table">
+        <table ref="tableRef" class="bookings-table admin-table">
           <thead>
             <tr>
               <th>Client</th>
@@ -214,11 +248,46 @@ definePageMeta({ layout: 'admin' })
 
 const search = ref('')
 const statusFilter = ref('')
+const hallFilter = ref('')
+const eventTypeFilter = ref('')
+const dateFrom = ref('')
+const dateTo = ref('')
+const minAmount = ref(null)
+const maxAmount = ref(null)
 const showFormModal = ref(false)
 const showViewModal = ref(false)
 const showDeleteModal = ref(false)
 const isEditing = ref(false)
 const selectedBooking = ref(null)
+const tableRef = ref(null)
+
+const exportXls = () => {
+  if (!tableRef.value) return
+  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableRef.value.outerHTML}</body></html>`
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'bookings.xls'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const exportPdf = () => {
+  if (!tableRef.value) return
+  const win = window.open('', '_blank')
+  if (!win) return
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Réservations</title><style>
+  body{font-family:Arial, sans-serif; padding:20px}
+  table{width:100%; border-collapse:collapse}
+  th,td{border:1px solid #e2e8f0; padding:8px; text-align:left; font-size:12px}
+  th{background:#f8fafc}
+  </style></head><body><h2>Réservations</h2>${tableRef.value.outerHTML}</body></html>`)
+  win.document.close()
+  win.focus()
+  win.print()
+  win.close()
+}
 
 const form = ref({
   id: null,
@@ -282,10 +351,24 @@ const calculatePrice = () => {
 
 const filteredBookings = computed(() => {
   return bookings.value.filter(b => {
-    const matchesSearch = b.customer_name.toLowerCase().includes(search.value.toLowerCase()) || 
-                         b.hall_name.toLowerCase().includes(search.value.toLowerCase())
+    const q = search.value.toLowerCase().trim()
+    const matchesSearch = q === '' ||
+      b.customer_name.toLowerCase().includes(q) ||
+      b.customer_email.toLowerCase().includes(q) ||
+      b.hall_name.toLowerCase().includes(q)
     const matchesStatus = statusFilter.value === '' || b.status === statusFilter.value
-    return matchesSearch && matchesStatus
+    const matchesHall = hallFilter.value === '' || String(b.hall) === String(hallFilter.value) || String(b.hall_id) === String(hallFilter.value)
+    const matchesEventType = eventTypeFilter.value === '' || b.event_type === eventTypeFilter.value
+
+    const start = b.start_date ? new Date(b.start_date) : null
+    const fromOk = !dateFrom.value || (start && start >= new Date(dateFrom.value))
+    const toOk = !dateTo.value || (start && start <= new Date(dateTo.value))
+
+    const amount = Number(b.total_price || 0)
+    const minOk = minAmount.value == null || minAmount.value === '' || amount >= Number(minAmount.value)
+    const maxOk = maxAmount.value == null || maxAmount.value === '' || amount <= Number(maxAmount.value)
+
+    return matchesSearch && matchesStatus && matchesHall && matchesEventType && fromOk && toOk && minOk && maxOk
   })
 })
 
@@ -418,6 +501,7 @@ const confirmDelete = (booking) => {
   padding: var(--space-4) var(--space-6);
   align-items: center;
   height: auto;
+  flex-wrap: wrap;
 }
 
 .search-wrapper {
@@ -459,6 +543,23 @@ const confirmDelete = (booking) => {
   color: #475569;
   font-weight: 600;
   cursor: pointer;
+}
+
+.filter-input-clean {
+  padding: 0.625rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--rounded-md);
+  font-size: 0.9rem;
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+
+.filter-input-clean:focus {
+  background: white;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
 .table-title {

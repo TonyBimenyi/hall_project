@@ -56,7 +56,9 @@ class Material(models.Model):
     name = models.CharField(max_length=100)
     category = models.CharField(max_length=100)
     total_quantity = models.IntegerField()
-    available_quantity = models.IntegerField()
+    damaged_quantity = models.IntegerField(default=0)
+    lost_quantity = models.IntegerField(default=0)
+    available_quantity = models.IntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='good')
 
     def __str__(self):

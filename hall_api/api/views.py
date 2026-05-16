@@ -102,14 +102,27 @@ def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, 
         if account_created
         else ""
     )
+    status_map = {
+        'pending': 'En attente',
+        'confirmed': 'Confirmé',
+        'paid': 'Payé',
+        'cancelled': 'Annulé',
+    }
+    status_label = status_map.get(getattr(booking, 'status', ''), getattr(booking, 'status', ''))
+    intro_line = (
+        "Votre réservation a été enregistrée avec succès.\n\n"
+        if booking.status == 'pending'
+        else "Votre réservation a été confirmée avec succès.\n\n"
+    )
     body = (
         f"Bonjour {greeting_name},\n\n"
-        "Votre réservation a été confirmée avec succès.\n\n"
+        f"{intro_line}"
         "Détails de la réservation :\n"
         f"- Salle : {booking.hall.name}\n"
         f"- Type d evenement : {booking.event_type}\n"
         f"- date debbut : {booking.start_date}\n"
         f"- date fin : {booking.end_date}\n\n"
+        f"- Statut : {status_label}\n\n"
         f"{account_line}"
         "Utilisez le lien sécurisé ci-dessous pour accéder instantanément à votre compte :\n\n"
         "[Gérer mes réservations]\n\n"
@@ -343,7 +356,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             start_date=start_dt,
             end_date=end_dt,
             total_price=total_price,
-            status='confirmed',
+            status='pending',
             created_by=user,
         )
 
@@ -380,7 +393,7 @@ class MagicLinkRequestView(APIView):
         User = get_user_model()
         user = User.objects.filter(email__iexact=email, is_active=True).first()
         if user is None:
-            return Response({'message': "Si ce compte existe, un lien a été envoyé."}, status=status.HTTP_200_OK)
+            return Response({'detail': "Email introuvable"}, status=status.HTTP_404_NOT_FOUND)
 
         raw_token, _ = _issue_magic_token(user)
         magic_url = _build_magic_login_url(request, raw_token)
@@ -398,7 +411,7 @@ class MagicLinkRequestView(APIView):
             recipient_list=[email],
             fail_silently=False,
         )
-        return Response({'message': "Si ce compte existe, un lien a été envoyé."}, status=status.HTTP_200_OK)
+        return Response({'message': "Lien envoyé par email."}, status=status.HTTP_200_OK)
 
 class MagicLinkVerifyView(APIView):
     permission_classes = [permissions.AllowAny]

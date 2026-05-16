@@ -30,7 +30,7 @@
           <div class="welcome-media">
             <img
               class="welcome-image"
-              src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80"
+              src="https://lh3.googleusercontent.com/p/AF1QipNtJLcLIgFJd5EZNMfAc3TcmOzw741WbRxRif5k=w240-h172-n-k-no-nu"
               alt="Welcome"
               loading="lazy"
             />
@@ -131,7 +131,7 @@ const slides = [
   {
     title: 'Réservez facilement en ligne',
     subtitle: 'Choisissez votre salle, vos dates et confirmez votre réservation en quelques clics.',
-    image: 'https://images.unsplash.com/photo-1472653525502-fcd1b145f002?auto=format&fit=crop&w=1900&q=80'
+    image: 'https://lh3.googleusercontent.com/p/AF1QipO2_Nos5xrpFVH_6F3OatpcfS-WDW9GF56DI1a8=w240-h172-n-k-no-nu'
   },
   {
     title: 'Un accompagnement professionnel du début à la fin',

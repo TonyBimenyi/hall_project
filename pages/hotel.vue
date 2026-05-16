@@ -4,7 +4,7 @@
       <ReusablePageHeader />
 
       <div class="card coming-soon">
-        <div class="pill">Coming soon</div>
+        <div class="pill">Bientot Disponible</div>
         <h2>Hotel LaBertha Villa</h2>
         <p>
           Cette section est en cours de préparation. Très bientôt, vous pourrez découvrir nos chambres,

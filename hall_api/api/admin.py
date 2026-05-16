@@ -45,7 +45,7 @@ class PersonnelAdmin(admin.ModelAdmin):
 
 @admin.register(Material)
 class MaterialAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'category', 'total_quantity', 'available_quantity', 'status')
+    list_display = ('id', 'name', 'category', 'total_quantity', 'available_quantity', 'damaged_quantity', 'lost_quantity', 'status')
     list_filter = ('status', 'category')
     search_fields = ('name', 'category')
     ordering = ('name',)

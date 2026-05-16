@@ -29,6 +29,54 @@ class PersonnelSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class MaterialSerializer(serializers.ModelSerializer):
+    def _normalize_and_recalc(self, attrs, instance=None):
+        total = attrs.get('total_quantity', getattr(instance, 'total_quantity', 0))
+        damaged = attrs.get('damaged_quantity', getattr(instance, 'damaged_quantity', 0))
+        lost = attrs.get('lost_quantity', getattr(instance, 'lost_quantity', 0))
+
+        try:
+            total = int(total)
+            damaged = int(damaged)
+            lost = int(lost)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError('Quantités invalides')
+
+        if total < 0:
+            raise serializers.ValidationError({'total_quantity': 'Doit être >= 0'})
+        if damaged < 0:
+            raise serializers.ValidationError({'damaged_quantity': 'Doit être >= 0'})
+        if lost < 0:
+            raise serializers.ValidationError({'lost_quantity': 'Doit être >= 0'})
+        if damaged + lost > total:
+            raise serializers.ValidationError({'non_field_errors': 'Endommagé + Perdu ne peut pas dépasser le total'})
+
+        available = total - damaged - lost
+        attrs['available_quantity'] = available
+
+        if lost == total and total > 0:
+            attrs['status'] = 'lost'
+        elif damaged > 0:
+            attrs['status'] = 'damaged'
+        else:
+            attrs['status'] = 'good'
+
+        return attrs
+
+    def validate(self, attrs):
+        return self._normalize_and_recalc(attrs, instance=self.instance)
+
+    def create(self, validated_data):
+        validated_data = self._normalize_and_recalc(validated_data, instance=None)
+        if 'damaged_quantity' not in validated_data:
+            validated_data['damaged_quantity'] = 0
+        if 'lost_quantity' not in validated_data:
+            validated_data['lost_quantity'] = 0
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data = self._normalize_and_recalc(validated_data, instance=instance)
+        return super().update(instance, validated_data)
+
     class Meta:
         model = Material
         fields = '__all__'

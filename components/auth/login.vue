@@ -153,9 +153,14 @@ export default {
       this.magicLoading = true
       try {
         await axios.post(`${API_ORIGIN}/api/auth/magic-link/request/`, { email: this.magicEmail })
-        notify("Si ce compte existe, un lien de connexion a été envoyé par email.", 'success')
+        notify("Lien de connexion envoyé par email.", 'success')
       } catch (error) {
-        notify("Impossible d'envoyer le lien. Réessayez.", 'danger')
+        const detail = error?.response?.data?.detail
+        if (detail) {
+          notify(detail, 'danger')
+        } else {
+          notify("Impossible d'envoyer le lien. Réessayez.", 'danger')
+        }
       } finally {
         this.magicLoading = false
       }
