@@ -2,8 +2,9 @@
   <header class="navbar" :class="{ scrolled: isScrolled }">
     <nav class="container">
       <NuxtLink to="/" class="logo">
-        <span class="mark">LV</span>
-        <span class="name">LaBertha Villa</span>
+        <!-- <span class="mark"><img src="../../labertha-logo.png" alt=""></span> -->
+         <span class="mark"><img src="../../Belta2.png" alt=""></span> 
+        <!-- <span class="name">LaBertha Villa</span> -->
       </NuxtLink>
 
       <ul class="links desktop-only">
@@ -166,15 +167,16 @@ export default {
   gap: .6rem;
 }
 
-.mark {
-  width: 32px;
-  height: 32px;
+.mark img {
+  width: 122px;
+  height:122px;
   border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #d4af37;
+  /* background: #d4af37; */
   color: #0f172a;
+  margin-top: 5px;
   font-weight: 800;
   font-size: .8rem;
 }

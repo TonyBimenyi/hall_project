@@ -2,7 +2,8 @@
   <footer class="footer">
     <div class="container top">
       <div class="brand">
-        <h3>LaBertha Villa</h3>
+        <!-- <h3>LaBertha Villa</h3> -->
+         <img src="../../labertha-logo.png" alt="">
         <p>Espaces élégants et service professionnel pour mariages, conférences et événements privés.</p>
       </div>
 
@@ -47,7 +48,7 @@ export default {
 <style scoped>
 .footer {
   margin-top: 3rem;
-  background: #0f172a;
+  background: var(--primary-dark);
   color: #e2e8f0;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -68,6 +69,10 @@ export default {
 .brand h3 {
   margin: 0 0 .5rem;
   color: #fff;
+}
+.brand img{
+  height: 102px;
+  width: 102px;
 }
 
 .brand p {

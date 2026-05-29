@@ -1,4 +1,8 @@
 from django.contrib import admin
+try:
+    from unfold.admin import ModelAdmin
+except Exception:
+    ModelAdmin = admin.ModelAdmin
 from .models import Hall, Booking, Personnel, Material, Expense, Payment, MagicLoginToken
 
 admin.site.site_header = 'Hall Management'
@@ -7,14 +11,14 @@ admin.site.index_title = 'Administration'
 
 
 @admin.register(Hall)
-class HallAdmin(admin.ModelAdmin):
+class HallAdmin(ModelAdmin):
     list_display = ('id', 'name', 'capacity', 'price_per_day')
     search_fields = ('name',)
     ordering = ('name',)
 
 
 @admin.register(Booking)
-class BookingAdmin(admin.ModelAdmin):
+class BookingAdmin(ModelAdmin):
     list_display = (
         'id',
         'hall',
@@ -36,7 +40,7 @@ class BookingAdmin(admin.ModelAdmin):
 
 
 @admin.register(Personnel)
-class PersonnelAdmin(admin.ModelAdmin):
+class PersonnelAdmin(ModelAdmin):
     list_display = ('id', 'name', 'role', 'phone', 'status')
     list_filter = ('status', 'role')
     search_fields = ('name', 'role', 'phone')
@@ -44,7 +48,7 @@ class PersonnelAdmin(admin.ModelAdmin):
 
 
 @admin.register(Material)
-class MaterialAdmin(admin.ModelAdmin):
+class MaterialAdmin(ModelAdmin):
     list_display = ('id', 'name', 'category', 'total_quantity', 'available_quantity', 'damaged_quantity', 'lost_quantity', 'status')
     list_filter = ('status', 'category')
     search_fields = ('name', 'category')
@@ -52,7 +56,7 @@ class MaterialAdmin(admin.ModelAdmin):
 
 
 @admin.register(Expense)
-class ExpenseAdmin(admin.ModelAdmin):
+class ExpenseAdmin(ModelAdmin):
     list_display = ('id', 'date', 'description', 'category', 'amount', 'paid_by', 'paid_to', 'status')
     list_filter = ('status', 'category', 'date')
     search_fields = ('description', 'category', 'paid_by', 'paid_to')
@@ -61,7 +65,7 @@ class ExpenseAdmin(admin.ModelAdmin):
 
 
 @admin.register(Payment)
-class PaymentAdmin(admin.ModelAdmin):
+class PaymentAdmin(ModelAdmin):
     list_display = ('id', 'date', 'reference', 'booking', 'amount', 'method', 'kind', 'status')
     list_filter = ('status', 'kind', 'method', 'date')
     search_fields = ('reference', 'method', 'booking__customer_name', 'booking__customer_email')
@@ -70,7 +74,7 @@ class PaymentAdmin(admin.ModelAdmin):
 
 
 @admin.register(MagicLoginToken)
-class MagicLoginTokenAdmin(admin.ModelAdmin):
+class MagicLoginTokenAdmin(ModelAdmin):
     list_display = ('id', 'user', 'expires_at', 'used_at', 'created_at')
     list_filter = ('used_at', 'expires_at', 'created_at')
     search_fields = ('user__username', 'user__email', 'token_hash')

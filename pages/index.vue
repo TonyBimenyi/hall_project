@@ -36,7 +36,7 @@
             />
           </div>
           <div class="welcome-content">
-            <div class="welcome-kicker">Welcome</div>
+            <div class="welcome-kicker">Bienvenue</div>
             <h2>Bienvenue chez LaBertha Villa</h2>
             <p>
               Réservez une salle en quelques clics, recevez une confirmation par email et gérez
