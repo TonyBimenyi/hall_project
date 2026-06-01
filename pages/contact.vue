@@ -6,9 +6,13 @@
       <div class="contact-grid">
         <article class="card info-card">
           <h2>Coordonnées</h2>
-          <div class="info-line"><i class="fas fa-phone"></i> +25779382580</div>
-          <div class="info-line"><i class="fas fa-envelope"></i> contact@belta-reception.bi</div>
-          <div class="info-line"><i class="fas fa-location-dot"></i> Cibitoke, Burundi</div>
+          <div class="info-line"><i class="fas fa-phone"></i> +257 66 47 66 43 (WhatsApp & Appel)</div>
+          <div class="info-line"><i class="fas fa-phone"></i> +257 76 65 39 31 (Appel)</div>
+          <div class="info-line"><i class="fas fa-envelope"></i> info@labertha-villa.com</div>
+          <div class="info-line"><i class="fas fa-globe"></i> labertha-villa.com</div>
+          <div class="info-line"><i class="fas fa-location-dot"></i> Karurama, Cibitoke, Bujumbura, Burundi</div>
+          <div class="info-line"><i class="fab fa-facebook"></i> LaBertha Villa</div>
+          <div class="info-line"><i class="fab fa-linkedin"></i> LaBertha Villa</div>
           <div class="info-line"><i class="fas fa-clock"></i> Lun - Sam : 08h00 - 19h00</div>
         </article>
 

@@ -4,7 +4,9 @@
       <div class="brand">
         <!-- <h3>LaBertha Villa</h3> -->
          <img src="../../labertha-logo.png" alt="">
-        <p>Espaces élégants et service professionnel pour mariages, conférences et événements privés.</p>
+        <p>
+          Hébergement hôtelier et location de salle de réception à Karurama (Cibitoke), dans la nouvelle province de Bujumbura, Burundi.
+        </p>
       </div>
 
       <div class="links">
@@ -20,9 +22,13 @@
 
       <div class="contact">
         <h4>Contact</h4>
-        <p><i class="fas fa-phone"></i> +25779382580</p>
-        <p><i class="fas fa-envelope"></i> contact@belta-reception.bi</p>
-        <p><i class="fas fa-location-dot"></i> Cibitoke, Burundi</p>
+        <p><i class="fas fa-phone"></i> +257 66 47 66 43</p>
+        <p><i class="fas fa-phone"></i> +257 76 65 39 31</p>
+        <p><i class="fas fa-envelope"></i> info@labertha-villa.com</p>
+        <p><i class="fas fa-globe"></i> labertha-villa.com</p>
+        <p><i class="fas fa-location-dot"></i> Karurama, Cibitoke, Bujumbura, Burundi</p>
+        <p><i class="fab fa-facebook"></i> LaBertha Villa</p>
+        <p><i class="fab fa-linkedin"></i> LaBertha Villa</p>
       </div>
     </div>
 

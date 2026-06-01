@@ -39,9 +39,9 @@
             <div class="welcome-kicker">Bienvenue</div>
             <h2>Bienvenue chez LaBertha Villa</h2>
             <p>
-              Réservez une salle en quelques clics, recevez une confirmation par email et gérez
-              vos réservations facilement. Nous mettons l’accent sur la simplicité, la transparence
-              et une expérience moderne pour vos événements.
+              Hôtel et location de salle de réception à Karurama (Cibitoke), dans la nouvelle province de Bujumbura,
+              Burundi. Profitez d’un cadre élégant, paisible et sécurisé pour vos séjours professionnels ou touristiques
+              et pour l’organisation d’événements privés ou institutionnels.
             </p>
             <div class="welcome-actions">
               <NuxtLink to="/book" class="btn btn-primary">Réserver maintenant</NuxtLink>
@@ -102,7 +102,7 @@
     <section class="section">
       <div class="section-head">
         <h2>Nous trouver</h2>
-        <p>Cibitoke, Burundi — +25779382580</p>
+        <p>Karurama, Cibitoke, Bujumbura, Burundi — +257 66 47 66 43 — info@labertha-villa.com</p>
       </div>
       <div class="map card">
         <iframe
@@ -125,17 +125,17 @@ let sliderTimer
 const slides = [
   {
     title: 'Des événements élégants dans des espaces premium',
-    subtitle: 'LaBertha Villa vous accompagne pour mariages, séminaires et célébrations privées.',
+    subtitle: 'Hôtel et salle de réception à Karurama (Cibitoke) — séjours, mariages, séminaires et événements privés.',
     image: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1900&q=80'
   },
   {
     title: 'Réservez facilement en ligne',
-    subtitle: 'Choisissez votre salle, vos dates et confirmez votre réservation en quelques clics.',
+    subtitle: 'Choisissez votre salle, vos dates et confirmez votre demande en quelques clics.',
     image: 'https://lh3.googleusercontent.com/p/AF1QipO2_Nos5xrpFVH_6F3OatpcfS-WDW9GF56DI1a8=w240-h172-n-k-no-nu'
   },
   {
     title: 'Un accompagnement professionnel du début à la fin',
-    subtitle: 'Notre équipe dédiée assure une expérience fluide et un service de qualité.',
+    subtitle: 'Hospitalité burundaise, confort moderne et excellence de service.',
     image: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1900&q=80'
   }
 ]

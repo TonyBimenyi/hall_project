@@ -19,31 +19,45 @@
       <div class="services-grid">
         <article class="card service">
           <div class="service-top">
+            <i class="fas fa-bed"></i>
+            <h3>Hébergement hôtelier</h3>
+          </div>
+          <p>Un hébergement de standing, confortable et soigné pour séjours professionnels ou touristiques.</p>
+        </article>
+        <article class="card service">
+          <div class="service-top">
             <i class="fas fa-building"></i>
-            <h3>Location de salle</h3>
+            <h3>Salle de réception</h3>
           </div>
-          <p>Espaces adaptés à différents formats d’événements, avec configuration selon vos besoins.</p>
+          <p>Mariages, conférences, séminaires et événements privés ou institutionnels.</p>
         </article>
         <article class="card service">
           <div class="service-top">
-            <i class="fas fa-list-check"></i>
-            <h3>Organisation événementielle</h3>
+            <i class="fas fa-utensils"></i>
+            <h3>Restauration & traiteur</h3>
           </div>
-          <p>Coordination complète et gestion logistique personnalisée pour un déroulement sans stress.</p>
+          <p>Restauration et service traiteur sur demande, adaptés au format de votre événement.</p>
         </article>
         <article class="card service">
           <div class="service-top">
-            <i class="fas fa-volume-high"></i>
-            <h3>Équipement technique</h3>
+            <i class="fas fa-tree"></i>
+            <h3>Espaces extérieurs</h3>
           </div>
-          <p>Sonorisation, projection, éclairage et support audiovisuel pour une ambiance réussie.</p>
+          <p>Des espaces extérieurs pour événements, dans un environnement calme et naturel.</p>
         </article>
         <article class="card service">
           <div class="service-top">
-            <i class="fas fa-headset"></i>
-            <h3>Accueil & service client</h3>
+            <i class="fas fa-shield-halved"></i>
+            <h3>Sécurité & parking</h3>
           </div>
-          <p>Équipe dédiée pour l’accueil des invités et le suivi sur place pendant l’événement.</p>
+          <p>Cadre élégant, paisible et sécurisé, avec parking sécurisé.</p>
+        </article>
+        <article class="card service">
+          <div class="service-top">
+            <i class="fas fa-handshake"></i>
+            <h3>Partenariats</h3>
+          </div>
+          <p>Partenariats ouverts avec entreprises, ONG et institutions.</p>
         </article>
       </div>
 

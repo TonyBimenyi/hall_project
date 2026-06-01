@@ -7,7 +7,16 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
    app: {
     head: {
+      title: 'LaBertha Villa',
+      meta: [
+        { name: 'description', content: 'LaBertha Villa — hôtel et location de salle de réception à Karurama (Cibitoke), dans la nouvelle province de Bujumbura, Burundi.' },
+        { property: 'og:title', content: 'LaBertha Villa' },
+        { property: 'og:description', content: 'Hébergement hôtelier et organisation d’événements (mariages, conférences, séminaires) dans un cadre élégant, paisible et sécurisé.' },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:url', content: 'https://labertha-villa.com' },
+      ],
       link: [
+        { rel: 'canonical', href: 'https://labertha-villa.com' },
         {
           rel: "stylesheet",
           href: "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css",
