@@ -2,7 +2,7 @@
   <header class="navbar" :class="{ scrolled: isScrolled }">
     <nav class="container">
       <NuxtLink :to="localePath('/')" class="logo">
-        <span class="mark"><img src="../../labertha-logo.png" alt="LaBertha Villa"></span>
+        <span class="mark"><img src="../../Belta2.png" alt="LaBertha Villa"></span>
         <!-- <span class="name">LaBertha Villa</span> -->
       </NuxtLink>
 

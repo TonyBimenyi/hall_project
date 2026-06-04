@@ -70,7 +70,7 @@
 import axios from 'axios'
 import Notification from '~/components/Notification.vue'
 import { notify } from '~/composables/useNotification'
-import { API_ORIGIN } from '~/composables/useApi'
+import { getApiOrigin } from '~/composables/useApi'
 
 const { t } = useI18n()
 const localePath = useLocalePath()
@@ -96,7 +96,7 @@ const login = async () => {
     const phoneNorm = String(username.value || '').replace(/\s+/g, '').replace(/\D/g, '')
     const loginUsername = phoneNorm || username.value
 
-    const response = await axios.post(`${API_ORIGIN}/api/token/`, {
+    const response = await axios.post(`${getApiOrigin()}/api/token/`, {
       username: loginUsername,
       password: password.value
     })
@@ -104,7 +104,7 @@ const login = async () => {
     localStorage.setItem('access_token', response.data.access)
     localStorage.setItem('refresh_token', response.data.refresh)
 
-    const me = await axios.get(`${API_ORIGIN}/api/me/`, {
+    const me = await axios.get(`${getApiOrigin()}/api/me/`, {
       headers: { Authorization: `Bearer ${response.data.access}` }
     })
     localStorage.setItem('user', JSON.stringify(me.data))
@@ -137,7 +137,7 @@ const requestMagicLink = async () => {
 
   magicLoading.value = true
   try {
-    await axios.post(`${API_ORIGIN}/api/auth/magic-link/request/`, { email: magicEmail.value })
+    await axios.post(`${getApiOrigin()}/api/auth/magic-link/request/`, { email: magicEmail.value })
     notify(t('auth.login.notify.magicSent'), 'success')
   } catch (error) {
     const detail = error?.response?.data?.detail
@@ -154,12 +154,12 @@ const requestMagicLink = async () => {
 const verifyMagicToken = async (token) => {
   loading.value = true
   try {
-    const response = await axios.post(`${API_ORIGIN}/api/auth/magic-link/verify/`, { token })
+    const response = await axios.post(`${getApiOrigin()}/api/auth/magic-link/verify/`, { token })
 
     localStorage.setItem('access_token', response.data.access)
     localStorage.setItem('refresh_token', response.data.refresh)
 
-    const me = await axios.get(`${API_ORIGIN}/api/me/`, {
+    const me = await axios.get(`${getApiOrigin()}/api/me/`, {
       headers: { Authorization: `Bearer ${response.data.access}` }
     })
     localStorage.setItem('user', JSON.stringify(me.data))
@@ -191,11 +191,11 @@ onMounted(() => {
 
 <style scoped>
 .auth-container {
-  min-height: 100vh;
+  min-height: 80vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  /* background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); */
   padding: var(--space-6);
 }
 
@@ -308,7 +308,7 @@ input:focus {
 }
 
 .submit-btn.secondary {
-  background: var(--accent);
+  background: var(--primary);
 }
 
 .magic-hint {

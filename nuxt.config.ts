@@ -360,7 +360,7 @@ export default defineNuxtConfig({
                 passwordLabel: 'Mot de passe',
                 submit: 'Se connecter',
                 emailLabel: 'Email',
-                emailPlaceholder: 'Ex: tony@email.com',
+                emailPlaceholder: 'Entrer Votre emaail',
                 magicSubmit: 'Recevoir un lien de connexion',
                 magicHint: 'Vous recevrez un lien de connexion sécurisé valable 15 minutes.',
                 noAccount: "Vous n'avez pas de compte ?",
@@ -776,7 +776,7 @@ export default defineNuxtConfig({
                 passwordLabel: 'Password',
                 submit: 'Sign in',
                 emailLabel: 'Email',
-                emailPlaceholder: 'Ex: tony@email.com',
+                emailPlaceholder: 'Enter you email',
                 magicSubmit: 'Send me a login link',
                 magicHint: 'You will receive a secure login link valid for 15 minutes.',
                 noAccount: "Don't have an account?",
@@ -905,7 +905,9 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      apiBase: "http://127.0.0.1:8000/api/",
+      // apiBase: "http://127.0.0.1:8000/api/",
+      apiBase: "https://api.labertha-villa.com/api/",
+      
     },
   },
 

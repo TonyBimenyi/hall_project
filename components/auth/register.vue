@@ -49,7 +49,7 @@
 import axios from 'axios'
 import Notification from '~/components/Notification.vue'
 import { notify } from '~/composables/useNotification'
-import { API_ORIGIN } from '~/composables/useApi'
+import { getApiOrigin } from '~/composables/useApi'
 
 const { t } = useI18n()
 const localePath = useLocalePath()
@@ -86,7 +86,7 @@ const register = async () => {
 
   loading.value = true
   try {
-    await axios.post(`${API_ORIGIN}/api/register/`, {
+    await axios.post(`${getApiOrigin()}/api/register/`, {
       phone: phoneNorm,
       first_name: first_name.value,
       last_name: last_name.value,
