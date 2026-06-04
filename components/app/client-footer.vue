@@ -4,24 +4,22 @@
       <div class="brand">
         <!-- <h3>LaBertha Villa</h3> -->
          <img src="../../labertha-logo.png" alt="">
-        <p>
-          Hébergement hôtelier et location de salle de réception à Karurama (Cibitoke), dans la nouvelle province de Bujumbura, Burundi.
-        </p>
+        <p>{{ $t('footer.description') }}</p>
       </div>
 
       <div class="links">
-        <h4>Navigation</h4>
-        <NuxtLink to="/">Accueil</NuxtLink>
-        <NuxtLink to="/about">A Propos</NuxtLink>
-        <NuxtLink to="/services">Services</NuxtLink>
-        <NuxtLink to="/book">Reserver la salle</NuxtLink>
-        <NuxtLink to="/gallery">Gallerie</NuxtLink>
-        <NuxtLink to="/package">Package</NuxtLink>
-        <NuxtLink to="/hotel">Hotel</NuxtLink>
+        <h4>{{ $t('footer.navigation') }}</h4>
+        <NuxtLink :to="localePath('/')">{{ $t('nav.home') }}</NuxtLink>
+        <NuxtLink :to="localePath('/about')">{{ $t('nav.about') }}</NuxtLink>
+        <NuxtLink :to="localePath('/services')">{{ $t('nav.services') }}</NuxtLink>
+        <NuxtLink :to="localePath('/book')">{{ $t('nav.bookRoom') }}</NuxtLink>
+        <NuxtLink :to="localePath('/gallery')">{{ $t('nav.gallery') }}</NuxtLink>
+        <NuxtLink :to="localePath('/package')">{{ $t('nav.package') }}</NuxtLink>
+        <NuxtLink :to="localePath('/hotel')">{{ $t('nav.hotel') }}</NuxtLink>
       </div>
 
       <div class="contact">
-        <h4>Contact</h4>
+        <h4>{{ $t('footer.contact') }}</h4>
         <p><i class="fas fa-phone"></i> +257 66 47 66 43</p>
         <p><i class="fas fa-phone"></i> +257 76 65 39 31</p>
         <p><i class="fas fa-envelope"></i> info@labertha-villa.com</p>
@@ -34,21 +32,14 @@
 
     <div class="container bottom">
       <span>© {{ currentYear }} LaBertha Villa</span>
-      <span>Tous droits réservés</span>
+      <span>{{ $t('footer.rights') }}</span>
     </div>
   </footer>
 </template>
 
-<script>
-export default {
-  name: 'SiteFooter',
-  data() {
-    return {
-      currentYear: new Date().getFullYear()
-    }
-  },
-  methods: {}
-}
+<script setup>
+const localePath = useLocalePath()
+const currentYear = new Date().getFullYear()
 </script>
 
 <style scoped>

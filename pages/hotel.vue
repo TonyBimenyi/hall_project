@@ -4,17 +4,21 @@
       <ReusablePageHeader />
 
       <div class="card coming-soon">
-        <div class="pill">Bientot Disponible</div>
-        <h2>Hotel LaBertha Villa</h2>
+        <div class="pill">{{ t('hotel.comingSoon') }}</div>
+        <h2>{{ t('hotel.title') }}</h2>
         <p>
-          Cette section est en cours de préparation. Très bientôt, vous pourrez découvrir nos chambres,
-          nos services et effectuer vos réservations en ligne.
+          {{ t('hotel.text') }}
         </p>
-        <NuxtLink to="/" class="btn btn-primary btn-sm">Retour à l’accueil</NuxtLink>
+        <NuxtLink :to="localePath('/')" class="btn btn-primary btn-sm">{{ t('hotel.backHome') }}</NuxtLink>
       </div>
     </div>
   </section>
 </template>
+
+<script setup>
+const { t } = useI18n()
+const localePath = useLocalePath()
+</script>
 
 <style scoped>
 .client-page {

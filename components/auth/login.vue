@@ -2,8 +2,8 @@
   <div class="auth-container">
     <div class="auth-card">
 
-      <h1>Bon retour</h1>
-      <p class="subtitle">Connectez-vous pour accéder à votre tableau de bord</p>
+      <h1>{{ t('auth.login.title') }}</h1>
+      <p class="subtitle">{{ t('auth.login.subtitle') }}</p>
 
       <div class="mode-tabs">
         <button
@@ -12,7 +12,7 @@
           @click="authMode = 'password'"
           type="button"
         >
-          Téléphone + mot de passe
+          {{ t('auth.login.tabPassword') }}
         </button>
         <button
           class="mode-btn"
@@ -20,43 +20,43 @@
           @click="authMode = 'magic'"
           type="button"
         >
-          Lien magique (email)
+          {{ t('auth.login.tabMagic') }}
         </button>
       </div>
 
       <div v-if="authMode === 'password'" class="mode-panel">
-        <label>Téléphone (username)</label>
-        <input v-model="username" type="text" placeholder="Ex: 25779382580" />
+        <label>{{ t('auth.login.phoneLabel') }}</label>
+        <input v-model="username" type="text" :placeholder="t('auth.login.phonePlaceholder')" />
         <p v-if="fieldErrors.username" class="field-error">{{ fieldErrors.username }}</p>
 
-        <label>Mot de passe</label>
+        <label>{{ t('auth.login.passwordLabel') }}</label>
         <input v-model="password" type="password" placeholder="••••••••" />
         <p v-if="fieldErrors.password" class="field-error">{{ fieldErrors.password }}</p>
 
         <button class="submit-btn" @click="login" :disabled="loading">
           <span v-if="loading" class="spinner"></span>
-          <span v-else>Se connecter</span>
+          <span v-else>{{ t('auth.login.submit') }}</span>
         </button>
       </div>
 
       <div v-else class="mode-panel">
-        <label>Email</label>
-        <input v-model="magicEmail" type="email" placeholder="Ex: tony@email.com" />
+        <label>{{ t('auth.login.emailLabel') }}</label>
+        <input v-model="magicEmail" type="email" :placeholder="t('auth.login.emailPlaceholder')" />
         <p v-if="fieldErrors.email" class="field-error">{{ fieldErrors.email }}</p>
 
         <button class="submit-btn secondary" @click="requestMagicLink" :disabled="magicLoading">
           <span v-if="magicLoading" class="spinner"></span>
-          <span v-else>Recevoir un lien de connexion</span>
+          <span v-else>{{ t('auth.login.magicSubmit') }}</span>
         </button>
 
         <p class="magic-hint">
-          Vous recevrez un lien de connexion sécurisé valable 15 minutes.
+          {{ t('auth.login.magicHint') }}
         </p>
       </div>
 
       <p class="switch-text">
-        Vous n'avez pas de compte ?
-        <NuxtLink to="/register" class="btn-signin">S'inscrire</NuxtLink>
+        {{ t('auth.login.noAccount') }}
+        <NuxtLink :to="localePath('/register')" class="btn-signin">{{ t('auth.login.signUp') }}</NuxtLink>
     
       </p>
 
@@ -66,136 +66,127 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import axios from 'axios'
 import Notification from '~/components/Notification.vue'
 import { notify } from '~/composables/useNotification'
 import { API_ORIGIN } from '~/composables/useApi'
 
-export default {
-  name: "LoginView",
-  components: { Notification },
-  data() {
-    return {
-      authMode: 'password',
-      username: '',
-      password: '',
-      magicEmail: '',
-      fieldErrors: {},
-      loading: false,
-      magicLoading: false
+const { t } = useI18n()
+const localePath = useLocalePath()
+const route = useRoute()
+const router = useRouter()
+
+const authMode = ref('password')
+const username = ref('')
+const password = ref('')
+const magicEmail = ref('')
+const fieldErrors = ref({})
+const loading = ref(false)
+const magicLoading = ref(false)
+
+const login = async () => {
+  fieldErrors.value = {}
+  if (!username.value) fieldErrors.value.username = t('auth.login.validation.usernameRequired')
+  if (!password.value) fieldErrors.value.password = t('auth.login.validation.passwordRequired')
+  if (Object.keys(fieldErrors.value).length) return
+
+  loading.value = true
+  try {
+    const phoneNorm = String(username.value || '').replace(/\s+/g, '').replace(/\D/g, '')
+    const loginUsername = phoneNorm || username.value
+
+    const response = await axios.post(`${API_ORIGIN}/api/token/`, {
+      username: loginUsername,
+      password: password.value
+    })
+
+    localStorage.setItem('access_token', response.data.access)
+    localStorage.setItem('refresh_token', response.data.refresh)
+
+    const me = await axios.get(`${API_ORIGIN}/api/me/`, {
+      headers: { Authorization: `Bearer ${response.data.access}` }
+    })
+    localStorage.setItem('user', JSON.stringify(me.data))
+
+    notify(t('auth.login.notify.success'), 'success')
+
+    const redirectTo = me.data?.is_staff ? localePath('/admin') : localePath('/dashboard')
+    setTimeout(() => {
+      router.push(redirectTo).then(() => {
+        window.location.reload()
+      })
+    }, 500)
+  } catch (error) {
+    if (error.response && error.response.data) {
+      notify(error.response.data.detail || t('auth.login.notify.invalidCredentials'), 'danger')
+    } else {
+      notify(t('auth.login.notify.genericError'), 'danger')
     }
-  },
-  mounted() {
-    const token = this.$route?.query?.token
-    if (token) {
-      this.authMode = 'magic'
-      this.verifyMagicToken(String(token))
-    }
-  },
-  methods: {
-    async login() {
-      // Reset field errors
-      this.fieldErrors = {}
-
-      // Simple frontend validation
-      if (!this.username) this.fieldErrors.username = 'Le nom d\'utilisateur est requis'
-      if (!this.password) this.fieldErrors.password = 'Le mot de passe est requis'
-      if (Object.keys(this.fieldErrors).length) return
-
-      this.loading = true
-      
-      try {
-        const phoneNorm = String(this.username || '').replace(/\s+/g, '').replace(/\D/g, '')
-        const loginUsername = phoneNorm || this.username
-
-        const response = await axios.post(`${API_ORIGIN}/api/token/`, {
-          username: loginUsername,
-          password: this.password
-        })
-
-        localStorage.setItem('access_token', response.data.access)
-        localStorage.setItem('refresh_token', response.data.refresh)
-
-        const me = await axios.get(`${API_ORIGIN}/api/me/`, {
-          headers: { Authorization: `Bearer ${response.data.access}` }
-        })
-        localStorage.setItem('user', JSON.stringify(me.data))
-
-        // Show success notification
-        notify('Connexion réussie !', 'success')
-
-        const redirectTo = me.data?.is_staff ? '/admin' : '/dashboard'
-
-        // Redirect to dashboard after a short delay and refresh page
-        setTimeout(() => {
-          this.$router.push(redirectTo).then(() => {
-            window.location.reload()
-          })
-        }, 500)
-      } catch (error) {
-        if (error.response && error.response.data) {
-          notify(error.response.data.detail || 'Identifiants invalides', 'danger')
-        } else {
-          notify('Une erreur est survenue. Veuillez réessayer.', 'danger')
-        }
-      } finally {
-        this.loading = false
-      }
-    },
-    async requestMagicLink() {
-      this.fieldErrors = {}
-      if (!this.magicEmail) {
-        this.fieldErrors.email = 'Email requis'
-        return
-      }
-
-      this.magicLoading = true
-      try {
-        await axios.post(`${API_ORIGIN}/api/auth/magic-link/request/`, { email: this.magicEmail })
-        notify("Lien de connexion envoyé par email.", 'success')
-      } catch (error) {
-        const detail = error?.response?.data?.detail
-        if (detail) {
-          notify(detail, 'danger')
-        } else {
-          notify("Impossible d'envoyer le lien. Réessayez.", 'danger')
-        }
-      } finally {
-        this.magicLoading = false
-      }
-    },
-    async verifyMagicToken(token) {
-      this.loading = true
-      try {
-        const response = await axios.post(`${API_ORIGIN}/api/auth/magic-link/verify/`, { token })
-
-        localStorage.setItem('access_token', response.data.access)
-        localStorage.setItem('refresh_token', response.data.refresh)
-
-        const me = await axios.get(`${API_ORIGIN}/api/me/`, {
-          headers: { Authorization: `Bearer ${response.data.access}` }
-        })
-        localStorage.setItem('user', JSON.stringify(me.data))
-
-        notify('Connexion réussie !', 'success')
-
-        const redirectTo = me.data?.is_staff ? '/admin' : (response.data.redirect_to || '/dashboard')
-        this.$router.replace({ path: '/login' })
-        setTimeout(() => {
-          this.$router.push(redirectTo).then(() => {
-            window.location.reload()
-          })
-        }, 300)
-      } catch (error) {
-        notify(error?.response?.data?.detail || 'Lien invalide ou expiré', 'danger')
-      } finally {
-        this.loading = false
-      }
-    }
-
+  } finally {
+    loading.value = false
   }
 }
+
+const requestMagicLink = async () => {
+  fieldErrors.value = {}
+  if (!magicEmail.value) {
+    fieldErrors.value.email = t('auth.login.validation.emailRequired')
+    return
+  }
+
+  magicLoading.value = true
+  try {
+    await axios.post(`${API_ORIGIN}/api/auth/magic-link/request/`, { email: magicEmail.value })
+    notify(t('auth.login.notify.magicSent'), 'success')
+  } catch (error) {
+    const detail = error?.response?.data?.detail
+    if (detail) {
+      notify(detail, 'danger')
+    } else {
+      notify(t('auth.login.notify.magicSendFail'), 'danger')
+    }
+  } finally {
+    magicLoading.value = false
+  }
+}
+
+const verifyMagicToken = async (token) => {
+  loading.value = true
+  try {
+    const response = await axios.post(`${API_ORIGIN}/api/auth/magic-link/verify/`, { token })
+
+    localStorage.setItem('access_token', response.data.access)
+    localStorage.setItem('refresh_token', response.data.refresh)
+
+    const me = await axios.get(`${API_ORIGIN}/api/me/`, {
+      headers: { Authorization: `Bearer ${response.data.access}` }
+    })
+    localStorage.setItem('user', JSON.stringify(me.data))
+
+    notify(t('auth.login.notify.success'), 'success')
+
+    const redirectTo = me.data?.is_staff ? localePath('/admin') : localePath(response.data.redirect_to || '/dashboard')
+    router.replace(localePath('/login'))
+    setTimeout(() => {
+      router.push(redirectTo).then(() => {
+        window.location.reload()
+      })
+    }, 300)
+  } catch (error) {
+    notify(error?.response?.data?.detail || t('auth.login.notify.magicInvalid'), 'danger')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  const token = route?.query?.token
+  if (token) {
+    authMode.value = 'magic'
+    verifyMagicToken(String(token))
+  }
+})
 </script>
 
 <style scoped>

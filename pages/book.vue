@@ -7,7 +7,7 @@
         <!-- CALENDAR -->
         <article class="card calendar-card">
           <div class="calendar-top">
-            <h2>Calendrier</h2>
+            <h2>{{ $t('booking.calendar') }}</h2>
             <div class="calendar-nav">
               <button class="icon-btn" @click="prevMonth">
                 <i class="fas fa-chevron-left"></i>
@@ -20,7 +20,7 @@
           </div>
 
           <div class="weekday-row">
-            <span v-for="d in weekdays" :key="d">{{ d }}</span>
+            <span v-for="d in weekdays" :key="d">{{ $t(`booking.weekdays.${d}`) }}</span>
           </div>
 
           <div class="calendar-grid">
@@ -44,46 +44,46 @@
           </div>
 
           <div class="calendar-legend">
-            <span><i class="dot booked"></i> Réservé</span>
-            <span><i class="dot selected"></i> Sélection</span>
-            <span><i class="dot range"></i> Intervalle</span>
+            <span><i class="dot booked"></i> {{ $t('booking.booked') }}</span>
+            <span><i class="dot selected"></i> {{ $t('booking.selection') }}</span>
+            <span><i class="dot range"></i> {{ $t('booking.range') }}</span>
           </div>
 
           <div class="summary-item">
-            <span>Début</span>
-            <strong>{{ startDate || 'Non sélectionné' }}</strong>
+            <span>{{ $t('booking.start') }}</span>
+            <strong>{{ startDate || $t('booking.notSelected') }}</strong>
           </div>
 
           <div class="summary-item">
-            <span>Fin</span>
-            <strong>{{ endDate || startDate || 'Non sélectionné' }}</strong>
+            <span>{{ $t('booking.end') }}</span>
+            <strong>{{ endDate || startDate || $t('booking.notSelected') }}</strong>
           </div>
 
           <div class="summary-item controls">
             <button class="btn btn-outline btn-sm" @click="clearDates">
-              Effacer
+              {{ $t('booking.clear') }}
             </button>
           </div>
         </article>
 
         <!-- SUMMARY -->
         <article class="card summary-card">
-          <h2>Résumé de réservation</h2>
+          <h2>{{ $t('booking.bookingSummary') }}</h2>
 
           <div class="summary-item">
-            <span>Salle</span>
-            <strong>{{ selectedHall?.name || 'Sélectionnez une salle' }}</strong>
+            <span>{{ $t('booking.hall') }}</span>
+            <strong>{{ selectedHall?.name || $t('booking.selectHall') }}</strong>
           </div>
 
           <div class="summary-item">
-            <span>Capacité</span>
+            <span>{{ $t('booking.capacity') }}</span>
             <strong>
-              {{ selectedHall ? `${selectedHall.capacity} pers.` : '-' }}
+              {{ selectedHall ? `${selectedHall.capacity} ${$t('booking.personsShort')}` : '-' }}
             </strong>
           </div>
 
           <div class="summary-item">
-            <span>Prix / jour</span>
+            <span>{{ $t('booking.pricePerDay') }}</span>
             <strong>
               {{
                 selectedHall
@@ -94,24 +94,24 @@
           </div>
 
           <div class="summary-item">
-            <span>Durée</span>
-            <strong>{{ totalDays }} jour(s)</strong>
+            <span>{{ $t('booking.duration') }}</span>
+            <strong>{{ totalDays }} {{ $t('booking.daysSuffix') }}</strong>
           </div>
 
           <div class="summary-total">
-            <span>Total estimé</span>
+            <span>{{ $t('booking.totalEstimated') }}</span>
             <strong>{{ totalPrice.toLocaleString() }} Fbu</strong>
           </div>
         </article>
 
         <!-- FORM -->
         <article class="card form-card">
-          <h2>Informations client</h2>
+          <h2>{{ $t('booking.customerInfo') }}</h2>
 
           <form class="admin-form" @submit.prevent="submitBooking">
             <div class="form-grid">
               <div class="form-group">
-                <label class="form-label">Nom complet</label>
+                <label class="form-label">{{ $t('booking.fullName') }}</label>
                 <input
                   v-model="form.customer_name"
                   class="form-input"
@@ -120,7 +120,7 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label">Email</label>
+                <label class="form-label">{{ $t('booking.email') }}</label>
                 <input
                   v-model="form.customer_email"
                   type="email"
@@ -132,7 +132,7 @@
 
             <div class="form-grid">
               <div class="form-group">
-                <label class="form-label">Téléphone</label>
+                <label class="form-label">{{ $t('booking.phone') }}</label>
                 <input
                   v-model="form.customer_phone"
                   class="form-input"
@@ -141,14 +141,14 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label">Salle</label>
+                <label class="form-label">{{ $t('booking.hall') }}</label>
                 <select
                   v-model.number="form.hall"
                   class="form-select"
                   required
                   @change="clearDates"
                 >
-                  <option disabled value="">Sélectionner une salle</option>
+                  <option disabled value="">{{ $t('booking.hallPlaceholder') }}</option>
                   <option
                     v-for="hall in halls"
                     :key="hall.id"
@@ -156,32 +156,32 @@
                   >
                     {{ hall.name }} -
                     {{ Number(hall.price_per_day || 0).toLocaleString() }}
-                    Fbu/jour
+                    {{ $t('booking.hallPriceSuffix') }}
                   </option>
                 </select>
               </div>
 
               <div class="form-group">
-                <label class="form-label">Type d'événement</label>
+                <label class="form-label">{{ $t('booking.eventType') }}</label>
                 <select v-model="form.event_type" class="form-select">
-                  <option value="Mariage">Mariage</option>
-                  <option value="Séminaire">Séminaire</option>
-                  <option value="Conférence">Conférence</option>
-                  <option value="Anniversaire">Anniversaire</option>
-                  <option value="Réunion">Réunion</option>
-                  <option value="Autre">Autre</option>
+                  <option value="wedding">{{ $t('booking.eventTypes.wedding') }}</option>
+                  <option value="seminar">{{ $t('booking.eventTypes.seminar') }}</option>
+                  <option value="conference">{{ $t('booking.eventTypes.conference') }}</option>
+                  <option value="birthday">{{ $t('booking.eventTypes.birthday') }}</option>
+                  <option value="meeting">{{ $t('booking.eventTypes.meeting') }}</option>
+                  <option value="other">{{ $t('booking.eventTypes.other') }}</option>
                 </select>
               </div>
             </div>
 
             <div class="form-grid">
               <div class="form-group">
-                <label class="form-label">Date début</label>
+                <label class="form-label">{{ $t('booking.startDate') }}</label>
                 <input :value="startDate" class="form-input" readonly />
               </div>
 
               <div class="form-group">
-                <label class="form-label">Date fin</label>
+                <label class="form-label">{{ $t('booking.endDate') }}</label>
                 <input :value="endDate || startDate" class="form-input" readonly />
               </div>
             </div>
@@ -192,7 +192,7 @@
                 :disabled="isSubmitting"
               >
                 {{
-                  isSubmitting ? 'Envoi en cours...' : 'Confirmer la réservation'
+                  isSubmitting ? $t('booking.submit.sending') : $t('booking.submit.confirm')
                 }}
               </button>
             </div>
@@ -223,10 +223,10 @@ export default {
         customer_email: '',
         customer_phone: '',
         hall: '',
-        event_type: 'Mariage',
+        event_type: 'wedding',
         status: 'pending'
       },
-      weekdays: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+      weekdays: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
     }
   },
 
@@ -244,7 +244,8 @@ export default {
     },
 
     monthLabel() {
-      return this.viewMonth.toLocaleDateString('fr-FR', {
+      const locale = this.$i18n?.locale === 'en' ? 'en-US' : 'fr-FR'
+      return this.viewMonth.toLocaleDateString(locale, {
         month: 'long',
         year: 'numeric'
       })
@@ -381,7 +382,7 @@ export default {
       }
 
       if (this.hasConflict(this.rangeStart, date)) {
-        notify('Cette période contient des dates déjà réservées', 'warning')
+        notify(this.$t('booking.notify.hasBookedDates'), 'warning')
         return
       }
 
@@ -397,7 +398,7 @@ export default {
           this.form.hall = this.halls[0].id
         }
       } catch {
-        notify('Impossible de charger les salles', 'danger')
+        notify(this.$t('booking.notify.loadHallsFail'), 'danger')
       }
     },
 
@@ -434,7 +435,7 @@ export default {
 
     async submitBooking() {
       if (!this.rangeStart) {
-        notify('Veuillez sélectionner au moins une date', 'warning')
+        notify(this.$t('booking.notify.selectAtLeastOneDate'), 'warning')
         return
       }
 
@@ -444,7 +445,7 @@ export default {
         const finalEnd = this.rangeEnd || this.rangeStart
 
         if (this.hasConflict(this.rangeStart, finalEnd)) {
-          notify('Cette période est déjà réservée', 'warning')
+        notify(this.$t('booking.notify.periodAlreadyBooked'), 'warning')
           this.isSubmitting = false
           return
         }
@@ -459,17 +460,17 @@ export default {
           end_date: this.formatYMD(finalEnd),
         })
 
-        notify(response?.data?.message || 'Réservation enregistrée avec succès', 'success')
+        notify(response?.data?.message || this.$t('booking.notify.bookingSuccess'), 'success')
 
         this.form.customer_name = ''
         this.form.customer_email = ''
         this.form.customer_phone = ''
-        this.form.event_type = 'Mariage'
+        this.form.event_type = 'wedding'
         this.clearDates()
 
         await this.fetchCalendar()
       } catch {
-        notify('Échec de la réservation', 'danger')
+        notify(this.$t('booking.notify.bookingFail'), 'danger')
       } finally {
         this.isSubmitting = false
       }

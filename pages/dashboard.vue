@@ -5,13 +5,11 @@
 
       <!-- LOGIN GATE -->
       <div v-if="!isLoggedIn" class="login-gate card">
-        <h2>Connexion requise</h2>
-        <p>
-          Connectez-vous pour accéder à votre tableau de bord et voir vos réservations.
-        </p>
+        <h2>{{ $t('dashboard.loginRequired') }}</h2>
+        <p>{{ $t('dashboard.loginText') }}</p>
         <div class="login-actions">
-          <NuxtLink to="/login" class="btn btn-primary btn-sm">Se connecter</NuxtLink>
-          <NuxtLink to="/register" class="btn btn-outline btn-sm">Créer un compte</NuxtLink>
+          <NuxtLink :to="localePath('/login')" class="btn btn-primary btn-sm">{{ $t('dashboard.signIn') }}</NuxtLink>
+          <NuxtLink :to="localePath('/register')" class="btn btn-outline btn-sm">{{ $t('dashboard.createAccount') }}</NuxtLink>
         </div>
       </div>
 
@@ -19,36 +17,32 @@
       <template v-else>
         <div class="head-row">
           <div>
-            <h2 class="page-title">Bonjour {{ displayName }}</h2>
-            <p class="page-subtitle">
-              Suivez vos réservations et vos paiements en un coup d’œil.
-            </p>
+            <h2 class="page-title">{{ $t('dashboard.hello', { name: displayName }) }}</h2>
+            <p class="page-subtitle">{{ $t('dashboard.subtitle') }}</p>
           </div>
 
-          <NuxtLink to="/book" class="btn btn-primary">
-            Nouvelle réservation
-          </NuxtLink>
+          <NuxtLink :to="localePath('/book')" class="btn btn-primary">{{ $t('dashboard.newBooking') }}</NuxtLink>
         </div>
 
         <!-- STATS -->
         <div class="stats-grid">
           <article class="card stat-card">
-            <span class="label">Mes réservations</span>
+            <span class="label">{{ $t('dashboard.myBookings') }}</span>
             <strong>{{ myBookings.length }}</strong>
           </article>
 
           <article class="card stat-card">
-            <span class="label">En attente</span>
+            <span class="label">{{ $t('dashboard.pending') }}</span>
             <strong>{{ pendingCount }}</strong>
           </article>
 
           <article class="card stat-card">
-            <span class="label">Confirmées</span>
+            <span class="label">{{ $t('dashboard.confirmed') }}</span>
             <strong>{{ confirmedCount }}</strong>
           </article>
 
           <article class="card stat-card">
-            <span class="label">Montant total</span>
+            <span class="label">{{ $t('dashboard.totalAmount') }}</span>
             <strong>{{ totalAmount.toLocaleString() }} Fbu</strong>
           </article>
         </div>
@@ -56,9 +50,9 @@
         <!-- TABLE -->
         <div class="card table-card">
           <div class="table-head">
-            <h3>Historique de réservation</h3>
+            <h3>{{ $t('dashboard.history') }}</h3>
             <button class="btn btn-outline btn-sm" @click="fetchBookings">
-              Actualiser
+              {{ $t('dashboard.refresh') }}
             </button>
           </div>
 
@@ -66,18 +60,18 @@
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>Référence</th>
-                  <th>Événement</th>
-                  <th>Période</th>
-                  <th>Montant</th>
-                  <th>Statut</th>
+                  <th>{{ $t('dashboard.table.reference') }}</th>
+                  <th>{{ $t('dashboard.table.event') }}</th>
+                  <th>{{ $t('dashboard.table.period') }}</th>
+                  <th>{{ $t('dashboard.table.amount') }}</th>
+                  <th>{{ $t('dashboard.table.status') }}</th>
                 </tr>
               </thead>
 
               <tbody>
                 <tr v-for="booking in myBookings" :key="booking.id">
                   <td>#LV-{{ booking.id }}</td>
-                  <td>{{ booking.event_type }}</td>
+                  <td>{{ eventTypeText(booking.event_type) }}</td>
                   <td>{{ booking.start_date }} → {{ booking.end_date }}</td>
                   <td>{{ Number(booking.total_price || 0).toLocaleString() }} Fbu</td>
                   <td>
@@ -88,11 +82,11 @@
                 </tr>
 
                 <tr v-if="!loading && myBookings.length === 0">
-                  <td colspan="5" class="empty">Aucune réservation trouvée.</td>
+                  <td colspan="5" class="empty">{{ $t('dashboard.empty') }}</td>
                 </tr>
 
                 <tr v-if="loading">
-                  <td colspan="5" class="empty">Chargement...</td>
+                  <td colspan="5" class="empty">{{ $t('dashboard.loading') }}</td>
                 </tr>
               </tbody>
             </table>
@@ -101,22 +95,22 @@
 
         <div class="card table-card">
           <div class="table-head">
-            <h3>Sécurité</h3>
+            <h3>{{ $t('dashboard.security') }}</h3>
           </div>
           <p class="security-subtitle">
-            Optionnel : définissez un mot de passe permanent. Sinon, vous pouvez continuer à vous connecter via lien magique.
+            {{ $t('dashboard.securitySubtitle') }}
           </p>
 
           <div class="security-form">
             <div class="security-grid">
               <div class="security-field">
-                <label>Nouveau mot de passe</label>
-                <input type="password" v-model="newPassword" placeholder="Minimum 6 caractères" />
+                <label>{{ $t('dashboard.newPassword') }}</label>
+                <input type="password" v-model="newPassword" :placeholder="$t('dashboard.minChars')" />
               </div>
 
               <div class="security-field">
-                <label>Confirmer le mot de passe</label>
-                <input type="password" v-model="confirmPassword" placeholder="Répétez le mot de passe" />
+                <label>{{ $t('dashboard.confirmPassword') }}</label>
+                <input type="password" v-model="confirmPassword" :placeholder="$t('dashboard.repeatPassword')" />
               </div>
             </div>
 
@@ -124,7 +118,7 @@
 
             <div class="security-actions">
               <button class="btn btn-primary btn-sm" @click="setPassword" :disabled="passwordLoading">
-                {{ passwordLoading ? 'Enregistrement...' : 'Enregistrer' }}
+                {{ passwordLoading ? $t('dashboard.saving') : $t('dashboard.save') }}
               </button>
             </div>
           </div>
@@ -134,129 +128,112 @@
   </section>
 </template>
 
-<script>
+<script setup>
 import { api } from '~/composables/useApi'
 import { notify } from '~/composables/useNotification'
 
-export default {
-  data() {
-    return {
-      loading: false,
-      bookings: [],
-      currentUser: {},
-      isLoggedIn: false,
-      newPassword: '',
-      confirmPassword: '',
-      passwordLoading: false,
-      passwordError: ''
-    }
-  },
+const localePath = useLocalePath()
+const { t } = useI18n()
 
-  computed: {
-    myBookings() {
-      return this.bookings
-    },
+const loading = ref(false)
+const bookings = ref([])
+const currentUser = ref({})
+const isLoggedIn = ref(false)
 
-    pendingCount() {
-      return this.myBookings.filter(b => b.status === 'pending').length
-    },
+const newPassword = ref('')
+const confirmPassword = ref('')
+const passwordLoading = ref(false)
+const passwordError = ref('')
 
-    confirmedCount() {
-      return this.myBookings.filter(b => b.status === 'confirmed').length
-    },
+const myBookings = computed(() => bookings.value)
 
-    totalAmount() {
-      return this.myBookings.reduce(
-        (sum, b) => sum + Number(b.total_price || 0),
-        0
-      )
-    },
+const pendingCount = computed(() => myBookings.value.filter(b => b.status === 'pending').length)
+const confirmedCount = computed(() => myBookings.value.filter(b => b.status === 'confirmed').length)
+const totalAmount = computed(() => myBookings.value.reduce((sum, b) => sum + Number(b.total_price || 0), 0))
 
-    displayName() {
-      const first = this.currentUser?.first_name || ''
-      const last = this.currentUser?.last_name || ''
+const displayName = computed(() => {
+  const first = currentUser.value?.first_name || ''
+  const last = currentUser.value?.last_name || ''
+  if (!first && !last) return t('dashboard.client')
 
-      if (!first && !last) return 'Client'
+  const safeFirst = first ? first.charAt(0).toUpperCase() + first.slice(1) : ''
+  const safeLast = last ? last.charAt(0).toUpperCase() + last.slice(1) : ''
+  return `${safeFirst} ${safeLast}`.trim()
+})
 
-      const safeFirst = first ? first.charAt(0).toUpperCase() + first.slice(1) : ''
-      const safeLast = last ? last.charAt(0).toUpperCase() + last.slice(1) : ''
+const statusClass = (status) => {
+  if (status === 'confirmed') return 'success'
+  if (status === 'cancelled') return 'danger'
+  if (status === 'paid') return 'info'
+  return 'warning'
+}
 
-      return `${safeFirst} ${safeLast}`.trim()
-    }
-  },
+const statusText = (status) => {
+  const safe = status || 'pending'
+  return t(`dashboard.statusText.${safe}`)
+}
 
-  methods: {
-    statusClass(status) {
-      if (status === 'confirmed') return 'success'
-      if (status === 'cancelled') return 'danger'
-      if (status === 'paid') return 'info'
-      return 'warning'
-    },
+const eventTypeText = (eventType) => {
+  if (!eventType) return '-'
+  if (['wedding', 'seminar', 'conference', 'birthday', 'meeting', 'other'].includes(eventType)) {
+    return t(`booking.eventTypes.${eventType}`)
+  }
+  return String(eventType)
+}
 
-    statusText(status) {
-      if (status === 'confirmed') return 'Confirmée'
-      if (status === 'cancelled') return 'Annulée'
-      if (status === 'paid') return 'Payée'
-      return 'En attente'
-    },
+const fetchBookings = async () => {
+  if (!isLoggedIn.value) return
 
-    async fetchBookings() {
-      if (!this.isLoggedIn) return
-
-      this.loading = true
-
-      try {
-        const response = await api.get('bookings/')
-        this.bookings = Array.isArray(response.data) ? response.data : []
-      } catch {
-        notify('Impossible de charger les réservations', 'danger')
-        this.bookings = []
-      } finally {
-        this.loading = false
-      }
-    },
-    async setPassword() {
-      if (!this.isLoggedIn) return
-      this.passwordError = ''
-      if (!this.newPassword || this.newPassword.length < 6) {
-        this.passwordError = 'Mot de passe (min 6 caractères) requis'
-        return
-      }
-      if (this.newPassword !== this.confirmPassword) {
-        this.passwordError = 'Les mots de passe ne correspondent pas'
-        return
-      }
-
-      this.passwordLoading = true
-      try {
-        await api.post('auth/set-password/', { password: this.newPassword })
-        this.newPassword = ''
-        this.confirmPassword = ''
-        notify('Mot de passe défini avec succès', 'success')
-      } catch (e) {
-        const msg = e?.response?.data?.password || e?.response?.data?.detail || 'Impossible de définir le mot de passe'
-        this.passwordError = msg
-        notify(msg, 'danger')
-      } finally {
-        this.passwordLoading = false
-      }
-    }
-  },
-
-  mounted() {
-    try {
-      this.currentUser = JSON.parse(localStorage.getItem('user') || '{}')
-    } catch {
-      this.currentUser = {}
-    }
-
-    this.isLoggedIn = !!localStorage.getItem('access_token')
-
-    if (this.isLoggedIn) {
-      this.fetchBookings()
-    }
+  loading.value = true
+  try {
+    const response = await api.get('bookings/')
+    bookings.value = Array.isArray(response.data) ? response.data : []
+  } catch {
+    notify(t('dashboard.notify.loadBookingsFail'), 'danger')
+    bookings.value = []
+  } finally {
+    loading.value = false
   }
 }
+
+const setPassword = async () => {
+  if (!isLoggedIn.value) return
+  passwordError.value = ''
+
+  if (!newPassword.value || newPassword.value.length < 6) {
+    passwordError.value = t('dashboard.notify.passwordMin')
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    passwordError.value = t('dashboard.notify.passwordMismatch')
+    return
+  }
+
+  passwordLoading.value = true
+  try {
+    await api.post('auth/set-password/', { password: newPassword.value })
+    newPassword.value = ''
+    confirmPassword.value = ''
+    notify(t('dashboard.notify.passwordSetSuccess'), 'success')
+  } catch (e) {
+    const msg = e?.response?.data?.password || e?.response?.data?.detail || t('dashboard.notify.passwordSetFail')
+    passwordError.value = msg
+    notify(msg, 'danger')
+  } finally {
+    passwordLoading.value = false
+  }
+}
+
+onMounted(() => {
+  try {
+    currentUser.value = JSON.parse(localStorage.getItem('user') || '{}')
+  } catch {
+    currentUser.value = {}
+  }
+
+  isLoggedIn.value = !!localStorage.getItem('access_token')
+  if (isLoggedIn.value) fetchBookings()
+})
 </script>
 <style scoped>
 .client-page {

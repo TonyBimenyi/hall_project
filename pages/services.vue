@@ -5,14 +5,14 @@
 
       <div class="services-head card">
         <div>
-          <h2>Nos services</h2>
+          <h2>{{ t('services.title') }}</h2>
           <p>
-            Des prestations flexibles pour accompagner votre événement, de la location à la coordination.
+            {{ t('services.intro') }}
           </p>
         </div>
         <div class="services-actions">
-          <NuxtLink to="/package" class="btn btn-outline">Voir les packages</NuxtLink>
-          <NuxtLink to="/book" class="btn btn-primary">Reserver la salle</NuxtLink>
+          <NuxtLink :to="localePath('/package')" class="btn btn-outline">{{ t('services.viewPackages') }}</NuxtLink>
+          <NuxtLink :to="localePath('/book')" class="btn btn-primary">{{ t('services.reserveRoom') }}</NuxtLink>
         </div>
       </div>
 
@@ -20,59 +20,64 @@
         <article class="card service">
           <div class="service-top">
             <i class="fas fa-bed"></i>
-            <h3>Hébergement hôtelier</h3>
+            <h3>{{ t('services.lodgingTitle') }}</h3>
           </div>
-          <p>Un hébergement de standing, confortable et soigné pour séjours professionnels ou touristiques.</p>
+          <p>{{ t('services.lodgingText') }}</p>
         </article>
         <article class="card service">
           <div class="service-top">
             <i class="fas fa-building"></i>
-            <h3>Salle de réception</h3>
+            <h3>{{ t('services.hallTitle') }}</h3>
           </div>
-          <p>Mariages, conférences, séminaires et événements privés ou institutionnels.</p>
+          <p>{{ t('services.hallText') }}</p>
         </article>
         <article class="card service">
           <div class="service-top">
             <i class="fas fa-utensils"></i>
-            <h3>Restauration & traiteur</h3>
+            <h3>{{ t('services.cateringTitle') }}</h3>
           </div>
-          <p>Restauration et service traiteur sur demande, adaptés au format de votre événement.</p>
+          <p>{{ t('services.cateringText') }}</p>
         </article>
         <article class="card service">
           <div class="service-top">
             <i class="fas fa-tree"></i>
-            <h3>Espaces extérieurs</h3>
+            <h3>{{ t('services.outdoorTitle') }}</h3>
           </div>
-          <p>Des espaces extérieurs pour événements, dans un environnement calme et naturel.</p>
+          <p>{{ t('services.outdoorText') }}</p>
         </article>
         <article class="card service">
           <div class="service-top">
             <i class="fas fa-shield-halved"></i>
-            <h3>Sécurité & parking</h3>
+            <h3>{{ t('services.securityTitle') }}</h3>
           </div>
-          <p>Cadre élégant, paisible et sécurisé, avec parking sécurisé.</p>
+          <p>{{ t('services.securityText') }}</p>
         </article>
         <article class="card service">
           <div class="service-top">
             <i class="fas fa-handshake"></i>
-            <h3>Partenariats</h3>
+            <h3>{{ t('services.partnershipsTitle') }}</h3>
           </div>
-          <p>Partenariats ouverts avec entreprises, ONG et institutions.</p>
+          <p>{{ t('services.partnershipsText') }}</p>
         </article>
       </div>
 
       <div class="cta card">
-        <h2>Besoin d’une offre personnalisée ?</h2>
-        <p>Contactez-nous ou réservez directement en ligne.</p>
+        <h2>{{ t('services.ctaTitle') }}</h2>
+        <p>{{ t('services.ctaText') }}</p>
         <div class="cta-actions">
-          <NuxtLink to="/contact" class="btn btn-outline">Nous contacter</NuxtLink>
-          <NuxtLink to="/package" class="btn btn-outline">Packages</NuxtLink>
-          <NuxtLink to="/book" class="btn btn-primary">Reserver</NuxtLink>
+          <NuxtLink :to="localePath('/contact')" class="btn btn-outline">{{ t('services.contactUs') }}</NuxtLink>
+          <NuxtLink :to="localePath('/package')" class="btn btn-outline">{{ t('services.packages') }}</NuxtLink>
+          <NuxtLink :to="localePath('/book')" class="btn btn-primary">{{ t('services.reserve') }}</NuxtLink>
         </div>
       </div>
     </div>
   </section>
 </template>
+
+<script setup>
+const { t } = useI18n()
+const localePath = useLocalePath()
+</script>
 
 <style scoped>
 .client-page {
@@ -82,7 +87,7 @@
 }
 
 .container {
-  max-width: 1160px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 0 1rem;
 }
@@ -148,6 +153,8 @@
 
 .service h3 {
   margin: 0 0 .35rem;
+  font-size: 17px;
+  font-weight: 800;
 }
 
 .service p {

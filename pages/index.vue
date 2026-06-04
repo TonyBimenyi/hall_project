@@ -9,8 +9,8 @@
           {{ slides[currentSlide].subtitle }}
         </p>
         <div class="hero-actions">
-          <NuxtLink to="/book" class="btn btn-primary">Réserver en ligne</NuxtLink>
-          <NuxtLink to="/gallery" class="btn btn-outline">Voir la galerie</NuxtLink>
+          <NuxtLink :to="localePath('/book')" class="btn btn-primary">{{ $t('home.hero.reserveOnline') }}</NuxtLink>
+          <NuxtLink :to="localePath('/gallery')" class="btn btn-outline">{{ $t('home.hero.viewGallery') }}</NuxtLink>
         </div>
         <div class="hero-dots">
           <button
@@ -36,16 +36,12 @@
             />
           </div>
           <div class="welcome-content">
-            <div class="welcome-kicker">Bienvenue</div>
-            <h2>Bienvenue chez LaBertha Villa</h2>
-            <p>
-              Hôtel et location de salle de réception à Karurama (Cibitoke), dans la nouvelle province de Bujumbura,
-              Burundi. Profitez d’un cadre élégant, paisible et sécurisé pour vos séjours professionnels ou touristiques
-              et pour l’organisation d’événements privés ou institutionnels.
-            </p>
+            <div class="welcome-kicker">{{ $t('home.welcome.kicker') }}</div>
+            <h2>{{ $t('home.welcome.title') }}</h2>
+            <p>{{ $t('home.welcome.text') }}</p>
             <div class="welcome-actions">
-              <NuxtLink to="/book" class="btn btn-primary">Réserver maintenant</NuxtLink>
-              <NuxtLink to="/contact" class="btn btn-outline">Nous contacter</NuxtLink>
+              <NuxtLink :to="localePath('/book')" class="btn btn-primary">{{ $t('home.welcome.reserveNow') }}</NuxtLink>
+              <NuxtLink :to="localePath('/contact')" class="btn btn-outline">{{ $t('home.welcome.contactUs') }}</NuxtLink>
             </div>
           </div>
         </div>
@@ -54,54 +50,82 @@
 
     <section class="section clean">
       <div class="section-head">
-        <h2>Pourquoi choisir LaBertha Villa</h2>
-        <p>Une expérience fluide, moderne et professionnelle pour tous vos événements.</p>
+        <h2>{{ $t('home.why.title') }}</h2>
+        <p>{{ $t('home.why.subtitle') }}</p>
       </div>
       <div class="feature-grid">
         <article class="feature-card card">
           <i class="fas fa-calendar-check"></i>
-          <h3>Réservation rapide</h3>
-          <p>Vérifiez les disponibilités et réservez directement en ligne en quelques clics.</p>
+          <h3>{{ $t('home.why.fastBookingTitle') }}</h3>
+          <p>{{ $t('home.why.fastBookingText') }}</p>
         </article>
         <article class="feature-card card">
           <i class="fas fa-building"></i>
-          <h3>Salles modulables</h3>
-          <p>Plusieurs espaces adaptés à vos besoins, avec capacité et configuration flexibles.</p>
+          <h3>{{ $t('home.why.flexibleRoomsTitle') }}</h3>
+          <p>{{ $t('home.why.flexibleRoomsText') }}</p>
         </article>
         <article class="feature-card card">
           <i class="fas fa-headset"></i>
-          <h3>Support dédié</h3>
-          <p>Notre équipe vous accompagne avant, pendant et après votre événement.</p>
+          <h3>{{ $t('home.why.supportTitle') }}</h3>
+          <p>{{ $t('home.why.supportText') }}</p>
         </article>
+      </div>
+
+      <div class="about-highlight card">
+        <div class="about-kicker">{{ $t('home.aboutHighlight.kicker') }}</div>
+        <div class="about-grid">
+          <div>
+            <h3>{{ $t('home.aboutHighlight.visionTitle') }}</h3>
+            <p>{{ $t('home.aboutHighlight.visionText') }}</p>
+          </div>
+          <div>
+            <h3>{{ $t('home.aboutHighlight.missionTitle') }}</h3>
+            <p>{{ $t('home.aboutHighlight.missionText') }}</p>
+          </div>
+          <div class="values">
+            <h3>{{ $t('home.aboutHighlight.valuesTitle') }}</h3>
+            <div class="chips">
+              <span class="chip">{{ $t('home.aboutHighlight.values.hospitality') }}</span>
+              <span class="chip">{{ $t('home.aboutHighlight.values.quality') }}</span>
+              <span class="chip">{{ $t('home.aboutHighlight.values.professionalism') }}</span>
+              <span class="chip">{{ $t('home.aboutHighlight.values.integrity') }}</span>
+              <span class="chip">{{ $t('home.aboutHighlight.values.satisfaction') }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="about-actions">
+          <NuxtLink :to="localePath('/about')" class="btn btn-outline">{{ $t('home.aboutHighlight.learnMore') }}</NuxtLink>
+          <NuxtLink :to="localePath('/contact')" class="btn btn-primary">{{ $t('home.welcome.contactUs') }}</NuxtLink>
+        </div>
       </div>
     </section>
 
     <section class="section">
       <div class="section-head">
-        <h2>Nos salles disponibles</h2>
-        <p>Des espaces pensés pour des expériences mémorables.</p>
+        <h2>{{ $t('home.halls.title') }}</h2>
+        <p>{{ $t('home.halls.subtitle') }}</p>
       </div>
       <div class="hall-grid">
         <article v-for="hall in halls" :key="hall.id" class="hall-card card">
           <h3>{{ hall.name }}</h3>
           <div class="hall-meta">
-            <span><i class="fas fa-users"></i> {{ hall.capacity }} pers.</span>
-            <span><i class="fas fa-coins"></i> {{ Number(hall.price_per_day || 0).toLocaleString() }} Fbu / jour</span>
+            <span><i class="fas fa-users"></i> {{ hall.capacity }} {{ $t('home.halls.persons') }}</span>
+            <span><i class="fas fa-coins"></i> {{ Number(hall.price_per_day || 0).toLocaleString() }} {{ $t('home.halls.perDay') }}</span>
           </div>
-          <NuxtLink to="/book" class="btn btn-primary btn-sm">Réserver cette salle</NuxtLink>
+          <NuxtLink :to="localePath('/book')" class="btn btn-primary btn-sm">{{ $t('home.halls.reserveThis') }}</NuxtLink>
         </article>
       </div>
     </section>
 
     <section class="cta card">
-      <h2>Prêt à réserver votre date ?</h2>
-      <p>Consultez les disponibilités et soumettez votre demande en ligne.</p>
-      <NuxtLink to="/book" class="btn btn-primary">Commencer ma réservation</NuxtLink>
+      <h2>{{ $t('home.cta.title') }}</h2>
+      <p>{{ $t('home.cta.subtitle') }}</p>
+      <NuxtLink :to="localePath('/book')" class="btn btn-primary">{{ $t('home.cta.start') }}</NuxtLink>
     </section>
 
     <section class="section">
       <div class="section-head">
-        <h2>Nous trouver</h2>
+        <h2>{{ $t('home.findUs.title') }}</h2>
         <p>Karurama, Cibitoke, Bujumbura, Burundi — +257 66 47 66 43 — info@labertha-villa.com</p>
       </div>
       <div class="map card">
@@ -119,26 +143,29 @@
 <script setup>
 import { api } from '~/composables/useApi'
 
+const { t } = useI18n()
+const localePath = useLocalePath()
+
 const halls = ref([])
 const currentSlide = ref(0)
 let sliderTimer
-const slides = [
+const slides = computed(() => [
   {
-    title: 'Des événements élégants dans des espaces premium',
-    subtitle: 'Hôtel et salle de réception à Karurama (Cibitoke) — séjours, mariages, séminaires et événements privés.',
+    title: t('home.slides.s1Title'),
+    subtitle: t('home.slides.s1Subtitle'),
     image: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1900&q=80'
   },
   {
-    title: 'Réservez facilement en ligne',
-    subtitle: 'Choisissez votre salle, vos dates et confirmez votre demande en quelques clics.',
+    title: t('home.slides.s2Title'),
+    subtitle: t('home.slides.s2Subtitle'),
     image: 'https://lh3.googleusercontent.com/p/AF1QipO2_Nos5xrpFVH_6F3OatpcfS-WDW9GF56DI1a8=w240-h172-n-k-no-nu'
   },
   {
-    title: 'Un accompagnement professionnel du début à la fin',
-    subtitle: 'Hospitalité burundaise, confort moderne et excellence de service.',
+    title: t('home.slides.s3Title'),
+    subtitle: t('home.slides.s3Subtitle'),
     image: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1900&q=80'
   }
-]
+])
 
 const fetchHalls = async () => {
   try {
@@ -162,7 +189,7 @@ const setSlide = (index) => {
 
 const startSlider = () => {
   sliderTimer = setInterval(() => {
-    currentSlide.value = (currentSlide.value + 1) % slides.length
+    currentSlide.value = (currentSlide.value + 1) % slides.value.length
   }, 5000)
 }
 
@@ -389,6 +416,71 @@ onBeforeUnmount(() => {
   gap: 1rem;
 }
 
+.about-highlight {
+  margin-top: 1rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+  padding: 1.25rem;
+}
+
+.about-kicker {
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: #a16207;
+  margin-bottom: 0.6rem;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.1fr;
+  gap: 1rem;
+}
+
+.about-grid h3 {
+  margin: 0 0 0.35rem;
+  color: #0f172a;
+  font-size: 1.05rem;
+}
+
+.about-grid p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.65;
+}
+
+.values .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.about-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .feature-card {
   padding: 1.4rem;
   box-shadow: none;
@@ -402,8 +494,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #eef2ff;
-  color: #4338ca;
+  background: rgba(212, 175, 55, .18);
+  color: var(--primary);
   margin-bottom: .8rem;
 }
 

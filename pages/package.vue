@@ -5,26 +5,25 @@
 
       <div class="intro card">
         <div class="intro-left">
-          <div class="pill">Package</div>
-          <h2>Des formules simples, claires et modernes</h2>
+          <div class="pill">{{ t('package.page.pill') }}</div>
+          <h2>{{ t('package.page.title') }}</h2>
           <p>
-            Choisissez un package selon votre budget et le type d’événement. Chaque formule peut être ajustée
-            sur demande (décoration, sonorisation, disposition, etc.).
+            {{ t('package.page.intro') }}
           </p>
         </div>
         <div class="intro-right">
           <div class="meta">
             <div class="meta-item">
-              <div class="meta-label">Réservation</div>
-              <div class="meta-value">En ligne</div>
+              <div class="meta-label">{{ t('package.page.meta.booking') }}</div>
+              <div class="meta-value">{{ t('package.page.meta.bookingValue') }}</div>
             </div>
             <div class="meta-item">
-              <div class="meta-label">Confirmation</div>
-              <div class="meta-value">Par email</div>
+              <div class="meta-label">{{ t('package.page.meta.confirmation') }}</div>
+              <div class="meta-value">{{ t('package.page.meta.confirmationValue') }}</div>
             </div>
             <div class="meta-item">
-              <div class="meta-label">Support</div>
-              <div class="meta-value">Dédié</div>
+              <div class="meta-label">{{ t('package.page.meta.support') }}</div>
+              <div class="meta-value">{{ t('package.page.meta.supportValue') }}</div>
             </div>
           </div>
         </div>
@@ -33,69 +32,74 @@
       <div class="grid">
         <article class="pkg card">
           <div class="pkg-top">
-            <h3>Essentiel</h3>
-            <div class="tag">Populaire</div>
+            <h3>{{ t('package.page.cards.essential.name') }}</h3>
+            <div class="tag">{{ t('package.popular') }}</div>
           </div>
           <p class="pkg-desc">
-            Idéal pour une réservation rapide avec les besoins principaux.
+            {{ t('package.page.cards.essential.desc') }}
           </p>
           <ul class="pkg-list">
-            <li>Salle + disposition standard</li>
-            <li>Nettoyage inclus</li>
-            <li>Assistance de base sur place</li>
-            <li>Accès calendrier des disponibilités</li>
+            <li>{{ t('package.page.cards.essential.items.i1') }}</li>
+            <li>{{ t('package.page.cards.essential.items.i2') }}</li>
+            <li>{{ t('package.page.cards.essential.items.i3') }}</li>
+            <li>{{ t('package.page.cards.essential.items.i4') }}</li>
           </ul>
-          <NuxtLink to="/book" class="btn btn-primary btn-sm">Reserver la salle</NuxtLink>
+          <NuxtLink :to="localePath('/book')" class="btn btn-primary btn-sm">{{ t('package.page.cards.essential.action') }}</NuxtLink>
         </article>
 
         <article class="pkg card highlighted">
           <div class="pkg-top">
-            <h3>Premium</h3>
-            <div class="tag dark">Recommandé</div>
+            <h3>{{ t('package.page.cards.premium.name') }}</h3>
+            <div class="tag dark">{{ t('package.recommended') }}</div>
           </div>
           <p class="pkg-desc">
-            Une formule complète pour une expérience fluide et élégante.
+            {{ t('package.page.cards.premium.desc') }}
           </p>
           <ul class="pkg-list">
-            <li>Décoration de base + éclairage</li>
-            <li>Sonorisation (standard)</li>
-            <li>Accompagnement avant événement</li>
-            <li>Priorité support</li>
+            <li>{{ t('package.page.cards.premium.items.i1') }}</li>
+            <li>{{ t('package.page.cards.premium.items.i2') }}</li>
+            <li>{{ t('package.page.cards.premium.items.i3') }}</li>
+            <li>{{ t('package.page.cards.premium.items.i4') }}</li>
           </ul>
-          <NuxtLink to="/contact" class="btn btn-primary btn-sm">Demander un devis</NuxtLink>
+          <NuxtLink :to="localePath('/contact')" class="btn btn-primary btn-sm">{{ t('package.page.cards.premium.action') }}</NuxtLink>
         </article>
 
         <article class="pkg card">
           <div class="pkg-top">
-            <h3>Signature</h3>
-            <div class="tag">Sur mesure</div>
+            <h3>{{ t('package.page.cards.signature.name') }}</h3>
+            <div class="tag">{{ t('package.custom') }}</div>
           </div>
           <p class="pkg-desc">
-            Pour les grands événements et une personnalisation totale.
+            {{ t('package.page.cards.signature.desc') }}
           </p>
           <ul class="pkg-list">
-            <li>Décoration avancée</li>
-            <li>Sonorisation + lumière améliorées</li>
-            <li>Coordination événementielle</li>
-            <li>Options additionnelles à la carte</li>
+            <li>{{ t('package.page.cards.signature.items.i1') }}</li>
+            <li>{{ t('package.page.cards.signature.items.i2') }}</li>
+            <li>{{ t('package.page.cards.signature.items.i3') }}</li>
+            <li>{{ t('package.page.cards.signature.items.i4') }}</li>
           </ul>
-          <NuxtLink to="/contact" class="btn btn-outline btn-sm">Parler à un conseiller</NuxtLink>
+          <NuxtLink :to="localePath('/contact')" class="btn btn-outline btn-sm">{{ t('package.page.cards.signature.action') }}</NuxtLink>
         </article>
       </div>
 
       <div class="cta card">
         <div>
-          <h3>Besoin d’un package personnalisé ?</h3>
-          <p>Contactez-nous et recevez une proposition adaptée à votre événement.</p>
+          <h3>{{ t('package.ctaTitle') }}</h3>
+          <p>{{ t('package.ctaText') }}</p>
         </div>
         <div class="cta-actions">
-          <NuxtLink to="/contact" class="btn btn-primary">Nous contacter</NuxtLink>
-          <NuxtLink to="/gallery" class="btn btn-outline">Voir la gallerie</NuxtLink>
+          <NuxtLink :to="localePath('/contact')" class="btn btn-primary">{{ t('package.contactUs') }}</NuxtLink>
+          <NuxtLink :to="localePath('/gallery')" class="btn btn-outline">{{ t('package.viewGallery') }}</NuxtLink>
         </div>
       </div>
     </div>
   </section>
 </template>
+
+<script setup>
+const { t } = useI18n()
+const localePath = useLocalePath()
+</script>
 
 <style scoped>
 .client-page {

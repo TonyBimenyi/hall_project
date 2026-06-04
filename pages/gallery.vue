@@ -14,14 +14,16 @@
 </template>
 
 <script setup>
-const images = [
-  { src: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1200&q=80', alt: 'Configuration mariage' },
-  { src: 'https://images.unsplash.com/photo-1472653525502-fcd1b145f002?auto=format&fit=crop&w=1200&q=80', alt: 'Salle conférence' },
-  { src: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1200&q=80', alt: 'Décoration soirée' },
-  { src: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80', alt: 'Réception privée' },
-  { src: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1200&q=80', alt: 'Banquet' },
-  { src: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80', alt: 'Événement corporate' }
-]
+const { t } = useI18n()
+
+const images = computed(() => [
+  { src: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1200&q=80', alt: t('gallery.items.weddingSetup') },
+  { src: 'https://images.unsplash.com/photo-1472653525502-fcd1b145f002?auto=format&fit=crop&w=1200&q=80', alt: t('gallery.items.conferenceHall') },
+  { src: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1200&q=80', alt: t('gallery.items.eveningDecor') },
+  { src: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80', alt: t('gallery.items.privateReception') },
+  { src: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1200&q=80', alt: t('gallery.items.banquet') },
+  { src: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80', alt: t('gallery.items.corporateEvent') }
+])
 </script>
 
 <style scoped>

@@ -5,7 +5,7 @@
 
       <div class="contact-grid">
         <article class="card info-card">
-          <h2>Coordonnées</h2>
+          <h2>{{ t('contact.title') }}</h2>
           <div class="info-line"><i class="fas fa-phone"></i> +257 66 47 66 43 (WhatsApp & Appel)</div>
           <div class="info-line"><i class="fas fa-phone"></i> +257 76 65 39 31 (Appel)</div>
           <div class="info-line"><i class="fas fa-envelope"></i> info@labertha-villa.com</div>
@@ -13,31 +13,31 @@
           <div class="info-line"><i class="fas fa-location-dot"></i> Karurama, Cibitoke, Bujumbura, Burundi</div>
           <div class="info-line"><i class="fab fa-facebook"></i> LaBertha Villa</div>
           <div class="info-line"><i class="fab fa-linkedin"></i> LaBertha Villa</div>
-          <div class="info-line"><i class="fas fa-clock"></i> Lun - Sam : 08h00 - 19h00</div>
+          <div class="info-line"><i class="fas fa-clock"></i> {{ t('contact.hours') }}</div>
         </article>
 
         <article class="card form-card">
-          <h2>Envoyer un message</h2>
+          <h2>{{ t('contact.sendMessage') }}</h2>
           <form class="admin-form" @submit.prevent="sendMessage">
             <div class="form-group">
-              <label class="form-label">Nom</label>
+              <label class="form-label">{{ t('contact.name') }}</label>
               <input v-model="form.name" class="form-input" required />
             </div>
             <div class="form-group">
-              <label class="form-label">Email</label>
+              <label class="form-label">{{ t('contact.email') }}</label>
               <input v-model="form.email" type="email" class="form-input" required />
             </div>
             <div class="form-group">
-              <label class="form-label">Message</label>
+              <label class="form-label">{{ t('contact.message') }}</label>
               <textarea v-model="form.message" class="form-input" rows="5" required></textarea>
             </div>
-            <button class="btn btn-primary">Envoyer</button>
+            <button class="btn btn-primary">{{ t('contact.send') }}</button>
           </form>
         </article>
       </div>
 
       <div class="card map-card">
-        <h2>Nous trouver</h2>
+        <h2>{{ t('contact.findUs') }}</h2>
         <div class="map-wrap">
           <iframe
             title="Carte LaBertha Villa"
@@ -54,6 +54,8 @@
 <script setup>
 import { notify } from '~/composables/useNotification'
 
+const { t } = useI18n()
+
 const lat = -2.8778673
 const lon = 29.1145199
 const mapSrc = computed(() => {
@@ -68,7 +70,7 @@ const form = ref({
 })
 
 const sendMessage = () => {
-  notify('Votre message a été envoyé. Nous vous répondrons rapidement.', 'success')
+  notify(t('contact.successMessage'), 'success')
   form.value = { name: '', email: '', message: '' }
 }
 </script>
@@ -81,7 +83,7 @@ const sendMessage = () => {
 }
 
 .container {
-  max-width: 1160px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 0 1rem;
 }

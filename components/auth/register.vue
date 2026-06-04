@@ -2,41 +2,41 @@
   <div class="auth-container">
     <div class="auth-card">
 
-      <h1>Créer un compte</h1>
-      <p class="subtitle">Rejoignez-nous et commencez dès aujourd'hui</p>
+      <h1>{{ t('auth.register.title') }}</h1>
+      <p class="subtitle">{{ t('auth.register.subtitle') }}</p>
 
-      <label>Téléphone (chiffres uniquement)</label>
-      <input v-model="username" type="text" placeholder="Ex: 25779382580" />
+      <label>{{ t('auth.register.phoneLabel') }}</label>
+      <input v-model="username" type="text" :placeholder="t('auth.register.phonePlaceholder')" />
       <p v-if="fieldErrors.username" class="field-error">{{ fieldErrors.username }}</p>
 
-      <label>Prénom</label>
+      <label>{{ t('auth.register.firstName') }}</label>
       <input v-model="first_name" type="text" placeholder="Jean" />
       <p v-if="fieldErrors.first_name" class="field-error">{{ fieldErrors.first_name }}</p>
 
-      <label>Nom</label>
+      <label>{{ t('auth.register.lastName') }}</label>
       <input v-model="last_name" type="text" placeholder="Dupont" />
       <p v-if="fieldErrors.last_name" class="field-error">{{ fieldErrors.last_name }}</p>
 
-      <label>Email</label>
+      <label>{{ t('auth.register.email') }}</label>
       <input v-model="email" type="email" placeholder="jean.dupont@exemple.com" />
       <p v-if="fieldErrors.email" class="field-error">{{ fieldErrors.email }}</p>
 
-      <label>Mot de passe</label>
+      <label>{{ t('auth.register.password') }}</label>
       <input v-model="password" type="password" placeholder="••••••••" />
       <p v-if="fieldErrors.password" class="field-error">{{ fieldErrors.password }}</p>
 
-      <label>Confirmer le mot de passe</label>
+      <label>{{ t('auth.register.password2') }}</label>
       <input v-model="password2" type="password" placeholder="••••••••" />
       <p v-if="fieldErrors.password2" class="field-error">{{ fieldErrors.password2 }}</p>
 
       <button class="submit-btn" @click="register" :disabled="loading">
         <span v-if="loading" class="spinner"></span>
-        <span v-else>S'inscrire</span>
+        <span v-else>{{ t('auth.register.submit') }}</span>
       </button>
 
       <p class="switch-text">
-        Vous avez déjà un compte ?
-        <NuxtLink to="/login" class="btn-signin">Se connecter</NuxtLink>
+        {{ t('auth.register.haveAccount') }}
+        <NuxtLink :to="localePath('/login')" class="btn-signin">{{ t('auth.register.signIn') }}</NuxtLink>
       </p>
 
       <!-- Notification component -->
@@ -45,79 +45,69 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import axios from 'axios'
 import Notification from '~/components/Notification.vue'
 import { notify } from '~/composables/useNotification'
 import { API_ORIGIN } from '~/composables/useApi'
 
-export default {
-  name: "RegisterView",
-  components: { Notification },
-  data() {
-    return {
-      username: '',
-      first_name: '',
-      last_name: '',
-      email: '',
-      password: '',
-      password2: '',
-      fieldErrors: {},
-      loading: false
+const { t } = useI18n()
+const localePath = useLocalePath()
+const router = useRouter()
+
+const username = ref('')
+const first_name = ref('')
+const last_name = ref('')
+const email = ref('')
+const password = ref('')
+const password2 = ref('')
+const fieldErrors = ref({})
+const loading = ref(false)
+
+const register = async () => {
+  fieldErrors.value = {}
+
+  const phone = String(username.value || '').replace(/\s+/g, '')
+  const phoneNorm = phone.replace(/\D/g, '')
+
+  if (!phoneNorm) fieldErrors.value.username = t('auth.register.validation.phoneRequired')
+  else if (phoneNorm.length < 8) fieldErrors.value.username = t('auth.register.validation.phoneInvalid')
+
+  if (!first_name.value) fieldErrors.value.first_name = t('auth.register.validation.firstNameRequired')
+  if (!last_name.value) fieldErrors.value.last_name = t('auth.register.validation.lastNameRequired')
+  if (!email.value) fieldErrors.value.email = t('auth.register.validation.emailRequired')
+  if (!password.value) fieldErrors.value.password = t('auth.register.validation.passwordRequired')
+  if (!password2.value) fieldErrors.value.password2 = t('auth.register.validation.password2Required')
+  if (password.value && password2.value && password.value !== password2.value) {
+    fieldErrors.value.password2 = t('auth.register.validation.passwordMismatch')
+  }
+
+  if (Object.keys(fieldErrors.value).length) return
+
+  loading.value = true
+  try {
+    await axios.post(`${API_ORIGIN}/api/register/`, {
+      phone: phoneNorm,
+      first_name: first_name.value,
+      last_name: last_name.value,
+      email: email.value,
+      password: password.value,
+    })
+
+    notify(t('auth.register.notify.success'), 'success')
+
+    setTimeout(() => {
+      router.push(localePath('/login'))
+    }, 2000)
+  } catch (error) {
+    if (error.response && error.response.data) {
+      fieldErrors.value = error.response.data
+      notify(t('auth.register.notify.failed'), 'danger')
+    } else {
+      notify(t('auth.register.notify.genericError'), 'danger')
     }
-  },
-  methods: {
-    async register() {
-      this.fieldErrors = {}
-
-      const phone = String(this.username || '').replace(/\s+/g, '')
-      const phoneNorm = phone.replace(/\D/g, '')
-
-      // Frontend validation
-      if (!phoneNorm) this.fieldErrors.username = 'Le numéro de téléphone est requis'
-      else if (phoneNorm.length < 8) this.fieldErrors.username = 'Numéro de téléphone invalide'
-
-      if (!this.first_name) this.fieldErrors.first_name = 'Le prénom est requis'
-      if (!this.last_name) this.fieldErrors.last_name = 'Le nom est requis'
-      if (!this.email) this.fieldErrors.email = 'L\'email est requis'
-      if (!this.password) this.fieldErrors.password = 'Le mot de passe est requis'
-      if (!this.password2) this.fieldErrors.password2 = 'La confirmation du mot de passe est requise'
-      if (this.password && this.password2 && this.password !== this.password2) {
-        this.fieldErrors.password2 = "Les mots de passe ne correspondent pas"
-      }
-
-      if (Object.keys(this.fieldErrors).length) return
-
-      this.loading = true
-
-      try {
-        await axios.post(`${API_ORIGIN}/api/register/`, {
-          phone: phoneNorm,
-          first_name: this.first_name,
-          last_name: this.last_name,
-          email: this.email,
-          password: this.password,
-        })
-
-        // Show success notification
-        notify('Inscription réussie ! Vous pouvez maintenant vous connecter.', 'success')
-
-        // Redirect to login after a short delay
-        setTimeout(() => {
-          this.$router.push('/login')
-        }, 2000)
-      } catch (error) {
-        if (error.response && error.response.data) {
-          // Handle specific field errors from backend if any
-          this.fieldErrors = error.response.data
-          notify('Échec de l\'inscription. Veuillez vérifier les champs.', 'danger')
-        } else {
-          notify('Une erreur est survenue. Veuillez réessayer.', 'danger')
-        }
-      } finally {
-        this.loading = false
-      }
-    }
+  } finally {
+    loading.value = false
   }
 }
 </script>

@@ -12,54 +12,68 @@
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
+const { t } = useI18n()
 
-const headers = {
+const imagesByPath = {
   '/about': {
-    title: 'À propos',
-    subtitle: 'Découvrez LaBertha Villa et notre engagement qualité',
     image: 'https://images.unsplash.com/photo-1478146059778-26028b07395a?auto=format&fit=crop&w=1400&q=80'
   },
   '/services': {
-    title: 'Services',
-    subtitle: 'Des offres complètes pour vos événements',
     image: 'https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=1400&q=80'
   },
   '/gallery': {
-    title: 'Galerie',
-    subtitle: 'Un aperçu des ambiances que nous créons',
     image: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1400&q=80'
   },
   '/contact': {
-    title: 'Contact',
-    subtitle: 'Parlons de votre projet événementiel',
     image: 'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1400&q=80'
   },
   '/book': {
-    title: 'Réserver',
-    subtitle: 'Choisissez vos dates et confirmez en ligne',
     image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1400&q=80'
   },
   '/package': {
-    title: 'Package',
-    subtitle: 'Des formules prêtes pour votre événement',
     image: 'https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=1400&q=80'
   },
   '/hotel': {
-    title: 'Hotel',
-    subtitle: 'Bientot Disponible',
     image: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1400&q=80'
   },
   '/dashboard': {
-    title: 'Tableau de bord',
-    subtitle: 'Gérez vos réservations personnelles',
     image: 'https://images.unsplash.com/photo-1460551885960-7a70d8a4f4be?auto=format&fit=crop&w=1400&q=80'
   }
 }
 
-const header = computed(() => headers[route.path] || {
-  title: 'LaBertha Villa',
-  subtitle: 'Des espaces élégants pour vos événements',
-  image: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1400&q=80'
+const normalizedPath = computed(() => {
+  let p = route.path || '/'
+  p = p.replace(/^\/(fr|en)(\/|$)/, '/')
+  if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1)
+  return p
+})
+
+const headerKey = computed(() => {
+  const p = normalizedPath.value
+  if (p === '/' || p === '') return 'default'
+  if (p === '/about') return 'about'
+  if (p === '/services') return 'services'
+  if (p === '/gallery') return 'gallery'
+  if (p === '/contact') return 'contact'
+  if (p === '/book') return 'book'
+  if (p === '/package') return 'package'
+  if (p === '/hotel') return 'hotel'
+  if (p === '/dashboard') return 'dashboard'
+  return 'default'
+})
+
+const header = computed(() => {
+  const p = normalizedPath.value
+  const key = headerKey.value
+  const img =
+    imagesByPath[p]?.image ||
+    'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1400&q=80'
+
+  return {
+    title: t(`pageHeader.${key}.title`),
+    subtitle: t(`pageHeader.${key}.subtitle`),
+    image: img
+  }
 })
 </script>
 
