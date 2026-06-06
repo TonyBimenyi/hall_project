@@ -3,10 +3,10 @@
     <div class="header-actions">
       <h1>Gestion du Matériel</h1>
       <div class="header-buttons">
-        <button class="btn btn-export btn-sm" @click="exportPdf">
+        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
           <i class="fas fa-file-pdf"></i> Export PDF
         </button>
-        <button class="btn btn-export btn-sm" @click="exportXls">
+        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
           <i class="fas fa-file-excel"></i> Export XLS
         </button>
         <button class="btn btn-primary btn-sm" @click="openAddModal">
@@ -20,34 +20,117 @@
         <div class="stat-icon primary"><i class="fas fa-boxes"></i></div>
         <div class="stat-info">
           <span class="stat-label">Articles</span>
-          <span class="stat-value">{{ materials.length }}</span>
+          <span class="stat-value">
+            <span v-if="loadingMaterials" class="skeleton-line skeleton-w-40"></span>
+            <template v-else>{{ displayMaterialsCount }}</template>
+          </span>
         </div>
       </div>
       <div class="stat-card card">
         <div class="stat-icon success"><i class="fas fa-check-circle"></i></div>
         <div class="stat-info">
           <span class="stat-label">En Stock</span>
-          <span class="stat-value success">{{ totalAvailable.toLocaleString() }}</span>
+          <span class="stat-value success">
+            <span v-if="loadingMaterials" class="skeleton-line skeleton-w-50"></span>
+            <template v-else>{{ displayTotalAvailable.toLocaleString() }}</template>
+          </span>
         </div>
       </div>
       <div class="stat-card card">
         <div class="stat-icon warning"><i class="fas fa-tools"></i></div>
         <div class="stat-info">
           <span class="stat-label">Endommagé</span>
-          <span class="stat-value warning">{{ totalDamaged.toLocaleString() }}</span>
+          <span class="stat-value warning">
+            <span v-if="loadingMaterials" class="skeleton-line skeleton-w-50"></span>
+            <template v-else>{{ displayTotalDamaged.toLocaleString() }}</template>
+          </span>
         </div>
       </div>
       <div class="stat-card card">
         <div class="stat-icon danger"><i class="fas fa-times-circle"></i></div>
         <div class="stat-info">
           <span class="stat-label">Perdu</span>
-          <span class="stat-value danger">{{ totalLost.toLocaleString() }}</span>
+          <span class="stat-value danger">
+            <span v-if="loadingMaterials" class="skeleton-line skeleton-w-50"></span>
+            <template v-else>{{ displayTotalLost.toLocaleString() }}</template>
+          </span>
         </div>
       </div>
     </div>
 
     <div class="table-container card">
-      <table ref="tableRef" class="admin-table">
+      <div v-if="isMobile" class="admin-cards">
+        <template v-if="loadingMaterials">
+          <div v-for="n in 6" :key="`sk-card-${n}`" class="admin-card">
+            <div class="admin-card-head">
+              <div style="width: 100%;">
+                <div class="skeleton-line skeleton-w-70"></div>
+                <div style="margin-top: 8px;" class="skeleton-line skeleton-w-50"></div>
+              </div>
+            </div>
+            <div class="admin-card-body">
+              <div class="skeleton-line skeleton-w-60"></div>
+              <div class="skeleton-line skeleton-w-40"></div>
+              <div class="skeleton-line skeleton-w-50"></div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div v-for="item in materials" :key="item.id" class="admin-card">
+            <div class="admin-card-head">
+              <div>
+                <div class="admin-card-title">{{ item.name }}</div>
+                <div class="admin-card-subtitle">{{ item.category }}</div>
+              </div>
+
+              <div class="actions-dropdown">
+                <button class="btn-icon details" title="Détails" @click.stop="toggleActions(item.id)">
+                  <i class="fas fa-ellipsis-vertical"></i>
+                </button>
+                <div v-if="openActionsId === item.id" class="actions-menu" @click.stop>
+                  <button class="actions-item" @click="openQtyModal(item, 'damaged')">
+                    <i class="fas fa-tools"></i> Endommagé
+                  </button>
+                  <button class="actions-item" @click="openQtyModal(item, 'lost')">
+                    <i class="fas fa-times-circle"></i> Perdu
+                  </button>
+                  <button class="actions-item" @click="viewMaterial(item)">
+                    <i class="fas fa-eye"></i> Voir
+                  </button>
+                  <button class="actions-item" @click="editMaterial(item)">
+                    <i class="fas fa-edit"></i> Modifier
+                  </button>
+                  <button class="actions-item danger" @click="confirmDelete(item)">
+                    <i class="fas fa-trash-alt"></i> Supprimer
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="admin-card-body">
+              <div class="admin-kv">
+                <span class="k">Total</span>
+                <span class="v">{{ item.total_quantity }}</span>
+              </div>
+              <div class="admin-kv">
+                <span class="k">En stock</span>
+                <span class="v">{{ item.available_quantity }}</span>
+              </div>
+              <div class="admin-kv">
+                <span class="k">Endommagé</span>
+                <span class="v">{{ (item.damaged_quantity || 0).toLocaleString() }}</span>
+              </div>
+              <div class="admin-kv">
+                <span class="k">Perdu</span>
+                <span class="v">{{ (item.lost_quantity || 0).toLocaleString() }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+        <div v-if="!loadingMaterials && materials.length === 0" class="empty-cell">Aucun matériel</div>
+      </div>
+
+      <table v-else ref="tableRef" class="admin-table">
         <thead>
           <tr>
             <th>Nom</th>
@@ -60,38 +143,46 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in materials" :key="item.id">
+          <template v-if="loadingMaterials">
+            <tr v-for="n in 6" :key="`sk-${n}`">
+              <td><div class="skeleton-line skeleton-w-70"></div></td>
+              <td><div class="skeleton-line skeleton-w-50"></div></td>
+              <td><div class="skeleton-line skeleton-w-30"></div></td>
+              <td><div class="skeleton-line skeleton-w-30"></div></td>
+              <td><div class="skeleton-line skeleton-w-30"></div></td>
+              <td><div class="skeleton-line skeleton-w-30"></div></td>
+              <td><div class="skeleton-line skeleton-w-60"></div></td>
+            </tr>
+          </template>
+          <tr v-else v-for="item in materials" :key="item.id">
             <td><strong>{{ item.name }}</strong></td>
             <td>{{ item.category }}</td>
             <td>{{ item.total_quantity }}</td>
             <td>{{ item.available_quantity }}</td>
             <td>{{ (item.damaged_quantity || 0).toLocaleString() }}</td>
             <td>{{ (item.lost_quantity || 0).toLocaleString() }}</td>
-            <td>
-              <div class="btn-group">
-                <button
-                  class="btn-icon"
-                  title="Modifier Endommagé"
-                  @click="openQtyModal(item, 'damaged')"
-                >
-                  <i class="fas fa-tools"></i>
+            <td class="actions-cell">
+              <div class="actions-dropdown">
+                <button class="btn-icon details" title="Détails" @click.stop="toggleActions(item.id)">
+                  <i class="fas fa-ellipsis-vertical"></i>
                 </button>
-                <button
-                  class="btn-icon"
-                  title="Modifier Perdu"
-                  @click="openQtyModal(item, 'lost')"
-                >
-                  <i class="fas fa-times-circle"></i>
-                </button>
-                <button class="btn-icon view" title="Voir détails" @click="viewMaterial(item)">
-                  <i class="fas fa-eye"></i>
-                </button>
-                <button class="btn-icon edit" title="Modifier" @click="editMaterial(item)">
-                  <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn-icon delete" title="Supprimer" @click="confirmDelete(item)">
-                  <i class="fas fa-trash-alt"></i>
-                </button>
+                <div v-if="openActionsId === item.id" class="actions-menu" @click.stop>
+                  <button class="actions-item" @click="openQtyModal(item, 'damaged')">
+                    <i class="fas fa-tools"></i> Endommagé
+                  </button>
+                  <button class="actions-item" @click="openQtyModal(item, 'lost')">
+                    <i class="fas fa-times-circle"></i> Perdu
+                  </button>
+                  <button class="actions-item" @click="viewMaterial(item)">
+                    <i class="fas fa-eye"></i> Voir
+                  </button>
+                  <button class="actions-item" @click="editMaterial(item)">
+                    <i class="fas fa-edit"></i> Modifier
+                  </button>
+                  <button class="actions-item danger" @click="confirmDelete(item)">
+                    <i class="fas fa-trash-alt"></i> Supprimer
+                  </button>
+                </div>
               </div>
             </td>
           </tr>
@@ -137,7 +228,9 @@
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showFormModal = false">Annuler</button>
-        <button class="btn btn-primary" @click="saveMaterial">{{ isEditing ? 'Mettre à jour' : 'Ajouter' }}</button>
+        <button class="btn btn-primary" :class="{ 'is-loading': savingMaterial }" :disabled="savingMaterial" @click="saveMaterial">
+          {{ isEditing ? 'Mettre à jour' : 'Ajouter' }}
+        </button>
       </template>
     </AdminAppModal>
 
@@ -158,7 +251,9 @@
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showQtyModal = false">Annuler</button>
-        <button class="btn btn-primary" @click="saveQty">Enregistrer</button>
+        <button class="btn btn-primary" :class="{ 'is-loading': savingQty }" :disabled="savingQty" @click="saveQty">
+          Enregistrer
+        </button>
       </template>
     </AdminAppModal>
 
@@ -200,13 +295,11 @@
       <p>Êtes-vous sûr de vouloir supprimer <strong>{{ selectedMaterial?.name }}</strong> ?</p>
       <template #footer>
         <button class="btn btn-outline" @click="showDeleteModal = false">Annuler</button>
-        <button class="btn btn-danger" @click="deleteMaterial">Supprimer</button>
+        <button class="btn btn-danger" :class="{ 'is-loading': deletingMaterial }" :disabled="deletingMaterial" @click="deleteMaterial">
+          Supprimer
+        </button>
       </template>
     </AdminAppModal>
-
-    <div class="static-info">
-      <p><i class="fas fa-info-circle"></i> Affichage de données statiques (Mode Démo)</p>
-    </div>
   </div>
 </template>
 
@@ -218,9 +311,27 @@ definePageMeta({ layout: 'admin' })
 
 const materials = ref([])
 const tableRef = ref(null)
+const exportingPdf = ref(false)
+const exportingXls = ref(false)
+const loadingMaterials = ref(false)
+const openActionsId = ref(null)
+const isMobile = ref(false)
+const savingMaterial = ref(false)
+const savingQty = ref(false)
+const deletingMaterial = ref(false)
 
-const exportXls = () => {
+const toggleActions = (id) => {
+  openActionsId.value = openActionsId.value === id ? null : id
+}
+
+const closeActions = () => {
+  openActionsId.value = null
+}
+
+const exportXls = async () => {
   if (!tableRef.value) return
+  exportingXls.value = true
+  await nextTick()
   const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableRef.value.outerHTML}</body></html>`
   const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
   const url = URL.createObjectURL(blob)
@@ -229,12 +340,20 @@ const exportXls = () => {
   a.download = 'materials.xls'
   a.click()
   URL.revokeObjectURL(url)
+  setTimeout(() => {
+    exportingXls.value = false
+  }, 350)
 }
 
-const exportPdf = () => {
+const exportPdf = async () => {
   if (!tableRef.value) return
+  exportingPdf.value = true
+  await nextTick()
   const win = window.open('', '_blank')
-  if (!win) return
+  if (!win) {
+    exportingPdf.value = false
+    return
+  }
   win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Matériel</title><style>
   body{font-family:Arial, sans-serif; padding:20px}
   table{width:100%; border-collapse:collapse}
@@ -245,6 +364,9 @@ const exportPdf = () => {
   win.focus()
   win.print()
   win.close()
+  setTimeout(() => {
+    exportingPdf.value = false
+  }, 350)
 }
 const showFormModal = ref(false)
 const showQtyModal = ref(false)
@@ -266,16 +388,29 @@ const form = ref({
 })
 
 const fetchMaterials = async () => {
+  loadingMaterials.value = true
   try {
     const response = await api.get('materials/')
     materials.value = response.data
   } catch (error) {
     notify('Erreur lors du chargement du matériel', 'danger')
+  } finally {
+    loadingMaterials.value = false
   }
 }
 
 onMounted(() => {
   fetchMaterials()
+  if (process.client) {
+    const update = () => { isMobile.value = window.innerWidth <= 992 }
+    update()
+    window.addEventListener('resize', update)
+    onBeforeUnmount(() => window.removeEventListener('resize', update))
+
+    const onDocClick = () => { openActionsId.value = null }
+    document.addEventListener('click', onDocClick)
+    onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+  }
 })
 
 const resetForm = () => {
@@ -296,11 +431,13 @@ const openAddModal = () => {
 }
 
 const viewMaterial = (item) => {
+  closeActions()
   selectedMaterial.value = item
   showViewModal.value = true
 }
 
 const editMaterial = (item) => {
+  closeActions()
   isEditing.value = true
   form.value = {
     id: item.id,
@@ -314,11 +451,14 @@ const editMaterial = (item) => {
 }
 
 const confirmDelete = (item) => {
+  closeActions()
   selectedMaterial.value = item
   showDeleteModal.value = true
 }
 
 const saveMaterial = async () => {
+  if (savingMaterial.value) return
+  savingMaterial.value = true
   try {
     if (isEditing.value) {
       await api.put(`materials/${form.value.id}/`, {
@@ -342,10 +482,14 @@ const saveMaterial = async () => {
     fetchMaterials()
   } catch (error) {
     notify('Erreur lors de l\'enregistrement', 'danger')
+  } finally {
+    savingMaterial.value = false
   }
 }
 
 const deleteMaterial = async () => {
+  if (deletingMaterial.value || !selectedMaterial.value?.id) return
+  deletingMaterial.value = true
   try {
     await api.delete(`materials/${selectedMaterial.value.id}/`)
     notify('Matériel supprimé', 'danger')
@@ -353,10 +497,13 @@ const deleteMaterial = async () => {
     fetchMaterials()
   } catch (error) {
     notify('Erreur lors de la suppression', 'danger')
+  } finally {
+    deletingMaterial.value = false
   }
 }
 
 const openQtyModal = (item, mode) => {
+  closeActions()
   qtyMaterial.value = item
   qtyMode.value = mode
   qtyValue.value = mode === 'lost' ? Number(item.lost_quantity || 0) : Number(item.damaged_quantity || 0)
@@ -375,6 +522,8 @@ const availablePreview = computed(() => {
 
 const saveQty = async () => {
   if (!qtyMaterial.value) return
+  if (savingQty.value) return
+  savingQty.value = true
   try {
     const payload = qtyMode.value === 'lost'
       ? { lost_quantity: qtyValue.value }
@@ -387,12 +536,54 @@ const saveQty = async () => {
   } catch (error) {
     const msg = error?.response?.data?.non_field_errors?.[0] || 'Erreur lors de la mise à jour'
     notify(msg, 'danger')
+  } finally {
+    savingQty.value = false
   }
 }
 
 const totalAvailable = computed(() => (materials.value || []).reduce((a, m) => a + Number(m.available_quantity || 0), 0))
 const totalDamaged = computed(() => (materials.value || []).reduce((a, m) => a + Number(m.damaged_quantity || 0), 0))
 const totalLost = computed(() => (materials.value || []).reduce((a, m) => a + Number(m.lost_quantity || 0), 0))
+
+const displayMaterialsCount = ref(0)
+const displayTotalAvailable = ref(0)
+const displayTotalDamaged = ref(0)
+const displayTotalLost = ref(0)
+
+const rafMap = new Map()
+const animateCounter = (outRef, toValue) => {
+  if (typeof requestAnimationFrame === 'undefined' || typeof cancelAnimationFrame === 'undefined') {
+    outRef.value = Math.round(Number(toValue || 0))
+    return
+  }
+
+  const from = Number(outRef.value || 0)
+  const to = Number(toValue || 0)
+  const duration = 750
+  const start = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now()
+  const existing = rafMap.get(outRef)
+  if (existing) cancelAnimationFrame(existing)
+
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
+  const step = (now) => {
+    const p = Math.min(1, (now - start) / duration)
+    const eased = easeOutCubic(p)
+    const current = from + (to - from) * eased
+    outRef.value = Math.round(current)
+    if (p < 1) rafMap.set(outRef, requestAnimationFrame(step))
+  }
+
+  rafMap.set(outRef, requestAnimationFrame(step))
+}
+
+watch(() => materials.value.length, (v) => animateCounter(displayMaterialsCount, v), { immediate: true })
+watch(totalAvailable, (v) => animateCounter(displayTotalAvailable, v), { immediate: true })
+watch(totalDamaged, (v) => animateCounter(displayTotalDamaged, v), { immediate: true })
+watch(totalLost, (v) => animateCounter(displayTotalLost, v), { immediate: true })
+
+onBeforeUnmount(() => {
+  for (const id of rafMap.values()) cancelAnimationFrame(id)
+})
 </script>
 
 <style scoped>
@@ -519,11 +710,53 @@ const totalLost = computed(() => (materials.value || []).reduce((a, m) => a + Nu
 .btn-icon.warning:hover { color: var(--warning); }
 .btn-icon.info:hover { color: var(--info); }
 
-.static-info {
-  margin-top: var(--space-12);
-  color: #cbd5e1;
-  font-size: 0.85rem;
-  text-align: center;
-  font-weight: 600;
+.actions-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.actions-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.actions-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  z-index: 30;
+}
+
+.actions-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #334155;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.actions-item:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.actions-item.danger {
+  color: #dc2626;
+}
+
+.actions-item.danger:hover {
+  background: #fef2f2;
+  color: #b91c1c;
 }
 </style>

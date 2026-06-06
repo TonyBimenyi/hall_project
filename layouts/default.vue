@@ -1,5 +1,6 @@
 <template>
   <div class="default-layout">
+    <NuxtLoadingIndicator color="#d4af37" :height="3" />
     <AppClientNavBar />
     <section class="main-content">
       <slot />

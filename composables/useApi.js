@@ -22,7 +22,8 @@ export const getApiBaseUrl = () => {
   } catch {
   }
 
-  return 'https://api.labertha-villa.com/api/'
+  // return 'https://api.labertha-villa.com/api/'
+  return 'http://localhost:3000/api/'
 }
 
 export const getApiOrigin = () => {

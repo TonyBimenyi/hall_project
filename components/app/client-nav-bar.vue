@@ -51,6 +51,28 @@
     </nav>
 
     <div class="mobile-menu" :class="{ open: isMenuOpen }">
+      <div class="mobile-top">
+        <div class="mobile-lang">
+          <NuxtLink :to="switchLocalePath('fr')" @click="isMenuOpen = false" class="mobile-lang-btn" :class="{ active: locale === 'fr' }">FR</NuxtLink>
+          <NuxtLink :to="switchLocalePath('en')" @click="isMenuOpen = false" class="mobile-lang-btn" :class="{ active: locale === 'en' }">EN</NuxtLink>
+        </div>
+        <div class="mobile-auth">
+          <NuxtLink
+            v-if="!isLoggedIn"
+            :to="localePath('/login')"
+            class="btn btn-outline btn-sm"
+            @click="isMenuOpen = false"
+          >
+            {{ $t('nav.signIn') }}
+          </NuxtLink>
+          <template v-else>
+            <NuxtLink :to="localePath('/dashboard')" class="btn btn-outline btn-sm" @click="isMenuOpen = false">
+              {{ $t('nav.dashboard') }}
+            </NuxtLink>
+            <button class="btn btn-danger btn-sm" @click="logout">{{ $t('nav.logout') }}</button>
+          </template>
+        </div>
+      </div>
       <template v-for="link in navLinks" :key="link.key">
         <template v-if="link.children">
           <div class="mobile-group">
@@ -72,13 +94,6 @@
           </NuxtLink>
         </template>
       </template>
-      <div class="mobile-lang">
-        <NuxtLink :to="switchLocalePath('fr')" @click="isMenuOpen = false" class="mobile-lang-btn" :class="{ active: locale === 'fr' }">FR</NuxtLink>
-        <NuxtLink :to="switchLocalePath('en')" @click="isMenuOpen = false" class="mobile-lang-btn" :class="{ active: locale === 'en' }">EN</NuxtLink>
-      </div>
-      <NuxtLink v-if="!isLoggedIn" :to="localePath('/login')" @click="isMenuOpen = false">{{ $t('nav.signIn') }}</NuxtLink>
-      <NuxtLink v-else :to="localePath('/dashboard')" @click="isMenuOpen = false">{{ $t('nav.dashboard') }}</NuxtLink>
-      <button v-if="isLoggedIn" @click="logout">{{ $t('nav.logout') }}</button>
     </div>
   </header>
 </template>
@@ -344,23 +359,42 @@ onBeforeUnmount(() => {
 }
 
 .mobile-menu.open {
-  max-height: 360px;
+  max-height: calc(100vh - 72px);
   padding: .9rem;
+  overflow-y: auto;
 }
 
-.mobile-menu a,
-.mobile-menu button {
-  text-align: left;
-  padding: .55rem .2rem;
-  color: #334155;
-  font-weight: 600;
+.mobile-top {
+  display: grid;
+  gap: .7rem;
+  padding: .2rem 0 .6rem;
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  background: #ffffff;
+  z-index: 2;
+}
+
+.mobile-auth {
+  display: flex;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+
+.mobile-auth .btn {
+  flex: 1 1 160px;
+  justify-content: center;
 }
 
 .mobile-lang {
   display: flex;
   gap: .5rem;
-  padding: .6rem .2rem;
-  border-top: 1px solid #e2e8f0;
+  padding: .2rem 0;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 6px;
+  width: fit-content;
 }
 
 .mobile-lang-btn {
@@ -377,6 +411,20 @@ onBeforeUnmount(() => {
   background: rgba(212, 175, 55, .18);
   border-color: rgba(212, 175, 55, .35);
   color: #a16207;
+}
+
+.mobile-menu > a:not(.btn),
+.mobile-sub-link {
+  display: block;
+  text-align: left;
+  padding: .65rem .2rem;
+  color: #334155;
+  font-weight: 600;
+}
+
+.mobile-menu > a:not(.btn):hover,
+.mobile-sub-link:hover {
+  color: #0f172a;
 }
 
 .mobile-group {
@@ -404,6 +452,12 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .mobile-auth .btn {
+    width: 100%;
   }
 }
 </style>

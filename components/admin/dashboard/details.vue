@@ -4,7 +4,7 @@
       <div class="card">
         <div class="card_info">
           <div class="p">Total des réservations</div>
-          <div class="number">{{ totalBookings.toLocaleString() }}</div>
+          <div class="number">{{ displayTotalBookings.toLocaleString() }}</div>
           <div class="trend">Mis à jour à l'instant</div>
         </div>
         <div class="icon">
@@ -15,7 +15,7 @@
       <div class="card">
         <div class="card_info">
           <div class="p">Salles actives</div>
-          <div class="number">{{ activeHalls }}</div>
+          <div class="number">{{ displayActiveHalls }}</div>
           <div class="trend">Disponible à la réservation</div>
         </div>
         <div class="icon">
@@ -26,7 +26,7 @@
       <div class="card">
         <div class="card_info">
           <div class="p">Revenu total</div>
-          <div class="number">{{ Number(totalRevenue).toLocaleString() }} Fbu</div>
+          <div class="number">{{ Number(displayTotalRevenue).toLocaleString() }} Fbu</div>
           <div class="trend">Depuis toujours</div>
         </div>
         <div class="icon">
@@ -37,7 +37,7 @@
       <div class="card">
         <div class="card_info">
           <div class="p">Dépenses du mois</div>
-          <div class="number">{{ Number(monthlyExpenses).toLocaleString() }} Fbu</div>
+          <div class="number">{{ Number(displayMonthlyExpenses).toLocaleString() }} Fbu</div>
           <div class="trend negative">
             +5% par rapport au mois dernier
           </div>
@@ -50,9 +50,9 @@
       <div class="card">
         <div class="card_info">
           <div class="p">Paiements en attente</div>
-          <div class="number">{{ pendingPayments }}</div>
-          <div class="trend" :class="{ negative: pendingPayments > 5 }">
-            {{ pendingPayments > 5 ? 'Nécessite une attention particulière' : 'À gérer bientôt' }}
+          <div class="number">{{ displayPendingPayments }}</div>
+          <div class="trend" :class="{ negative: displayPendingPayments > 5 }">
+            {{ displayPendingPayments > 5 ? 'Nécessite une attention particulière' : 'À gérer bientôt' }}
           </div>
         </div>
         <div class="icon">
@@ -63,7 +63,7 @@
       <div class="card">
         <div class="card_info">
           <div class="p">Pertes de matériel</div>
-          <div class="number">{{ materialLosses }}</div>
+          <div class="number">{{ displayMaterialLosses }}</div>
           <div class="trend negative">Articles à remplacer</div>
         </div>
         <div class="icon">
@@ -85,9 +85,25 @@ export default {
       totalRevenue: 0,
       pendingPayments: 0,
       monthlyExpenses: 0,
-      materialLosses: 0
+      materialLosses: 0,
+
+      displayTotalBookings: 0,
+      displayActiveHalls: 0,
+      displayTotalRevenue: 0,
+      displayPendingPayments: 0,
+      displayMonthlyExpenses: 0,
+      displayMaterialLosses: 0,
+
+      rafIds: {}
     }
   },
+
+  beforeUnmount() {
+    for (const id of Object.values(this.rafIds || {})) {
+      cancelAnimationFrame(id)
+    }
+  },
+
   async mounted() {
     try {
       const response = await api.get('summary/')
@@ -97,8 +113,40 @@ export default {
       this.monthlyExpenses = response.data.monthly_expenses
       this.pendingPayments = response.data.pending_payments
       this.materialLosses = response.data.material_losses
+
+      this.animateTo('displayTotalBookings', this.totalBookings)
+      this.animateTo('displayActiveHalls', this.activeHalls)
+      this.animateTo('displayTotalRevenue', this.totalRevenue)
+      this.animateTo('displayMonthlyExpenses', this.monthlyExpenses)
+      this.animateTo('displayPendingPayments', this.pendingPayments)
+      this.animateTo('displayMaterialLosses', this.materialLosses)
     } catch (error) {
       console.error('Error fetching dashboard summary:', error)
+    }
+  },
+
+  methods: {
+    animateTo(key, toValue) {
+      const from = Number(this[key] || 0)
+      const to = Number(toValue || 0)
+      const duration = 750
+      const start = performance.now()
+
+      if (this.rafIds?.[key]) cancelAnimationFrame(this.rafIds[key])
+
+      const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
+
+      const step = (now) => {
+        const p = Math.min(1, (now - start) / duration)
+        const eased = easeOutCubic(p)
+        const current = from + (to - from) * eased
+        this[key] = Math.round(current)
+        if (p < 1) {
+          this.rafIds[key] = requestAnimationFrame(step)
+        }
+      }
+
+      this.rafIds[key] = requestAnimationFrame(step)
     }
   }
 }

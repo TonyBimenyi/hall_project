@@ -30,16 +30,26 @@
         <div v-for="day in daysInMonth" :key="day" class="calendar-day" :class="{ 'today': isToday(day) }">
           <div class="day-number">{{ day }}</div>
           <div class="day-events">
-            <div 
-              v-for="event in getEventsForDay(day)" 
-              :key="event.id" 
-              class="event-pill"
-              :class="event.status"
-              @click="viewEvent(event)"
-            >
-              <span class="event-time">{{ event.hall_name.split(' ')[2] }}</span>
-              <span class="event-title">{{ event.customer_name }}</span>
-            </div>
+            <template v-if="loadingEvents">
+              <div class="event-pill skeleton">
+                <span class="skeleton-line skeleton-w-80"></span>
+              </div>
+            </template>
+            <template v-else>
+              <div
+                v-for="event in visibleEventsForDay(day)"
+                :key="event.id"
+                class="event-pill"
+                :class="event.status"
+                @click="viewEvent(event)"
+              >
+                <span class="event-time">{{ safeHallLabel(event.hall_name) }}</span>
+                <span class="event-title">{{ nameInitials(event.customer_name) }}</span>
+              </div>
+              <div v-if="extraEventsCount(day) > 0" class="event-pill more">
+                +{{ extraEventsCount(day) }}
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -110,18 +120,29 @@ const showViewModal = ref(false)
 const selectedEvent = ref(null)
 
 const events = ref([])
+const loadingEvents = ref(false)
+const isMobile = ref(false)
 
 const fetchEvents = async () => {
+  loadingEvents.value = true
   try {
     const response = await api.get('bookings/')
     events.value = response.data
   } catch (error) {
     console.error('Error fetching events:', error)
+  } finally {
+    loadingEvents.value = false
   }
 }
 
 onMounted(() => {
   fetchEvents()
+  if (process.client) {
+    const update = () => { isMobile.value = window.innerWidth <= 992 }
+    update()
+    window.addEventListener('resize', update)
+    onBeforeUnmount(() => window.removeEventListener('resize', update))
+  }
 })
 
 const currentMonth = computed(() => currentDate.value.getMonth())
@@ -167,6 +188,41 @@ const getEventsForDay = (day) => {
   })
 }
 
+const maxEventsPerDay = computed(() => (isMobile.value ? 1 : 3))
+
+const visibleEventsForDay = (day) => {
+  const list = getEventsForDay(day)
+  return list.slice(0, maxEventsPerDay.value)
+}
+
+const extraEventsCount = (day) => {
+  const list = getEventsForDay(day)
+  return Math.max(0, list.length - maxEventsPerDay.value)
+}
+
+const safeHallLabel = (name) => {
+  const v = String(name || '').trim()
+  if (!v) return ''
+  const parts = v.split(/\s+/).filter(Boolean)
+  return parts[parts.length - 1] || v
+}
+
+const nameInitials = (name) => {
+  const value = String(name || '').trim()
+  if (!value) return ''
+  const words = value.split(/\s+/).filter(Boolean)
+  const pick = []
+  if (words.length >= 2) {
+    pick.push(words[0][0])
+    pick.push(words[words.length - 1][0])
+  } else {
+    const w = words[0] || ''
+    pick.push(w[0])
+    if (w[1]) pick.push(w[1])
+  }
+  return pick.filter(Boolean).map(c => String(c).toUpperCase()).join('.')
+}
+
 const viewEvent = (event) => {
   selectedEvent.value = event
   showViewModal.value = true
@@ -201,23 +257,41 @@ const getBadgeClass = (status) => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: var(--space-8);
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 .calendar-nav {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-3);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 6px 10px;
 }
 
 .current-month {
-  font-size: 1.25rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: #0f172a;
-  min-width: 180px;
+  min-width: 160px;
   text-align: center;
   margin: 0;
+}
+
+.calendar-container {
+  padding: var(--space-5);
 }
 
 .calendar-grid {
@@ -287,7 +361,7 @@ const getBadgeClass = (status) => {
 .event-pill {
   font-size: 0.7rem;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -295,6 +369,21 @@ const getBadgeClass = (status) => {
   font-weight: 600;
   display: flex;
   gap: 4px;
+}
+
+.event-pill.skeleton {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  cursor: default;
+}
+
+.event-pill.more {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  cursor: default;
+  justify-content: center;
+  font-weight: 800;
 }
 
 .event-pill.paid { background: #dcfce7; color: #166534; border-left: 3px solid #22c55e; }
@@ -351,5 +440,31 @@ const getBadgeClass = (status) => {
 .view-details .detail-val {
   color: #0f172a;
   font-weight: 700;
+}
+
+@media (max-width: 992px) {
+  .current-month {
+    font-size: 0.95rem;
+    min-width: 140px;
+  }
+
+  .calendar-container {
+    padding: var(--space-4);
+  }
+
+  .weekday-header {
+    padding: 10px 6px;
+    font-size: 0.7rem;
+  }
+
+  .calendar-day {
+    min-height: 88px;
+    padding: 8px;
+  }
+
+  .event-pill {
+    font-size: 0.68rem;
+    padding: 3px 6px;
+  }
 }
 </style>

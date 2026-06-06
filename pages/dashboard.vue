@@ -28,22 +28,22 @@
         <div class="stats-grid">
           <article class="card stat-card">
             <span class="label">{{ $t('dashboard.myBookings') }}</span>
-            <strong>{{ myBookings.length }}</strong>
+            <strong>{{ displayBookingsCount }}</strong>
           </article>
 
           <article class="card stat-card">
             <span class="label">{{ $t('dashboard.pending') }}</span>
-            <strong>{{ pendingCount }}</strong>
+            <strong>{{ displayPendingCount }}</strong>
           </article>
 
           <article class="card stat-card">
             <span class="label">{{ $t('dashboard.confirmed') }}</span>
-            <strong>{{ confirmedCount }}</strong>
+            <strong>{{ displayConfirmedCount }}</strong>
           </article>
 
           <article class="card stat-card">
             <span class="label">{{ $t('dashboard.totalAmount') }}</span>
-            <strong>{{ totalAmount.toLocaleString() }} Fbu</strong>
+            <strong>{{ displayTotalAmount.toLocaleString() }} Fbu</strong>
           </article>
         </div>
 
@@ -150,6 +150,47 @@ const myBookings = computed(() => bookings.value)
 const pendingCount = computed(() => myBookings.value.filter(b => b.status === 'pending').length)
 const confirmedCount = computed(() => myBookings.value.filter(b => b.status === 'confirmed').length)
 const totalAmount = computed(() => myBookings.value.reduce((sum, b) => sum + Number(b.total_price || 0), 0))
+
+const displayBookingsCount = ref(0)
+const displayPendingCount = ref(0)
+const displayConfirmedCount = ref(0)
+const displayTotalAmount = ref(0)
+
+const rafMap = new Map()
+const animateCounter = (outRef, toValue) => {
+  if (typeof requestAnimationFrame === 'undefined' || typeof cancelAnimationFrame === 'undefined') {
+    outRef.value = Math.round(Number(toValue || 0))
+    return
+  }
+
+  const from = Number(outRef.value || 0)
+  const to = Number(toValue || 0)
+  const duration = 750
+  const start = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now()
+  const existing = rafMap.get(outRef)
+  if (existing) cancelAnimationFrame(existing)
+
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
+  const step = (now) => {
+    const p = Math.min(1, (now - start) / duration)
+    const eased = easeOutCubic(p)
+    const current = from + (to - from) * eased
+    outRef.value = Math.round(current)
+    if (p < 1) {
+      rafMap.set(outRef, requestAnimationFrame(step))
+    }
+  }
+  rafMap.set(outRef, requestAnimationFrame(step))
+}
+
+watch(() => myBookings.value.length, (v) => animateCounter(displayBookingsCount, v), { immediate: true })
+watch(pendingCount, (v) => animateCounter(displayPendingCount, v), { immediate: true })
+watch(confirmedCount, (v) => animateCounter(displayConfirmedCount, v), { immediate: true })
+watch(totalAmount, (v) => animateCounter(displayTotalAmount, v), { immediate: true })
+
+onBeforeUnmount(() => {
+  for (const id of rafMap.values()) cancelAnimationFrame(id)
+})
 
 const displayName = computed(() => {
   const first = currentUser.value?.first_name || ''

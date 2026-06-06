@@ -30,27 +30,133 @@ class SummaryView(APIView):
     def get(self, request):
         now = timezone.now()
         first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        today = timezone.localdate()
+        start_28 = today - timedelta(days=27)
+        end_28 = today
+
+        start_q = (request.query_params.get('start_date') or request.query_params.get('start') or '').strip()
+        end_q = (request.query_params.get('end_date') or request.query_params.get('end') or '').strip()
+        if start_q or end_q:
+            if not start_q or not end_q:
+                return Response(
+                    {'dates': 'start_date et end_date sont requis (YYYY-MM-DD)'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                range_start = date.fromisoformat(start_q)
+                range_end = date.fromisoformat(end_q)
+            except ValueError:
+                return Response(
+                    {'dates': 'Format de date invalide (YYYY-MM-DD)'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if range_end < range_start:
+                return Response(
+                    {'dates': 'La date fin doit être après la date début'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            range_start = start_28
+            range_end = end_28
+
+        range_days = (range_end - range_start).days + 1
         
         total_bookings = Booking.objects.count()
         active_halls = Hall.objects.count()
-        total_revenue = Payment.objects.filter(status='paid').aggregate(Sum('amount'))['amount__sum'] or 0
+        total_revenue = Payment.objects.filter(status='paid', booking__isnull=False).aggregate(Sum('amount'))['amount__sum'] or 0
         monthly_expenses = Expense.objects.filter(date__gte=first_day_of_month).aggregate(Sum('amount'))['amount__sum'] or 0
-        pending_payments = Payment.objects.filter(status='pending').count()
+        pending_payments = Payment.objects.filter(status='pending', booking__isnull=False).count()
         material_losses = Material.objects.filter(status='lost').count()
         
         # Monthly stats for reports
-        monthly_revenue = Payment.objects.filter(date__gte=first_day_of_month, status='paid').aggregate(Sum('amount'))['amount__sum'] or 0
+        monthly_revenue = Payment.objects.filter(date__gte=first_day_of_month, status='paid', booking__isnull=False).aggregate(Sum('amount'))['amount__sum'] or 0
+
+        revenue_last_28_days = Payment.objects.filter(status='paid', date__gte=start_28, booking__isnull=False).aggregate(Sum('amount'))['amount__sum'] or 0
+        expenses_last_28_days = Expense.objects.filter(date__gte=start_28).aggregate(Sum('amount'))['amount__sum'] or 0
+
+        revenue_in_range = Payment.objects.filter(
+            status='paid',
+            booking__isnull=False,
+            date__gte=range_start,
+            date__lte=range_end,
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
+        expenses_in_range = Expense.objects.filter(
+            date__gte=range_start,
+            date__lte=range_end,
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
         
-        # Occupation by event type
-        occupation_stats = Booking.objects.values('event_type').annotate(count=Count('id'))
-        total_b = Booking.objects.count()
+        # Occupation (last 28 days): based on booked days across all halls
+        total_available_days_28 = Hall.objects.count() * 28
+        booked_days_total_28 = 0
+        booked_days_by_type = {}
+
+        bookings_28 = Booking.objects.filter(
+            status__in=['pending', 'confirmed', 'paid'],
+            start_date__lte=end_28,
+            end_date__gte=start_28,
+        ).values('event_type', 'start_date', 'end_date')
+
+        for b in bookings_28:
+            start = b['start_date']
+            end = b['end_date']
+            if not start or not end:
+                continue
+            overlap_start = max(start, start_28)
+            overlap_end = min(end, end_28)
+            if overlap_end < overlap_start:
+                continue
+            days = (overlap_end - overlap_start).days + 1
+            booked_days_total_28 += days
+            key = b.get('event_type') or 'Autre'
+            booked_days_by_type[key] = booked_days_by_type.get(key, 0) + days
+
+        if total_available_days_28 > 0:
+            occupation_rate_28_days = round((booked_days_total_28 / total_available_days_28) * 100, 1)
+        else:
+            occupation_rate_28_days = 0
+
         occupation_data = []
-        for stat in occupation_stats:
-            percentage = (stat['count'] / total_b * 100) if total_b > 0 else 0
-            occupation_data.append({
-                'type': stat['event_type'],
-                'percentage': round(percentage, 1)
-            })
+        if booked_days_total_28 > 0:
+            for event_type, days in booked_days_by_type.items():
+                pct = round((days / booked_days_total_28) * 100, 1)
+                occupation_data.append({'type': event_type, 'percentage': pct})
+            occupation_data.sort(key=lambda x: x['percentage'], reverse=True)
+
+        total_available_days_range = Hall.objects.count() * max(0, range_days)
+        booked_days_total_range = 0
+        booked_days_by_type_range = {}
+
+        bookings_range = Booking.objects.filter(
+            status__in=['pending', 'confirmed', 'paid'],
+            start_date__lte=range_end,
+            end_date__gte=range_start,
+        ).values('event_type', 'start_date', 'end_date')
+
+        for b in bookings_range:
+            start = b['start_date']
+            end = b['end_date']
+            if not start or not end:
+                continue
+            overlap_start = max(start, range_start)
+            overlap_end = min(end, range_end)
+            if overlap_end < overlap_start:
+                continue
+            days = (overlap_end - overlap_start).days + 1
+            booked_days_total_range += days
+            key = b.get('event_type') or 'Autre'
+            booked_days_by_type_range[key] = booked_days_by_type_range.get(key, 0) + days
+
+        if total_available_days_range > 0:
+            occupation_rate_in_range = round((booked_days_total_range / total_available_days_range) * 100, 1)
+        else:
+            occupation_rate_in_range = 0
+
+        occupation_data_in_range = []
+        if booked_days_total_range > 0:
+            for event_type, days in booked_days_by_type_range.items():
+                pct = round((days / booked_days_total_range) * 100, 1)
+                occupation_data_in_range.append({'type': event_type, 'percentage': pct})
+            occupation_data_in_range.sort(key=lambda x: x['percentage'], reverse=True)
 
         return Response({
             'total_bookings': total_bookings,
@@ -60,7 +166,17 @@ class SummaryView(APIView):
             'pending_payments': pending_payments,
             'material_losses': material_losses,
             'monthly_revenue': monthly_revenue,
-            'occupation_data': occupation_data
+            'revenue_last_28_days': revenue_last_28_days,
+            'expenses_last_28_days': expenses_last_28_days,
+            'occupation_rate_28_days': occupation_rate_28_days,
+            'occupation_data': occupation_data,
+            'range_start': range_start.isoformat(),
+            'range_end': range_end.isoformat(),
+            'range_days': range_days,
+            'revenue_in_range': revenue_in_range,
+            'expenses_in_range': expenses_in_range,
+            'occupation_rate_in_range': occupation_rate_in_range,
+            'occupation_data_in_range': occupation_data_in_range,
         })
 
 def _hash_magic_token(raw_token: str) -> str:
@@ -91,6 +207,7 @@ def _split_full_name(full_name: str):
 
 def _build_magic_login_url(request, raw_token: str):
     origin = (getattr(settings, 'FRONTEND_URL', '') or getattr(settings, 'FRONTEND_ORIGIN', '') or '').strip() or 'http://localhost:3000'
+    
     return f"{origin.rstrip('/')}/login?token={raw_token}"
 
 def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, magic_url: str, account_created: bool):

@@ -7,13 +7,13 @@
         <p>Suivi des employés et assignation des tâches</p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-export btn-sm" @click="exportPdf">
+        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
           <i class="fas fa-file-pdf"></i> Export PDF
         </button>
-        <button class="btn btn-export btn-sm" @click="exportXls">
+        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
           <i class="fas fa-file-excel"></i> Export XLS
         </button>
-        <button class="btn btn-primary" @click="openAddModal">
+        <button class="btn btn-primary btn-sm" @click="openAddModal">
           <i class="fas fa-user-plus"></i> Ajouter un employé
         </button>
       </div>
@@ -24,34 +24,101 @@
         <div class="stat-icon primary"><i class="fas fa-users"></i></div>
         <div class="stat-info">
           <span class="label">Total Personnel</span>
-          <span class="value">{{ personnel.length }}</span>
+          <span class="value">
+            <span v-if="loadingPersonnel" class="skeleton-line skeleton-w-30"></span>
+            <template v-else>{{ displayPersonnelCount }}</template>
+          </span>
         </div>
       </div>
       <div class="stat-card card">
         <div class="stat-icon success"><i class="fas fa-user-check"></i></div>
         <div class="stat-info">
           <span class="label">En service</span>
-          <span class="value success">{{ personnel.filter(p => p.status === 'on_duty').length }}</span>
+          <span class="value success">
+            <span v-if="loadingPersonnel" class="skeleton-line skeleton-w-30"></span>
+            <template v-else>{{ displayOnDutyCount }}</template>
+          </span>
         </div>
       </div>
       <div class="stat-card card">
         <div class="stat-icon info"><i class="fas fa-tasks"></i></div>
         <div class="stat-info">
           <span class="label">Disponibles</span>
-          <span class="value info">{{ personnel.filter(p => p.status === 'available').length }}</span>
+          <span class="value info">
+            <span v-if="loadingPersonnel" class="skeleton-line skeleton-w-30"></span>
+            <template v-else>{{ displayAvailableCount }}</template>
+          </span>
         </div>
       </div>
       <div class="stat-card card">
         <div class="stat-icon warning"><i class="fas fa-user-clock"></i></div>
         <div class="stat-info">
           <span class="label">En congé</span>
-          <span class="value warning">{{ personnel.filter(p => p.status === 'off_duty').length }}</span>
+          <span class="value warning">
+            <span v-if="loadingPersonnel" class="skeleton-line skeleton-w-30"></span>
+            <template v-else>{{ displayOffDutyCount }}</template>
+          </span>
         </div>
       </div>
     </div>
 
     <div class="table-container card">
-      <table ref="tableRef" class="admin-table">
+      <div v-if="isMobile" class="admin-cards">
+        <template v-if="loadingPersonnel">
+          <div v-for="n in 6" :key="`sk-card-${n}`" class="admin-card">
+            <div class="admin-card-head">
+              <div style="width: 100%;">
+                <div class="skeleton-line skeleton-w-60"></div>
+                <div style="margin-top: 8px;" class="skeleton-line skeleton-w-40"></div>
+              </div>
+            </div>
+            <div class="admin-card-body">
+              <div class="skeleton-line skeleton-w-50"></div>
+              <div class="skeleton-line skeleton-w-40"></div>
+              <div class="skeleton-line skeleton-w-30"></div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div v-for="staff in personnel" :key="staff.id" class="admin-card">
+            <div class="admin-card-head">
+              <div>
+                <div class="admin-card-title">{{ staff.name }}</div>
+                <div class="admin-card-subtitle">{{ staff.role }} • {{ staff.phone }}</div>
+              </div>
+
+              <div class="actions-dropdown">
+                <button class="btn-icon details" title="Détails" @click.stop="toggleActions(staff.id)">
+                  <i class="fas fa-ellipsis-vertical"></i>
+                </button>
+                <div v-if="openActionsId === staff.id" class="actions-menu" @click.stop>
+                  <button class="actions-item" @click="viewStaff(staff)">
+                    <i class="fas fa-eye"></i> Voir
+                  </button>
+                  <button class="actions-item" @click="editStaff(staff)">
+                    <i class="fas fa-edit"></i> Modifier
+                  </button>
+                  <button class="actions-item danger" @click="confirmDelete(staff)">
+                    <i class="fas fa-trash-alt"></i> Supprimer
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="admin-card-body">
+              <div class="admin-kv">
+                <span class="k">Statut</span>
+                <span class="v">
+                  <span :class="['badge', getBadgeClass(staff.status)]">{{ translateStatus(staff.status) }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </template>
+        <div v-if="!loadingPersonnel && personnel.length === 0" class="empty-cell">Aucun employé</div>
+      </div>
+
+      <table v-else ref="tableRef" class="admin-table">
         <thead>
           <tr>
             <th>Employé</th>
@@ -62,7 +129,21 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="staff in personnel" :key="staff.id">
+          <template v-if="loadingPersonnel">
+            <tr v-for="n in 6" :key="`sk-${n}`">
+              <td class="staff-cell">
+                <div class="skeleton-lines">
+                  <div class="skeleton-line skeleton-w-60"></div>
+                  <div class="skeleton-line skeleton-w-40"></div>
+                </div>
+              </td>
+              <td><div class="skeleton-line skeleton-w-50"></div></td>
+              <td><div class="skeleton-line skeleton-w-50"></div></td>
+              <td><div class="skeleton-line skeleton-w-30"></div></td>
+              <td><div class="skeleton-line skeleton-w-60"></div></td>
+            </tr>
+          </template>
+          <tr v-else v-for="staff in personnel" :key="staff.id">
             <td class="staff-cell">
               <div class="avatar">{{ staff.name.charAt(0) }}</div>
               <div class="staff-info">
@@ -77,17 +158,22 @@
                 {{ translateStatus(staff.status) }}
               </span>
             </td>
-            <td>
-              <div class="btn-group">
-                <button class="btn-icon view" title="Voir détails" @click="viewStaff(staff)">
-                  <i class="fas fa-eye"></i>
+            <td class="actions-cell">
+              <div class="actions-dropdown">
+                <button class="btn-icon details" title="Détails" @click.stop="toggleActions(staff.id)">
+                  <i class="fas fa-ellipsis-vertical"></i>
                 </button>
-                <button class="btn-icon edit" title="Modifier" @click="editStaff(staff)">
-                  <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn-icon delete" title="Supprimer" @click="confirmDelete(staff)">
-                  <i class="fas fa-trash-alt"></i>
-                </button>
+                <div v-if="openActionsId === staff.id" class="actions-menu" @click.stop>
+                  <button class="actions-item" @click="viewStaff(staff)">
+                    <i class="fas fa-eye"></i> Voir
+                  </button>
+                  <button class="actions-item" @click="editStaff(staff)">
+                    <i class="fas fa-edit"></i> Modifier
+                  </button>
+                  <button class="actions-item danger" @click="confirmDelete(staff)">
+                    <i class="fas fa-trash-alt"></i> Supprimer
+                  </button>
+                </div>
               </div>
             </td>
           </tr>
@@ -128,7 +214,9 @@
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showFormModal = false">Annuler</button>
-        <button class="btn btn-primary" @click="saveStaff">{{ isEditing ? 'Mettre à jour' : 'Ajouter' }}</button>
+        <button class="btn btn-primary" :class="{ 'is-loading': savingStaff }" :disabled="savingStaff" @click="saveStaff">
+          {{ isEditing ? 'Mettre à jour' : 'Ajouter' }}
+        </button>
       </template>
     </AdminAppModal>
 
@@ -164,13 +252,11 @@
       <p>Êtes-vous sûr de vouloir supprimer l'employé <strong>{{ selectedStaff?.name }}</strong> ? Cette action est irréversible.</p>
       <template #footer>
         <button class="btn btn-outline" @click="showDeleteModal = false">Annuler</button>
-        <button class="btn btn-danger" @click="deleteStaff">Supprimer</button>
+        <button class="btn btn-danger" :class="{ 'is-loading': deletingStaff }" :disabled="deletingStaff" @click="deleteStaff">
+          Supprimer
+        </button>
       </template>
     </AdminAppModal>
-
-    <div class="static-info">
-      <p><i class="fas fa-info-circle"></i> Affichage de données statiques (Mode Démo)</p>
-    </div>
   </div>
 </template>
 
@@ -182,9 +268,26 @@ definePageMeta({ layout: 'admin' })
 
 const personnel = ref([])
 const tableRef = ref(null)
+const exportingPdf = ref(false)
+const exportingXls = ref(false)
+const loadingPersonnel = ref(false)
+const openActionsId = ref(null)
+const isMobile = ref(false)
+const savingStaff = ref(false)
+const deletingStaff = ref(false)
 
-const exportXls = () => {
+const toggleActions = (id) => {
+  openActionsId.value = openActionsId.value === id ? null : id
+}
+
+const closeActions = () => {
+  openActionsId.value = null
+}
+
+const exportXls = async () => {
   if (!tableRef.value) return
+  exportingXls.value = true
+  await nextTick()
   const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableRef.value.outerHTML}</body></html>`
   const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
   const url = URL.createObjectURL(blob)
@@ -193,12 +296,20 @@ const exportXls = () => {
   a.download = 'personnel.xls'
   a.click()
   URL.revokeObjectURL(url)
+  setTimeout(() => {
+    exportingXls.value = false
+  }, 350)
 }
 
-const exportPdf = () => {
+const exportPdf = async () => {
   if (!tableRef.value) return
+  exportingPdf.value = true
+  await nextTick()
   const win = window.open('', '_blank')
-  if (!win) return
+  if (!win) {
+    exportingPdf.value = false
+    return
+  }
   win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Personnel</title><style>
   body{font-family:Arial, sans-serif; padding:20px}
   table{width:100%; border-collapse:collapse}
@@ -209,6 +320,9 @@ const exportPdf = () => {
   win.focus()
   win.print()
   win.close()
+  setTimeout(() => {
+    exportingPdf.value = false
+  }, 350)
 }
 const showFormModal = ref(false)
 const showViewModal = ref(false)
@@ -225,16 +339,73 @@ const form = ref({
 })
 
 const fetchPersonnel = async () => {
+  loadingPersonnel.value = true
   try {
     const response = await api.get('personnel/')
     personnel.value = response.data
   } catch (error) {
     notify('Erreur lors du chargement du personnel', 'danger')
+  } finally {
+    loadingPersonnel.value = false
   }
 }
 
 onMounted(() => {
   fetchPersonnel()
+  if (process.client) {
+    const update = () => { isMobile.value = window.innerWidth <= 992 }
+    update()
+    window.addEventListener('resize', update)
+    onBeforeUnmount(() => window.removeEventListener('resize', update))
+
+    const onDocClick = () => { openActionsId.value = null }
+    document.addEventListener('click', onDocClick)
+    onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+  }
+})
+
+const onDutyCount = computed(() => personnel.value.filter(p => p.status === 'on_duty').length)
+const availableCount = computed(() => personnel.value.filter(p => p.status === 'available').length)
+const offDutyCount = computed(() => personnel.value.filter(p => p.status === 'off_duty').length)
+
+const displayPersonnelCount = ref(0)
+const displayOnDutyCount = ref(0)
+const displayAvailableCount = ref(0)
+const displayOffDutyCount = ref(0)
+
+const rafMap = new Map()
+const animateCounter = (outRef, toValue) => {
+  if (typeof requestAnimationFrame === 'undefined' || typeof cancelAnimationFrame === 'undefined') {
+    outRef.value = Math.round(Number(toValue || 0))
+    return
+  }
+
+  const from = Number(outRef.value || 0)
+  const to = Number(toValue || 0)
+  const duration = 750
+  const start = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now()
+  const existing = rafMap.get(outRef)
+  if (existing) cancelAnimationFrame(existing)
+
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
+  const step = (now) => {
+    const p = Math.min(1, (now - start) / duration)
+    const eased = easeOutCubic(p)
+    const current = from + (to - from) * eased
+    outRef.value = Math.round(current)
+    if (p < 1) rafMap.set(outRef, requestAnimationFrame(step))
+  }
+
+  rafMap.set(outRef, requestAnimationFrame(step))
+}
+
+watch(() => personnel.value.length, (v) => animateCounter(displayPersonnelCount, v), { immediate: true })
+watch(onDutyCount, (v) => animateCounter(displayOnDutyCount, v), { immediate: true })
+watch(availableCount, (v) => animateCounter(displayAvailableCount, v), { immediate: true })
+watch(offDutyCount, (v) => animateCounter(displayOffDutyCount, v), { immediate: true })
+
+onBeforeUnmount(() => {
+  for (const id of rafMap.values()) cancelAnimationFrame(id)
 })
 
 const resetForm = () => {
@@ -254,22 +425,27 @@ const openAddModal = () => {
 }
 
 const viewStaff = (staff) => {
+  closeActions()
   selectedStaff.value = staff
   showViewModal.value = true
 }
 
 const editStaff = (staff) => {
+  closeActions()
   isEditing.value = true
   form.value = { ...staff }
   showFormModal.value = true
 }
 
 const confirmDelete = (staff) => {
+  closeActions()
   selectedStaff.value = staff
   showDeleteModal.value = true
 }
 
 const saveStaff = async () => {
+  if (savingStaff.value) return
+  savingStaff.value = true
   try {
     if (isEditing.value) {
       await api.put(`personnel/${form.value.id}/`, form.value)
@@ -282,10 +458,14 @@ const saveStaff = async () => {
     fetchPersonnel()
   } catch (error) {
     notify('Erreur lors de l\'enregistrement', 'danger')
+  } finally {
+    savingStaff.value = false
   }
 }
 
 const deleteStaff = async () => {
+  if (deletingStaff.value || !selectedStaff.value?.id) return
+  deletingStaff.value = true
   try {
     await api.delete(`personnel/${selectedStaff.value.id}/`)
     notify('Employé supprimé', 'danger')
@@ -293,6 +473,8 @@ const deleteStaff = async () => {
     fetchPersonnel()
   } catch (error) {
     notify('Erreur lors de la suppression', 'danger')
+  } finally {
+    deletingStaff.value = false
   }
 }
 
@@ -438,11 +620,53 @@ const getBadgeClass = (status) => {
 
 .btn-icon.info:hover { color: var(--info); }
 
-.static-info {
-  margin-top: var(--space-12);
-  color: #cbd5e1;
-  font-size: 0.85rem;
-  text-align: center;
-  font-weight: 600;
+.actions-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.actions-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.actions-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 190px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  z-index: 30;
+}
+
+.actions-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #334155;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.actions-item:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.actions-item.danger {
+  color: #dc2626;
+}
+
+.actions-item.danger:hover {
+  background: #fef2f2;
+  color: #b91c1c;
 }
 </style>

@@ -1,15 +1,13 @@
 <template>
   <div class="layout">
     <!-- Sidebar -->
-    <aside :class="['sidebar', { collapsed: isCollapsed }]">
+    <aside :class="['sidebar', { 'is-collapsed': isCollapsed, 'is-mobile-open': isMobile && isMobileSidebarOpen }]">
       <div class="sidebar-header">
-        <div class="logo">
-          <i class="fa-solid fa-building"></i>
-        </div>
+ 
 
         <div class="title" v-if="!isCollapsed">
-          <span class="name">Admin Hall</span>
-          <span class="sub">Tableau de bord Réception</span>
+          <span class="name"><img src="../../../Belta2.png" alt="LaBertha Villa"></span>
+
         </div>
       </div>
 
@@ -20,6 +18,7 @@
           :to="item.url"
           class="menu-item"
           :class="{ active: isActive(item.url) }"
+          @click="handleNavClick"
         >
           <i :class="item.icon"></i>
           <span v-if="!isCollapsed">{{ item.title }}</span>
@@ -71,9 +70,9 @@
 
     <!-- Mobile overlay -->
     <div
-      v-if="!isCollapsed && isMobile"
+      v-if="isMobileSidebarOpen && isMobile"
       class="mobile-overlay"
-      @click="toggleSidebar"
+      @click="closeMobileSidebar"
     ></div>
   </div>
 </template>
@@ -86,6 +85,7 @@ export default {
     return {
       isCollapsed: false,
       isMobile: false,
+      isMobileSidebarOpen: false,
       showProfileMenu: false,
 
       currentUser: {},
@@ -135,7 +135,8 @@ export default {
   mounted() {
     if (process.client) {
       this.isMobile = window.innerWidth <= 992
-      if (this.isMobile) this.isCollapsed = true
+      this.isMobileSidebarOpen = false
+      if (this.isMobile) this.isCollapsed = false
 
       window.addEventListener('resize', this.handleResize)
       document.addEventListener('click', this.handleOutsideClick)
@@ -144,9 +145,10 @@ export default {
     this.fetchMe()
   },
 
-  beforeDestroy() {
+  beforeUnmount() {
     if (process.client) {
       window.removeEventListener('resize', this.handleResize)
+      document.body.style.overflow = ''
     }
     document.removeEventListener('click', this.handleOutsideClick)
   },
@@ -162,7 +164,24 @@ export default {
     },
 
     toggleSidebar() {
+      if (this.isMobile) {
+        this.isMobileSidebarOpen = !this.isMobileSidebarOpen
+        document.body.style.overflow = this.isMobileSidebarOpen ? 'hidden' : ''
+        return
+      }
+
       this.isCollapsed = !this.isCollapsed
+    },
+
+    closeMobileSidebar() {
+      if (!this.isMobile) return
+      this.isMobileSidebarOpen = false
+      document.body.style.overflow = ''
+    },
+
+    handleNavClick() {
+      if (!this.isMobile) return
+      this.closeMobileSidebar()
     },
 
     isActive(url) {
@@ -173,9 +192,15 @@ export default {
     },
 
     handleResize() {
-      this.isMobile = window.innerWidth <= 992
-      if (this.isMobile && !this.isCollapsed) {
-        this.isCollapsed = true
+      const nextIsMobile = window.innerWidth <= 992
+
+      if (nextIsMobile !== this.isMobile) {
+        this.isMobile = nextIsMobile
+        this.isMobileSidebarOpen = false
+        document.body.style.overflow = ''
+        if (this.isMobile) this.isCollapsed = false
+      } else {
+        this.isMobile = nextIsMobile
       }
     },
 
@@ -211,9 +236,10 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden;
 }
 
-.sidebar.collapsed {
+.sidebar.is-collapsed {
   width: 80px;
 }
 
@@ -246,6 +272,11 @@ export default {
   letter-spacing: 0.02em;
   color: var(--white);
 }
+.title .name img{
+  height: 82px;
+  background-color: #fbfbf7;
+  border-radius: 10px;
+}
 
 .title .sub {
   font-size: 0.7rem;
@@ -261,6 +292,10 @@ export default {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .menu-item {
@@ -416,12 +451,80 @@ export default {
   .sidebar {
     position: fixed;
     height: 100vh;
-    left: -280px;
+    top: 0;
+    left: 0;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    box-shadow: 0 18px 40px rgba(2, 6, 23, 0.35);
+    overflow: hidden;
   }
   
-  .sidebar.collapsed {
-    left: 0;
+  .sidebar.is-collapsed {
     width: 280px;
+  }
+
+  .sidebar.is-mobile-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-header {
+    flex: 0 0 auto;
+  }
+
+  .menu {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .header {
+    height: 64px;
+    padding: 0 var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .page-title {
+    font-size: 1rem;
+    max-width: 48vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-profile {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .user-info {
+    display: none;
+  }
+
+  .content {
+    padding: var(--space-4);
+  }
+
+  .content :deep(.table-container) {
+    width: 100%;
+  }
+
+  .content :deep(.admin-table) {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .content :deep(.admin-table th),
+  .content :deep(.admin-table td) {
+    padding: 0.85rem 0.95rem;
+  }
+
+  .content :deep(.filters-group),
+  .content :deep(.filters),
+  .content :deep(.header-actions) {
+    flex-wrap: wrap;
+    gap: var(--space-3);
   }
   
   .mobile-overlay {

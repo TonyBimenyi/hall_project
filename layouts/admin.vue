@@ -1,5 +1,6 @@
 <template>
   <ClientOnly>
+    <NuxtLoadingIndicator color="#d4af37" :height="3" />
     <AdminAppAdminSideBar v-if="allowed">
       <template #default>
         <slot />

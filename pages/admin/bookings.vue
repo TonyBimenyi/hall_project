@@ -8,10 +8,10 @@
         <p>Gérer toutes les réservations de salle</p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-export btn-sm" @click="exportPdf">
+        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
           <i class="fas fa-file-pdf"></i> Export PDF
         </button>
-        <button class="btn btn-export btn-sm" @click="exportXls">
+        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
           <i class="fas fa-file-excel"></i> Export XLS
         </button>
         <NuxtLink to="/admin/calendar" class="btn btn-secondary btn-sm">
@@ -25,60 +25,153 @@
 
     <!-- Controls -->
     <div class="controls card">
-      <div class="search-wrapper">
-        <i class="fas fa-search search-icon"></i>
-        <input
-          type="text"
-          v-model="search"
-          placeholder="Rechercher par client ou salle..."
-          class="search-input-clean"
-        />
+      <div class="controls-top">
+        <div class="search-wrapper">
+          <i class="fas fa-search search-icon"></i>
+          <input
+            type="text"
+            v-model="search"
+            placeholder="Rechercher par client ou salle..."
+            class="search-input-clean"
+          />
+        </div>
+        <button class="btn-icon filters-toggle" :class="{ active: filtersOpen }" title="Filtres" @click="filtersOpen = !filtersOpen">
+          <i class="fas fa-filter"></i>
+        </button>
       </div>
-      <div class="filter-wrapper">
-        <select v-model="statusFilter" class="filter-select-clean">
-          <option value="">Tous les statuts</option>
-          <option value="pending">En attente</option>
-          <option value="confirmed">Confirmé</option>
-          <option value="paid">Payé</option>
-          <option value="cancelled">Annulé</option>
-        </select>
-      </div>
-      <div class="filter-wrapper">
-        <select v-model="hallFilter" class="filter-select-clean">
-          <option value="">Toutes les salles</option>
-          <option v-for="h in halls" :key="h.id" :value="h.id">{{ h.name }}</option>
-        </select>
-      </div>
-      <div class="filter-wrapper">
-        <select v-model="eventTypeFilter" class="filter-select-clean">
-          <option value="">Tous les événements</option>
-          <option value="Mariage">Mariage</option>
-          <option value="Séminaire">Séminaire</option>
-          <option value="Gala">Gala</option>
-          <option value="Anniversaire">Anniversaire</option>
-          <option value="Réunion">Réunion</option>
-        </select>
-      </div>
-      <div class="filter-wrapper">
-        <input v-model="dateFrom" type="date" class="filter-input-clean" />
-      </div>
-      <div class="filter-wrapper">
-        <input v-model="dateTo" type="date" class="filter-input-clean" />
-      </div>
-      <div class="filter-wrapper">
-        <input v-model.number="minAmount" type="number" class="filter-input-clean" placeholder="Min (Fbu)" />
-      </div>
-      <div class="filter-wrapper">
-        <input v-model.number="maxAmount" type="number" class="filter-input-clean" placeholder="Max (Fbu)" />
+      <div v-show="!isMobile || filtersOpen" class="filters-panel">
+        <div class="filter-wrapper">
+          <select v-model="statusFilter" class="filter-select-clean">
+            <option value="">Tous les statuts</option>
+            <option value="pending">En attente</option>
+            <option value="confirmed">Confirmé</option>
+            <option value="paid">Payé</option>
+            <option value="cancelled">Annulé</option>
+          </select>
+        </div>
+        <div class="filter-wrapper">
+          <select v-model="hallFilter" class="filter-select-clean">
+            <option value="">Toutes les salles</option>
+            <option v-for="h in halls" :key="h.id" :value="h.id">{{ h.name }}</option>
+          </select>
+        </div>
+        <div class="filter-wrapper">
+          <select v-model="eventTypeFilter" class="filter-select-clean">
+            <option value="">Tous les événements</option>
+            <option value="Mariage">Mariage</option>
+            <option value="Séminaire">Séminaire</option>
+            <option value="Gala">Gala</option>
+            <option value="Anniversaire">Anniversaire</option>
+            <option value="Réunion">Réunion</option>
+          </select>
+        </div>
+        <div class="filter-wrapper">
+          <input v-model="dateFrom" type="date" class="filter-input-clean" />
+        </div>
+        <div class="filter-wrapper">
+          <input v-model="dateTo" type="date" class="filter-input-clean" />
+        </div>
+        <div class="filter-wrapper">
+          <input v-model.number="minAmount" type="number" class="filter-input-clean" placeholder="Min (Fbu)" />
+        </div>
+        <div class="filter-wrapper">
+          <input v-model.number="maxAmount" type="number" class="filter-input-clean" placeholder="Max (Fbu)" />
+        </div>
       </div>
     </div>
 
     <!-- Table -->
     <div class="table-container card">
       <h2 class="table-title">
-        Toutes les réservations ({{ filteredBookings.length }})
+        Toutes les réservations ({{ loadingBookings ? '...' : filteredBookings.length }})
       </h2>
-      <div class="table-wrapper">
+      <div v-if="isMobile" class="admin-cards">
+        <template v-if="loadingBookings">
+          <div v-for="n in 6" :key="`sk-card-${n}`" class="admin-card">
+            <div class="admin-card-head">
+              <div style="width: 100%;">
+                <div class="skeleton-line skeleton-w-70"></div>
+                <div style="margin-top: 8px;" class="skeleton-line skeleton-w-50"></div>
+              </div>
+            </div>
+            <div class="admin-card-body">
+              <div class="skeleton-line skeleton-w-60"></div>
+              <div class="skeleton-line skeleton-w-50"></div>
+              <div class="skeleton-line skeleton-w-40"></div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div v-for="booking in filteredBookings" :key="booking.id" class="admin-card has-actions">
+            <div class="admin-card-head">
+              <div>
+                <div class="admin-card-title">{{ booking.customer_name }}</div>
+                <div class="admin-card-subtitle">{{ booking.hall_name }} • {{ booking.start_date }} → {{ booking.end_date }}</div>
+              </div>
+
+              <div class="admin-card-actions">
+                <div class="actions-dropdown">
+                <button class="btn-icon details" title="Détails" @click.stop="toggleActions(booking.id)">
+                  <i class="fas fa-ellipsis-vertical"></i>
+                </button>
+                <div v-if="openActionsId === booking.id" class="actions-menu" @click.stop>
+                  <NuxtLink class="actions-item" :to="`/admin/payments?booking=${booking.id}`" @click="closeActions">
+                    <i class="fas fa-coins"></i> Payer
+                  </NuxtLink>
+                  <button
+                    v-if="booking.status === 'pending'"
+                    class="actions-item"
+                    :class="{ 'is-loading': actionBookingId === booking.id && actionType === 'approve' }"
+                    :disabled="actionBookingId === booking.id"
+                    @click="approve(booking)"
+                  >
+                    <i class="fas fa-check-circle"></i> Approuver
+                  </button>
+                  <button
+                    v-if="booking.status === 'pending'"
+                    class="actions-item"
+                    :class="{ 'is-loading': actionBookingId === booking.id && actionType === 'reject' }"
+                    :disabled="actionBookingId === booking.id"
+                    @click="reject(booking)"
+                  >
+                    <i class="fas fa-times-circle"></i> Rejeter
+                  </button>
+                  <button class="actions-item" @click="viewBooking(booking)">
+                    <i class="fas fa-eye"></i> Voir
+                  </button>
+                  <button class="actions-item" @click="editBooking(booking)">
+                    <i class="fas fa-edit"></i> Modifier
+                  </button>
+                  <button class="actions-item danger" @click="confirmDelete(booking)">
+                    <i class="fas fa-trash-alt"></i> Supprimer
+                  </button>
+                </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="admin-card-body">
+              <div class="admin-kv">
+                <span class="k">Événement</span>
+                <span class="v">{{ booking.event_type }}</span>
+              </div>
+              <div class="admin-kv">
+                <span class="k">Montant</span>
+                <span class="v">{{ booking.total_price.toLocaleString() }} Fbu</span>
+              </div>
+              <div class="admin-kv">
+                <span class="k">Statut</span>
+                <span class="v">
+                  <span :class="['badge', getBadgeClass(booking.status)]">{{ getStatusTranslation(booking.status) }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </template>
+        <div v-if="!loadingBookings && filteredBookings.length === 0" class="empty-cell">Aucune réservation</div>
+      </div>
+
+      <div v-else class="table-wrapper">
         <table ref="tableRef" class="bookings-table admin-table">
           <thead>
             <tr>
@@ -92,7 +185,28 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="booking in filteredBookings" :key="booking.id">
+            <template v-if="loadingBookings">
+              <tr v-for="n in 6" :key="`sk-${n}`">
+                <td class="customer-cell">
+                  <div class="skeleton-lines">
+                    <div class="skeleton-line skeleton-w-70"></div>
+                    <div class="skeleton-line skeleton-w-50"></div>
+                  </div>
+                </td>
+                <td><div class="skeleton-line skeleton-w-60"></div></td>
+                <td><div class="skeleton-line skeleton-w-50"></div></td>
+                <td class="date-cell">
+                  <div class="skeleton-lines">
+                    <div class="skeleton-line skeleton-w-60"></div>
+                    <div class="skeleton-line skeleton-w-40"></div>
+                  </div>
+                </td>
+                <td class="amount-cell"><div class="skeleton-line skeleton-w-50"></div></td>
+                <td><div class="skeleton-line skeleton-w-40"></div></td>
+                <td class="actions-cell"><div class="skeleton-line skeleton-w-60"></div></td>
+              </tr>
+            </template>
+            <tr v-else v-for="booking in filteredBookings" :key="booking.id">
               <td class="customer-cell">
                 <div class="customer-name">{{ booking.customer_name }}</div>
                 <div class="customer-email">{{ booking.customer_email }}</div>
@@ -110,25 +224,30 @@
                 </span>
               </td>
               <td class="actions-cell">
-                <div class="btn-group">
-                  <NuxtLink class="btn-icon pay" :to="`/admin/payments?booking=${booking.id}`" title="Payer">
-                    <i class="fas fa-coins"></i>
-                  </NuxtLink>
-                  <button class="btn-icon approve" v-if="booking.status === 'pending'" @click="approve(booking)" title="Approuver">
-                    <i class="fas fa-check-circle"></i>
+                <div class="actions-dropdown">
+                  <button class="btn-icon details" title="Détails" @click.stop="toggleActions(booking.id)">
+                    <i class="fas fa-ellipsis-vertical"></i>
                   </button>
-                  <button class="btn-icon reject" v-if="booking.status === 'pending'" @click="reject(booking)" title="Rejeter">
-                    <i class="fas fa-times-circle"></i>
-                  </button>
-                  <button class="btn-icon view" @click="viewBooking(booking)" title="Voir les détails">
-                    <i class="fas fa-eye"></i>
-                  </button>
-                  <button class="btn-icon edit" @click="editBooking(booking)" title="Modifier">
-                    <i class="fas fa-edit"></i>
-                  </button>
-                  <button class="btn-icon delete" @click="confirmDelete(booking)" title="Supprimer">
-                    <i class="fas fa-trash-alt"></i>
-                  </button>
+                  <div v-if="openActionsId === booking.id" class="actions-menu" @click.stop>
+                    <NuxtLink class="actions-item" :to="`/admin/payments?booking=${booking.id}`" @click="closeActions">
+                      <i class="fas fa-coins"></i> Payer
+                    </NuxtLink>
+                    <button v-if="booking.status === 'pending'" class="actions-item" :class="{ 'is-loading': actionBookingId === booking.id && actionType === 'approve' }" :disabled="actionBookingId === booking.id" @click="approve(booking)">
+                      <i class="fas fa-check-circle"></i> Approuver
+                    </button>
+                    <button v-if="booking.status === 'pending'" class="actions-item" :class="{ 'is-loading': actionBookingId === booking.id && actionType === 'reject' }" :disabled="actionBookingId === booking.id" @click="reject(booking)">
+                      <i class="fas fa-times-circle"></i> Rejeter
+                    </button>
+                    <button class="actions-item" @click="viewBooking(booking)">
+                      <i class="fas fa-eye"></i> Voir
+                    </button>
+                    <button class="actions-item" @click="editBooking(booking)">
+                      <i class="fas fa-edit"></i> Modifier
+                    </button>
+                    <button class="actions-item danger" @click="confirmDelete(booking)">
+                      <i class="fas fa-trash-alt"></i> Supprimer
+                    </button>
+                  </div>
                 </div>
               </td>
             </tr>
@@ -182,7 +301,7 @@
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showFormModal = false">Annuler</button>
-        <button class="btn btn-primary" @click="saveBooking">{{ isEditing ? 'Mettre à jour' : 'Créer' }}</button>
+        <button class="btn btn-primary" :class="{ 'is-loading': savingBooking }" :disabled="savingBooking" @click="saveBooking">{{ isEditing ? 'Mettre à jour' : 'Créer' }}</button>
       </template>
     </AdminAppModal>
 
@@ -230,13 +349,9 @@
       <p>Êtes-vous sûr de vouloir supprimer la réservation de <strong>{{ selectedBooking?.customer_name }}</strong> ? Cette action est irréversible.</p>
       <template #footer>
         <button class="btn btn-outline" @click="showDeleteModal = false">Annuler</button>
-        <button class="btn btn-danger" @click="deleteBooking">Supprimer</button>
+        <button class="btn btn-danger" :class="{ 'is-loading': deletingBooking }" :disabled="deletingBooking" @click="deleteBooking">Supprimer</button>
       </template>
     </AdminAppModal>
-
-    <div class="static-info">
-      <p><i class="fas fa-info-circle"></i> Affichage de données statiques (Mode Démo)</p>
-    </div>
   </div>
 </template>
 
@@ -260,9 +375,22 @@ const showDeleteModal = ref(false)
 const isEditing = ref(false)
 const selectedBooking = ref(null)
 const tableRef = ref(null)
+const exportingPdf = ref(false)
+const exportingXls = ref(false)
+const savingBooking = ref(false)
+const deletingBooking = ref(false)
+const actionBookingId = ref(null)
+const actionType = ref('')
+const loadingBookings = ref(false)
+const loadingHalls = ref(false)
+const isMobile = ref(false)
+const filtersOpen = ref(false)
+const openActionsId = ref(null)
 
-const exportXls = () => {
+const exportXls = async () => {
   if (!tableRef.value) return
+  exportingXls.value = true
+  await nextTick()
   const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableRef.value.outerHTML}</body></html>`
   const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
   const url = URL.createObjectURL(blob)
@@ -271,12 +399,20 @@ const exportXls = () => {
   a.download = 'bookings.xls'
   a.click()
   URL.revokeObjectURL(url)
+  setTimeout(() => {
+    exportingXls.value = false
+  }, 350)
 }
 
-const exportPdf = () => {
+const exportPdf = async () => {
   if (!tableRef.value) return
+  exportingPdf.value = true
+  await nextTick()
   const win = window.open('', '_blank')
-  if (!win) return
+  if (!win) {
+    exportingPdf.value = false
+    return
+  }
   win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Réservations</title><style>
   body{font-family:Arial, sans-serif; padding:20px}
   table{width:100%; border-collapse:collapse}
@@ -287,6 +423,9 @@ const exportPdf = () => {
   win.focus()
   win.print()
   win.close()
+  setTimeout(() => {
+    exportingPdf.value = false
+  }, 350)
 }
 
 const form = ref({
@@ -305,15 +444,19 @@ const bookings = ref([])
 const halls = ref([])
 
 const fetchBookings = async () => {
+  loadingBookings.value = true
   try {
     const response = await api.get('bookings/')
     bookings.value = response.data
   } catch (error) {
     notify('Erreur lors du chargement des réservations', 'danger')
+  } finally {
+    loadingBookings.value = false
   }
 }
 
 const fetchHalls = async () => {
+  loadingHalls.value = true
   try {
     const response = await api.get('halls/')
     halls.value = response.data
@@ -322,13 +465,41 @@ const fetchHalls = async () => {
     }
   } catch (error) {
     notify('Erreur lors du chargement des salles', 'danger')
+  } finally {
+    loadingHalls.value = false
   }
 }
 
 onMounted(() => {
   fetchBookings()
   fetchHalls()
+  if (process.client) {
+    const update = () => {
+      const nextIsMobile = window.innerWidth <= 992
+      if (nextIsMobile !== isMobile.value) {
+        isMobile.value = nextIsMobile
+        filtersOpen.value = !nextIsMobile
+      } else {
+        isMobile.value = nextIsMobile
+      }
+    }
+    update()
+    window.addEventListener('resize', update)
+    onBeforeUnmount(() => window.removeEventListener('resize', update))
+
+    const onDocClick = () => { openActionsId.value = null }
+    document.addEventListener('click', onDocClick)
+    onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+  }
 })
+
+const toggleActions = (id) => {
+  openActionsId.value = openActionsId.value === id ? null : id
+}
+
+const closeActions = () => {
+  openActionsId.value = null
+}
 
 const pricePerDay = ref(0)
 const daysCount = ref(0)
@@ -373,6 +544,7 @@ const filteredBookings = computed(() => {
 })
 
 const saveBooking = async () => {
+  savingBooking.value = true
   try {
     if (isEditing.value) {
       await api.put(`bookings/${form.value.id}/`, form.value)
@@ -385,10 +557,14 @@ const saveBooking = async () => {
     fetchBookings()
   } catch (error) {
     notify('Erreur lors de l\'enregistrement', 'danger')
+  } finally {
+    savingBooking.value = false
   }
 }
 
 const deleteBooking = async () => {
+  if (!selectedBooking.value?.id) return
+  deletingBooking.value = true
   try {
     await api.delete(`bookings/${selectedBooking.value.id}/`)
     notify('Réservation supprimée', 'danger')
@@ -396,26 +572,42 @@ const deleteBooking = async () => {
     fetchBookings()
   } catch (error) {
     notify('Erreur lors de la suppression', 'danger')
+  } finally {
+    deletingBooking.value = false
   }
 }
 
 const approve = async (booking) => {
+  if (!booking?.id) return
+  closeActions()
+  actionBookingId.value = booking.id
+  actionType.value = 'approve'
   try {
     await api.patch(`bookings/${booking.id}/`, { status: 'confirmed' })
     notify(`Réservation de ${booking.customer_name} approuvée`, 'success')
     fetchBookings()
   } catch (error) {
     notify('Erreur lors de l\'approbation', 'danger')
+  } finally {
+    actionBookingId.value = null
+    actionType.value = ''
   }
 }
 
 const reject = async (booking) => {
+  if (!booking?.id) return
+  closeActions()
+  actionBookingId.value = booking.id
+  actionType.value = 'reject'
   try {
     await api.patch(`bookings/${booking.id}/`, { status: 'cancelled' })
     notify(`Réservation de ${booking.customer_name} rejetée`, 'warning')
     fetchBookings()
   } catch (error) {
     notify('Erreur lors du rejet', 'danger')
+  } finally {
+    actionBookingId.value = null
+    actionType.value = ''
   }
 }
 
@@ -447,6 +639,7 @@ const openAddModal = () => {
 }
 
 const editBooking = (booking) => {
+  closeActions()
   isEditing.value = true
   form.value = { ...booking }
   calculatePrice()
@@ -454,11 +647,13 @@ const editBooking = (booking) => {
 }
 
 const viewBooking = (booking) => {
+  closeActions()
   selectedBooking.value = booking
   showViewModal.value = true
 }
 
 const confirmDelete = (booking) => {
+  closeActions()
   selectedBooking.value = booking
   showDeleteModal.value = true
 }
@@ -469,11 +664,19 @@ const confirmDelete = (booking) => {
   padding: 0;
 }
 
+.admin-cards {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: var(--space-10);
+  gap: var(--space-4);
+  flex-wrap: wrap;
 }
 
 .page-header h1 {
@@ -487,6 +690,106 @@ const confirmDelete = (booking) => {
   color: #64748b;
   font-size: 0.9rem;
   font-weight: 500;
+}
+
+.header-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .5rem;
+}
+
+.controls-top {
+  width: 100%;
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.filters-panel {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.filters-toggle {
+  display: none;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.filters-toggle.active {
+  background: rgba(212, 175, 55, .18);
+  border-color: rgba(212, 175, 55, .35);
+  color: #0f172a;
+}
+
+.actions-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.actions-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  z-index: 30;
+}
+
+.actions-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #334155;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.actions-item:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.actions-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.actions-item.danger {
+  color: #dc2626;
+}
+
+.actions-item.danger:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+@media (max-width: 992px) {
+  .filters-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .filters-panel {
+    gap: var(--space-3);
+  }
 }
 
 .header-actions {
@@ -644,13 +947,5 @@ const confirmDelete = (booking) => {
 
 .form-group.full {
   grid-column: span 2;
-}
-
-.static-info {
-  margin-top: var(--space-12);
-  color: #cbd5e1;
-  font-size: 0.85rem;
-  text-align: center;
-  font-weight: 600;
 }
 </style>
