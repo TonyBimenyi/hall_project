@@ -72,19 +72,31 @@
           <input v-model="dateTo" type="date" class="filter-input-clean" />
         </div>
         <div class="filter-wrapper">
-          <input v-model.number="minAmount" type="number" class="filter-input-clean" placeholder="Min (Fbu)" />
+          <input v-model="minAmountInput" inputmode="numeric" type="text" class="filter-input-clean" placeholder="Min (Fbu)" />
         </div>
         <div class="filter-wrapper">
-          <input v-model.number="maxAmount" type="number" class="filter-input-clean" placeholder="Max (Fbu)" />
+          <input v-model="maxAmountInput" inputmode="numeric" type="text" class="filter-input-clean" placeholder="Max (Fbu)" />
         </div>
       </div>
     </div>
 
     <!-- Table -->
     <div class="table-container card">
-      <h2 class="table-title">
-        Toutes les réservations ({{ loadingBookings ? '...' : filteredBookings.length }})
-      </h2>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom: var(--space-4);">
+        <h2 class="table-title" style="margin-bottom:0;">
+          Toutes les réservations ({{ loadingBookings ? '...' : filteredBookings.length }})
+        </h2>
+        <AdminAppTablePagination
+          :start="bookingsStartIndex"
+          :end="bookingsEndIndex"
+          :total="bookingsTotalItems"
+          :can-prev="bookingsCanPrev"
+          :can-next="bookingsCanNext"
+          :disabled="loadingBookings"
+          @prev="bookingsPrevPage"
+          @next="bookingsNextPage"
+        />
+      </div>
       <div v-if="isMobile" class="admin-cards">
         <template v-if="loadingBookings">
           <div v-for="n in 6" :key="`sk-card-${n}`" class="admin-card">
@@ -102,11 +114,11 @@
           </div>
         </template>
         <template v-else>
-          <div v-for="booking in filteredBookings" :key="booking.id" class="admin-card has-actions">
+          <div v-for="booking in paginatedBookings" :key="booking.id" class="admin-card has-actions">
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ booking.customer_name }}</div>
-                <div class="admin-card-subtitle">{{ booking.hall_name }} • {{ booking.start_date }} → {{ booking.end_date }}</div>
+                <div class="admin-card-subtitle">{{ booking.hall_name }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
               </div>
 
               <div class="admin-card-actions">
@@ -157,7 +169,7 @@
               </div>
               <div class="admin-kv">
                 <span class="k">Montant</span>
-                <span class="v">{{ booking.total_price.toLocaleString() }} Fbu</span>
+                <span class="v">{{ formatMoney(booking.total_price) }}</span>
               </div>
               <div class="admin-kv">
                 <span class="k">Statut</span>
@@ -206,18 +218,15 @@
                 <td class="actions-cell"><div class="skeleton-line skeleton-w-60"></div></td>
               </tr>
             </template>
-            <tr v-else v-for="booking in filteredBookings" :key="booking.id">
+            <tr v-else v-for="booking in paginatedBookings" :key="booking.id">
               <td class="customer-cell">
                 <div class="customer-name">{{ booking.customer_name }}</div>
                 <div class="customer-email">{{ booking.customer_email }}</div>
               </td>
               <td>{{ booking.hall_name }}</td>
               <td>{{ booking.event_type }}</td>
-              <td class="date-cell">
-                <div>{{ booking.start_date }}</div>
-                <div class="end-date">au {{ booking.end_date }}</div>
-              </td>
-              <td class="amount-cell">{{ booking.total_price.toLocaleString() }} Fbu</td>
+              <td class="date-cell">{{ formatDateRange(booking.start_date, booking.end_date) }}</td>
+              <td class="amount-cell">{{ formatMoney(booking.total_price) }}</td>
               <td>
                 <span :class="['badge', getBadgeClass(booking.status)]">
                   {{ getStatusTranslation(booking.status) }}
@@ -294,8 +303,8 @@
           </div>
           <div class="form-group">
             <label class="form-label">Montant (Fbu)</label>
-            <input v-model.number="form.total_price" type="number" class="form-input" required />
-            <small class="form-hint" v-if="daysCount > 0">{{ daysCount }} jour(s) à {{ pricePerDay.toLocaleString() }} Fbu/jour</small>
+            <input v-model="totalPriceInput" inputmode="numeric" type="text" class="form-input" required />
+            <small class="form-hint" v-if="daysCount > 0">{{ daysCount }} jour(s) à {{ formatMoney(pricePerDay) }}/jour</small>
           </div>
         </div>
       </form>
@@ -326,11 +335,11 @@
         </div>
         <div class="detail-item">
           <span class="detail-label">Période</span>
-          <span class="detail-val">{{ selectedBooking.start_date }} au {{ selectedBooking.end_date }}</span>
+          <span class="detail-val">{{ formatDateRange(selectedBooking.start_date, selectedBooking.end_date) }}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Montant</span>
-          <span class="detail-val">{{ selectedBooking.total_price.toLocaleString() }} Fbu</span>
+          <span class="detail-val">{{ formatMoney(selectedBooking.total_price) }}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Statut</span>
@@ -358,8 +367,13 @@
 <script setup>
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
+import { useMoney } from '~/composables/useMoney'
+import { usePagination } from '~/composables/usePagination'
+import { useDateFormat } from '~/composables/useDateFormat'
 
 definePageMeta({ layout: 'admin' })
+const { formatMoney, formatNumberSpaces, moneyInputModel, parseMoney } = useMoney()
+const { formatDateRange, formatDisplayDate } = useDateFormat()
 
 const search = ref('')
 const statusFilter = ref('')
@@ -438,6 +452,19 @@ const form = ref({
   end_date: '',
   total_price: 0,
   status: 'pending'
+})
+const totalPriceInput = moneyInputModel(form, 'total_price')
+const minAmountInput = computed({
+  get: () => (minAmount.value === null || minAmount.value === '' ? '' : formatNumberSpaces(minAmount.value)),
+  set: (value) => {
+    minAmount.value = value === '' ? null : parseMoney(value)
+  }
+})
+const maxAmountInput = computed({
+  get: () => (maxAmount.value === null || maxAmount.value === '' ? '' : formatNumberSpaces(maxAmount.value)),
+  set: (value) => {
+    maxAmount.value = value === '' ? null : parseMoney(value)
+  }
 })
 
 const bookings = ref([])
@@ -542,6 +569,17 @@ const filteredBookings = computed(() => {
     return matchesSearch && matchesStatus && matchesHall && matchesEventType && fromOk && toOk && minOk && maxOk
   })
 })
+
+const {
+  paginatedItems: paginatedBookings,
+  totalItems: bookingsTotalItems,
+  startIndex: bookingsStartIndex,
+  endIndex: bookingsEndIndex,
+  canPrev: bookingsCanPrev,
+  canNext: bookingsCanNext,
+  prevPage: bookingsPrevPage,
+  nextPage: bookingsNextPage,
+} = usePagination(filteredBookings, 50)
 
 const saveBooking = async () => {
   savingBooking.value = true

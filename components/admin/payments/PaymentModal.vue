@@ -13,9 +13,9 @@
           <p><strong>Client :</strong> {{ booking.clients?.first_name }} {{ booking.clients?.last_name }}</p>
           <p><strong>Salle :</strong> {{ booking.halls?.name || 'Salle #' + booking.hall }}</p>
           <p><strong>Période :</strong> {{ formatDate(booking.date_start) }} → {{ formatDate(booking.date_end) }}</p>
-          <p><strong>Montant total dû :</strong> ${{ Number(booking.total_cost || 0).toLocaleString() }}</p>
-          <p><strong>Déjà payé :</strong> ${{ Number(booking.total_paid || 0).toLocaleString() }}</p>
-          <p><strong>Restant :</strong> ${{ Number(booking.remaining_balance || 0).toLocaleString() }}</p>
+          <p><strong>Montant total dû :</strong> {{ formatMoney(booking.total_cost || 0, '$') }}</p>
+          <p><strong>Déjà payé :</strong> {{ formatMoney(booking.total_paid || 0, '$') }}</p>
+          <p><strong>Restant :</strong> {{ formatMoney(booking.remaining_balance || 0, '$') }}</p>
         </div>
 
         <!-- Form -->
@@ -23,10 +23,10 @@
           <div class="form-group">
             <label>Montant <span class="required">*</span></label>
             <input
-              type="number"
-              v-model.number="form.amount"
-              step="0.01"
-              min="0.01"
+              type="text"
+              inputmode="decimal"
+              :value="amountInput"
+              @input="onAmountInput($event.target.value)"
               placeholder="0.00"
               required
               :class="{ 'error': errors.amount }"
@@ -104,6 +104,9 @@
 <script>
 import { notify } from '~/composables/useNotification'   // ← ADDED
 import { api } from '~/composables/useApi'
+import { useMoney } from '~/composables/useMoney'
+
+const { formatMoney, formatMoneyInput, parseMoney } = useMoney()
 
 export default {
   props: {
@@ -128,7 +131,8 @@ export default {
         notes: ''
       },
       errors: {},
-      submitting: false
+      submitting: false,
+      amountInput: ''
     }
   },
 
@@ -140,10 +144,21 @@ export default {
           this.form.booking = newBooking.id
         }
       }
+    },
+    'form.amount': {
+      immediate: true,
+      handler(nextValue) {
+        this.amountInput = nextValue ? formatMoneyInput(nextValue) : ''
+      }
     }
   },
 
   methods: {
+    formatMoney,
+    onAmountInput(value) {
+      this.amountInput = value === '' ? '' : formatMoneyInput(value)
+      this.form.amount = value === '' ? null : parseMoney(value)
+    },
     async submit() {
       this.errors = {}
       this.submitting = true

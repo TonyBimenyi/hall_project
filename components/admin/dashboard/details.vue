@@ -26,7 +26,7 @@
       <div class="card">
         <div class="card_info">
           <div class="p">Revenu total</div>
-          <div class="number">{{ Number(displayTotalRevenue).toLocaleString() }} Fbu</div>
+          <div class="number">{{ formatMoney(displayTotalRevenue) }}</div>
           <div class="trend">Depuis toujours</div>
         </div>
         <div class="icon">
@@ -37,7 +37,7 @@
       <div class="card">
         <div class="card_info">
           <div class="p">Dépenses du mois</div>
-          <div class="number">{{ Number(displayMonthlyExpenses).toLocaleString() }} Fbu</div>
+          <div class="number">{{ formatMoney(displayMonthlyExpenses) }}</div>
           <div class="trend negative">
             +5% par rapport au mois dernier
           </div>
@@ -76,6 +76,9 @@
 
 <script>
 import { api } from '~/composables/useApi'
+import { useMoney } from '~/composables/useMoney'
+
+const { formatMoney } = useMoney()
 
 export default {
   data() {

@@ -110,7 +110,7 @@
           <h3>{{ hall.name }}</h3>
           <div class="hall-meta">
             <span><i class="fas fa-users"></i> {{ hall.capacity }} {{ $t('home.halls.persons') }}</span>
-            <span><i class="fas fa-coins"></i> {{ Number(hall.price_per_day || 0).toLocaleString() }} {{ $t('home.halls.perDay') }}</span>
+            <span><i class="fas fa-coins"></i> {{ formatNumberSpaces(hall.price_per_day) }} {{ $t('home.halls.perDay') }}</span>
           </div>
           <NuxtLink :to="localePath('/book')" class="btn btn-primary btn-sm">{{ $t('home.halls.reserveThis') }}</NuxtLink>
         </article>
@@ -141,6 +141,9 @@
 </template>
 
 <script setup>
+import { useMoney } from '~/composables/useMoney'
+
+const { formatNumberSpaces } = useMoney()
 import { api } from '~/composables/useApi'
 
 const { t } = useI18n()

@@ -57,7 +57,7 @@
           <span class="label">Revenu encaissé</span>
           <span class="value success">
             <span v-if="isLoading" class="skeleton-line skeleton-w-70"></span>
-            <template v-else>{{ displayTotalRevenue.toLocaleString() }} Fbu</template>
+            <template v-else>{{ formatMoney(displayTotalRevenue) }}</template>
           </span>
         </div>
       </div>
@@ -67,7 +67,7 @@
           <span class="label">Reste à encaisser</span>
           <span class="value warning">
             <span v-if="isLoading" class="skeleton-line skeleton-w-70"></span>
-            <template v-else>{{ displayTotalRemaining.toLocaleString() }} Fbu</template>
+            <template v-else>{{ formatMoney(displayTotalRemaining) }}</template>
           </span>
         </div>
       </div>
@@ -94,8 +94,18 @@
     </div>
 
     <div class="card section-card">
-      <div class="section-header">
+      <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
         <h2>Réservations à payer</h2>
+        <AdminAppTablePagination
+          :start="unpaidStartIndex"
+          :end="unpaidEndIndex"
+          :total="unpaidTotalItems"
+          :can-prev="unpaidCanPrev"
+          :can-next="unpaidCanNext"
+          :disabled="isLoading"
+          @prev="unpaidPrevPage"
+          @next="unpaidNextPage"
+        />
       </div>
       <div v-if="isMobile" class="admin-cards">
         <template v-if="isLoading">
@@ -114,11 +124,11 @@
           </div>
         </template>
         <template v-else>
-          <div v-for="booking in filteredUnpaidBookings" :key="booking.id" class="admin-card has-actions">
+          <div v-for="booking in paginatedUnpaidBookings" :key="booking.id" class="admin-card has-actions">
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ booking.customer_name }}</div>
-                <div class="admin-card-subtitle">{{ booking.hall_name }} • {{ booking.start_date }} → {{ booking.end_date }}</div>
+                <div class="admin-card-subtitle">{{ booking.hall_name }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
               </div>
               <div class="admin-card-actions">
                 <button class="btn btn-primary btn-sm" title="Payer" @click="openAddModal(booking)">
@@ -129,20 +139,20 @@
             <div class="admin-card-body">
               <div class="admin-kv">
                 <span class="k">Total</span>
-                <span class="v">{{ toNumber(booking.total_price).toLocaleString() }} Fbu</span>
+                <span class="v">{{ formatMoney(booking.total_price) }}</span>
               </div>
               <div class="admin-kv">
                 <span class="k">Déjà payé</span>
-                <span class="v">{{ toNumber(booking.paid_amount).toLocaleString() }} Fbu</span>
+                <span class="v">{{ formatMoney(booking.paid_amount) }}</span>
               </div>
               <div class="admin-kv">
                 <span class="k">Reste</span>
-                <span class="v">{{ toNumber(booking.remaining_amount).toLocaleString() }} Fbu</span>
+                <span class="v">{{ formatMoney(booking.remaining_amount) }}</span>
               </div>
             </div>
           </div>
         </template>
-        <div v-if="!isLoading && unpaidBookings.length === 0" class="empty-cell">Toutes les réservations sont soldées</div>
+        <div v-if="!isLoading && filteredUnpaidBookings.length === 0" class="empty-cell">Toutes les réservations sont soldées</div>
       </div>
 
       <table v-else class="admin-table">
@@ -175,23 +185,23 @@
             </tr>
           </template>
           <template v-else>
-            <tr v-for="booking in filteredUnpaidBookings" :key="booking.id">
+            <tr v-for="booking in paginatedUnpaidBookings" :key="booking.id">
               <td>
                 <div class="customer-name">{{ booking.customer_name }}</div>
                 <div class="customer-email">{{ booking.customer_email }}</div>
               </td>
               <td>{{ booking.hall_name }}</td>
-              <td>{{ booking.start_date }} → {{ booking.end_date }}</td>
-              <td>{{ toNumber(booking.total_price).toLocaleString() }} Fbu</td>
-              <td>{{ toNumber(booking.paid_amount).toLocaleString() }} Fbu</td>
-              <td><span class="remain">{{ toNumber(booking.remaining_amount).toLocaleString() }} Fbu</span></td>
+              <td>{{ formatDateRange(booking.start_date, booking.end_date) }}</td>
+              <td>{{ formatMoney(booking.total_price) }}</td>
+              <td>{{ formatMoney(booking.paid_amount) }}</td>
+              <td><span class="remain">{{ formatMoney(booking.remaining_amount) }}</span></td>
               <td>
                 <button class="btn btn-primary btn-sm" @click="openAddModal(booking)">
                   <i class="fas fa-coins"></i> Payer
                 </button>
               </td>
             </tr>
-            <tr v-if="unpaidBookings.length === 0">
+            <tr v-if="filteredUnpaidBookings.length === 0">
               <td colspan="7" class="empty-cell">Toutes les réservations sont soldées</td>
             </tr>
           </template>
@@ -200,8 +210,18 @@
     </div>
 
     <div class="card section-card">
-      <div class="section-header">
+      <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
         <h2>Historique des paiements</h2>
+        <AdminAppTablePagination
+          :start="paymentsStartIndex"
+          :end="paymentsEndIndex"
+          :total="paymentsTotalItems"
+          :can-prev="paymentsCanPrev"
+          :can-next="paymentsCanNext"
+          :disabled="isLoading"
+          @prev="paymentsPrevPage"
+          @next="paymentsNextPage"
+        />
       </div>
       <div v-if="isMobile" class="admin-cards">
         <template v-if="isLoading">
@@ -220,11 +240,11 @@
           </div>
         </template>
         <template v-else>
-          <div v-for="payment in filteredPayments" :key="payment.id" class="admin-card has-actions">
+          <div v-for="payment in paginatedPayments" :key="payment.id" class="admin-card has-actions">
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ payment.booking_customer_name }}</div>
-                <div class="admin-card-subtitle">{{ payment.date }} • {{ toNumber(payment.amount).toLocaleString() }} Fbu</div>
+                <div class="admin-card-subtitle">{{ formatDisplayDate(payment.date) }} • {{ formatMoney(payment.amount) }}</div>
               </div>
               <div class="admin-card-actions">
                 <div class="actions-dropdown">
@@ -293,12 +313,12 @@
             </tr>
           </template>
           <template v-else>
-            <tr v-for="payment in filteredPayments" :key="payment.id">
-              <td>{{ payment.date }}</td>
+            <tr v-for="payment in paginatedPayments" :key="payment.id">
+              <td>{{ formatDisplayDate(payment.date) }}</td>
               <td>{{ payment.booking_customer_name }}</td>
               <td><code>{{ payment.reference }}</code></td>
               <td>{{ payment.kind === 'full' ? 'Total' : 'Avance' }}</td>
-              <td>{{ toNumber(payment.amount).toLocaleString() }} Fbu</td>
+              <td>{{ formatMoney(payment.amount) }}</td>
               <td>{{ payment.method }}</td>
               <td><span :class="['badge', getBadgeClass(payment.status)]">{{ translateStatus(payment.status) }}</span></td>
               <td class="actions-cell">
@@ -332,15 +352,15 @@
           <label class="form-label">Réservation</label>
           <select v-model="form.booking" class="form-select" required @change="onBookingChange">
             <option v-for="b in unpaidBookings" :key="b.id" :value="b.id">
-              {{ b.customer_name }} - {{ b.hall_name }} (reste: {{ toNumber(b.remaining_amount).toLocaleString() }} Fbu)
+              {{ b.customer_name }} - {{ b.hall_name }} (reste: {{ formatMoney(b.remaining_amount) }})
             </option>
           </select>
         </div>
 
         <div v-if="selectedBookingForForm" class="booking-summary">
-          <div><strong>Total:</strong> {{ toNumber(selectedBookingForForm.total_price).toLocaleString() }} Fbu</div>
-          <div><strong>Déjà payé:</strong> {{ toNumber(selectedBookingForForm.paid_amount).toLocaleString() }} Fbu</div>
-          <div><strong>Reste:</strong> {{ toNumber(selectedBookingForForm.remaining_amount).toLocaleString() }} Fbu</div>
+          <div><strong>Total:</strong> {{ formatMoney(selectedBookingForForm.total_price) }}</div>
+          <div><strong>Déjà payé:</strong> {{ formatMoney(selectedBookingForForm.paid_amount) }}</div>
+          <div><strong>Reste:</strong> {{ formatMoney(selectedBookingForForm.remaining_amount) }}</div>
         </div>
 
         <div class="form-grid">
@@ -353,7 +373,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">Montant (Fbu)</label>
-            <input v-model.number="form.amount" type="number" class="form-input" min="1" required />
+            <input v-model="amountInput" inputmode="numeric" type="text" class="form-input" placeholder="0" required />
           </div>
         </div>
 
@@ -390,10 +410,10 @@
       <div v-if="selectedPayment" class="view-details">
         <div class="detail-item"><span class="detail-label">Client</span><span class="detail-val">{{ selectedPayment.booking_customer_name }}</span></div>
         <div class="detail-item"><span class="detail-label">Réservation</span><span class="detail-val">{{ selectedPayment.booking_hall_name }}</span></div>
-        <div class="detail-item"><span class="detail-label">Période</span><span class="detail-val">{{ selectedPayment.booking_start_date }} → {{ selectedPayment.booking_end_date }}</span></div>
+        <div class="detail-item"><span class="detail-label">Période</span><span class="detail-val">{{ formatDateRange(selectedPayment.booking_start_date, selectedPayment.booking_end_date) }}</span></div>
         <div class="detail-item"><span class="detail-label">Type</span><span class="detail-val">{{ selectedPayment.kind === 'full' ? 'Paiement total' : 'Avance' }}</span></div>
-        <div class="detail-item"><span class="detail-label">Montant</span><span class="detail-val">{{ toNumber(selectedPayment.amount).toLocaleString() }} Fbu</span></div>
-        <div class="detail-item"><span class="detail-label">Reste après paiement</span><span class="detail-val">{{ toNumber(selectedPayment.booking_remaining_amount).toLocaleString() }} Fbu</span></div>
+        <div class="detail-item"><span class="detail-label">Montant</span><span class="detail-val">{{ formatMoney(selectedPayment.amount) }}</span></div>
+        <div class="detail-item"><span class="detail-label">Reste après paiement</span><span class="detail-val">{{ formatMoney(selectedPayment.booking_remaining_amount) }}</span></div>
       </div>
       <template #footer>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
@@ -415,9 +435,14 @@
 <script setup>
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
+import { useMoney } from '~/composables/useMoney'
+import { usePagination } from '~/composables/usePagination'
+import { useDateFormat } from '~/composables/useDateFormat'
 
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
+const { formatMoney, moneyInputModel } = useMoney()
+const { formatDateRange, formatDisplayDate } = useDateFormat()
 
 const payments = ref([])
 const bookings = ref([])
@@ -501,6 +526,7 @@ const form = ref({
   kind: 'advance',
   status: 'paid'
 })
+const amountInput = moneyInputModel(form, 'amount')
 
 const toNumber = (v) => Number(v || 0)
 const unpaidBookings = computed(() => bookings.value.filter(b => toNumber(b.remaining_amount) > 0 && b.status !== 'cancelled'))
@@ -514,6 +540,17 @@ const filteredUnpaidBookings = computed(() => {
     return matchesSearch
   })
 })
+
+const {
+  paginatedItems: paginatedUnpaidBookings,
+  totalItems: unpaidTotalItems,
+  startIndex: unpaidStartIndex,
+  endIndex: unpaidEndIndex,
+  canPrev: unpaidCanPrev,
+  canNext: unpaidCanNext,
+  prevPage: unpaidPrevPage,
+  nextPage: unpaidNextPage,
+} = usePagination(filteredUnpaidBookings, 50)
 
 const selectedBookingForForm = computed(() => unpaidBookings.value.find(b => b.id === form.value.booking) || null)
 const totalRevenue = computed(() => payments.value.filter(p => p.status === 'paid').reduce((a, p) => a + toNumber(p.amount), 0))
@@ -574,6 +611,17 @@ const filteredPayments = computed(() => {
     return matchesSearch && matchesStatus && matchesMethod && fromOk && toOk
   })
 })
+
+const {
+  paginatedItems: paginatedPayments,
+  totalItems: paymentsTotalItems,
+  startIndex: paymentsStartIndex,
+  endIndex: paymentsEndIndex,
+  canPrev: paymentsCanPrev,
+  canNext: paymentsCanNext,
+  prevPage: paymentsPrevPage,
+  nextPage: paymentsNextPage,
+} = usePagination(filteredPayments, 50)
 
 const fetchPayments = async () => {
   loadingPayments.value = true

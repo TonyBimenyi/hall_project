@@ -87,7 +87,7 @@
             <strong>
               {{
                 selectedHall
-                  ? `${Number(selectedHall.price_per_day || 0).toLocaleString()} Fbu`
+                  ? formatMoney(selectedHall.price_per_day)
                   : '-'
               }}
             </strong>
@@ -100,7 +100,7 @@
 
           <div class="summary-total">
             <span>{{ $t('booking.totalEstimated') }}</span>
-            <strong>{{ totalPrice.toLocaleString() }} Fbu</strong>
+            <strong>{{ formatMoney(totalPrice) }}</strong>
           </div>
         </article>
 
@@ -155,7 +155,7 @@
                     :value="hall.id"
                   >
                     {{ hall.name }} -
-                    {{ Number(hall.price_per_day || 0).toLocaleString() }}
+                    {{ formatNumberSpaces(hall.price_per_day) }}
                     {{ $t('booking.hallPriceSuffix') }}
                   </option>
                 </select>
@@ -206,6 +206,9 @@
 <script>
 import { api } from '~/composables/useApi'
 import { notify } from '~/composables/useNotification'
+import { useMoney } from '~/composables/useMoney'
+
+const { formatMoney, formatNumberSpaces } = useMoney()
 
 export default {
   data() {
@@ -320,6 +323,8 @@ export default {
   },
 
   methods: {
+    formatMoney,
+    formatNumberSpaces,
     formatYMD(d) {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
         2,

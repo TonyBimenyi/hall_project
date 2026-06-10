@@ -63,6 +63,18 @@
     </div>
 
     <div class="table-container card">
+      <div style="display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; margin-bottom: var(--space-4);">
+        <AdminAppTablePagination
+          :start="personnelStartIndex"
+          :end="personnelEndIndex"
+          :total="personnelTotalItems"
+          :can-prev="personnelCanPrev"
+          :can-next="personnelCanNext"
+          :disabled="loadingPersonnel"
+          @prev="personnelPrevPage"
+          @next="personnelNextPage"
+        />
+      </div>
       <div v-if="isMobile" class="admin-cards">
         <template v-if="loadingPersonnel">
           <div v-for="n in 6" :key="`sk-card-${n}`" class="admin-card">
@@ -80,7 +92,7 @@
           </div>
         </template>
         <template v-else>
-          <div v-for="staff in personnel" :key="staff.id" class="admin-card">
+          <div v-for="staff in paginatedPersonnel" :key="staff.id" class="admin-card">
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ staff.name }}</div>
@@ -143,7 +155,7 @@
               <td><div class="skeleton-line skeleton-w-60"></div></td>
             </tr>
           </template>
-          <tr v-else v-for="staff in personnel" :key="staff.id">
+          <tr v-else v-for="staff in paginatedPersonnel" :key="staff.id">
             <td class="staff-cell">
               <div class="avatar">{{ staff.name.charAt(0) }}</div>
               <div class="staff-info">
@@ -263,10 +275,21 @@
 <script setup>
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
+import { usePagination } from '~/composables/usePagination'
 
 definePageMeta({ layout: 'admin' })
 
 const personnel = ref([])
+const {
+  paginatedItems: paginatedPersonnel,
+  totalItems: personnelTotalItems,
+  startIndex: personnelStartIndex,
+  endIndex: personnelEndIndex,
+  canPrev: personnelCanPrev,
+  canNext: personnelCanNext,
+  prevPage: personnelPrevPage,
+  nextPage: personnelNextPage,
+} = usePagination(computed(() => personnel.value), 50)
 const tableRef = ref(null)
 const exportingPdf = ref(false)
 const exportingXls = ref(false)

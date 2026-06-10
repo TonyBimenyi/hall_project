@@ -59,6 +59,18 @@
     </div>
 
     <div class="table-container card">
+      <div style="display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; margin-bottom: var(--space-4);">
+        <AdminAppTablePagination
+          :start="materialsStartIndex"
+          :end="materialsEndIndex"
+          :total="materialsTotalItems"
+          :can-prev="materialsCanPrev"
+          :can-next="materialsCanNext"
+          :disabled="loadingMaterials"
+          @prev="materialsPrevPage"
+          @next="materialsNextPage"
+        />
+      </div>
       <div v-if="isMobile" class="admin-cards">
         <template v-if="loadingMaterials">
           <div v-for="n in 6" :key="`sk-card-${n}`" class="admin-card">
@@ -76,7 +88,7 @@
           </div>
         </template>
         <template v-else>
-          <div v-for="item in materials" :key="item.id" class="admin-card">
+          <div v-for="item in paginatedMaterials" :key="item.id" class="admin-card">
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ item.name }}</div>
@@ -154,7 +166,7 @@
               <td><div class="skeleton-line skeleton-w-60"></div></td>
             </tr>
           </template>
-          <tr v-else v-for="item in materials" :key="item.id">
+          <tr v-else v-for="item in paginatedMaterials" :key="item.id">
             <td><strong>{{ item.name }}</strong></td>
             <td>{{ item.category }}</td>
             <td>{{ item.total_quantity }}</td>
@@ -306,10 +318,21 @@
 <script setup>
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
+import { usePagination } from '~/composables/usePagination'
 
 definePageMeta({ layout: 'admin' })
 
 const materials = ref([])
+const {
+  paginatedItems: paginatedMaterials,
+  totalItems: materialsTotalItems,
+  startIndex: materialsStartIndex,
+  endIndex: materialsEndIndex,
+  canPrev: materialsCanPrev,
+  canNext: materialsCanNext,
+  prevPage: materialsPrevPage,
+  nextPage: materialsNextPage,
+} = usePagination(computed(() => materials.value), 50)
 const tableRef = ref(null)
 const exportingPdf = ref(false)
 const exportingXls = ref(false)

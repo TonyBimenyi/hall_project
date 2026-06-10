@@ -22,7 +22,7 @@
           <span class="stat-label">Total ce mois</span>
           <span class="stat-value">
             <span v-if="loadingExpenses" class="skeleton-line skeleton-w-60"></span>
-            <template v-else>{{ displayTotalMonthlyExpenses.toLocaleString() }} Fbu</template>
+            <template v-else>{{ formatMoney(displayTotalMonthlyExpenses) }}</template>
           </span>
         </div>
       </div>
@@ -32,7 +32,7 @@
           <span class="stat-label">Maintenance</span>
           <span class="stat-value">
             <span v-if="loadingExpenses" class="skeleton-line skeleton-w-50"></span>
-            <template v-else>{{ displayMaintenanceTotal.toLocaleString() }} Fbu</template>
+            <template v-else>{{ formatMoney(displayMaintenanceTotal) }}</template>
           </span>
         </div>
       </div>
@@ -42,7 +42,7 @@
           <span class="stat-label">Achats Matériel</span>
           <span class="stat-value">
             <span v-if="loadingExpenses" class="skeleton-line skeleton-w-50"></span>
-            <template v-else>{{ displayEquipmentTotal.toLocaleString() }} Fbu</template>
+            <template v-else>{{ formatMoney(displayEquipmentTotal) }}</template>
           </span>
         </div>
       </div>
@@ -52,7 +52,7 @@
           <span class="stat-label">Salaires</span>
           <span class="stat-value">
             <span v-if="loadingExpenses" class="skeleton-line skeleton-w-50"></span>
-            <template v-else>{{ displaySalariesTotal.toLocaleString() }} Fbu</template>
+            <template v-else>{{ formatMoney(displaySalariesTotal) }}</template>
           </span>
         </div>
       </div>
@@ -94,6 +94,18 @@
     </div>
 
     <div class="table-container card">
+      <div style="display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; margin-bottom: var(--space-4);">
+        <AdminAppTablePagination
+          :start="expensesStartIndex"
+          :end="expensesEndIndex"
+          :total="expensesTotalItems"
+          :can-prev="expensesCanPrev"
+          :can-next="expensesCanNext"
+          :disabled="loadingExpenses"
+          @prev="expensesPrevPage"
+          @next="expensesNextPage"
+        />
+      </div>
       <div v-if="isMobile" class="admin-cards">
         <template v-if="loadingExpenses">
           <div v-for="n in 6" :key="`sk-card-${n}`" class="admin-card">
@@ -111,7 +123,7 @@
           </div>
         </template>
         <template v-else>
-          <div v-for="expense in filteredExpenses" :key="expense.id" class="admin-card">
+          <div v-for="expense in paginatedExpenses" :key="expense.id" class="admin-card">
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ expense.description }}</div>
@@ -139,7 +151,7 @@
             <div class="admin-card-body">
               <div class="admin-kv">
                 <span class="k">Montant</span>
-                <span class="v">{{ expense.amount.toLocaleString() }} Fbu</span>
+                <span class="v">{{ formatMoney(expense.amount) }}</span>
               </div>
               <div class="admin-kv">
                 <span class="k">Payé par</span>
@@ -183,11 +195,11 @@
               <td><div class="skeleton-line skeleton-w-60"></div></td>
             </tr>
           </template>
-          <tr v-else v-for="expense in filteredExpenses" :key="expense.id">
+          <tr v-else v-for="expense in paginatedExpenses" :key="expense.id">
             <td>{{ expense.date }}</td>
             <td><strong>{{ expense.description }}</strong></td>
             <td>{{ expense.category }}</td>
-            <td>{{ expense.amount.toLocaleString() }} Fbu</td>
+            <td>{{ formatMoney(expense.amount) }}</td>
             <td>{{ expense.paid_by }}</td>
             <td>
               <span :class="['badge', expense.status === 'paid' ? 'badge-success' : 'badge-warning']">
@@ -238,7 +250,7 @@
         <div class="form-grid">
           <div class="form-group">
             <label class="form-label">Montant (Fbu)</label>
-            <input v-model.number="form.amount" type="number" class="form-input" required />
+            <input v-model="amountInput" inputmode="numeric" type="text" class="form-input" placeholder="0" required />
           </div>
           <div class="form-group">
             <label class="form-label">Date</label>
@@ -284,7 +296,7 @@
         </div>
         <div class="detail-item">
           <span class="detail-label">Montant</span>
-          <span class="detail-val">{{ selectedExpense.amount.toLocaleString() }} Fbu</span>
+          <span class="detail-val">{{ formatMoney(selectedExpense.amount) }}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Date</span>
@@ -326,8 +338,11 @@
 <script setup>
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
+import { useMoney } from '~/composables/useMoney'
+import { usePagination } from '~/composables/usePagination'
 
 definePageMeta({ layout: 'admin' })
+const { formatMoney, moneyInputModel } = useMoney()
 
 const expenses = ref([])
 const tableRef = ref(null)
@@ -489,6 +504,17 @@ const filteredExpenses = computed(() => {
   })
 })
 
+const {
+  paginatedItems: paginatedExpenses,
+  totalItems: expensesTotalItems,
+  startIndex: expensesStartIndex,
+  endIndex: expensesEndIndex,
+  canPrev: expensesCanPrev,
+  canNext: expensesCanNext,
+  prevPage: expensesPrevPage,
+  nextPage: expensesNextPage,
+} = usePagination(filteredExpenses, 50)
+
 const showFormModal = ref(false)
 const showViewModal = ref(false)
 const showDeleteModal = ref(false)
@@ -505,6 +531,7 @@ const form = ref({
   paid_to: '',
   status: 'paid'
 })
+const amountInput = moneyInputModel(form, 'amount')
 
 const resetForm = () => {
   form.value = {

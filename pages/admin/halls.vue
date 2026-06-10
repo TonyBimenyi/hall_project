@@ -37,7 +37,7 @@
           <span class="stat-label">Prix Moyen / Jour</span>
           <span class="stat-value success">
             <span v-if="loadingHalls" class="skeleton-line skeleton-w-60"></span>
-            <template v-else>{{ displayAverageDailyPrice.toLocaleString() }} Fbu</template>
+            <template v-else>{{ formatMoney(displayAverageDailyPrice) }}</template>
           </span>
         </div>
       </div>
@@ -47,14 +47,26 @@
           <span class="stat-label">Plus Haute Tarification</span>
           <span class="stat-value warning">
             <span v-if="loadingHalls" class="skeleton-line skeleton-w-60"></span>
-            <template v-else>{{ displayHighestDailyPrice.toLocaleString() }} Fbu</template>
+            <template v-else>{{ formatMoney(displayHighestDailyPrice) }}</template>
           </span>
         </div>
       </div>
     </div>
 
     <div class="table-container card">
-      <h2 class="table-title">Toutes les salles ({{ loadingHalls ? '...' : halls.length }})</h2>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom: var(--space-4);">
+        <h2 class="table-title" style="margin-bottom:0;">Toutes les salles ({{ loadingHalls ? '...' : halls.length }})</h2>
+        <AdminAppTablePagination
+          :start="hallsStartIndex"
+          :end="hallsEndIndex"
+          :total="hallsTotalItems"
+          :can-prev="hallsCanPrev"
+          :can-next="hallsCanNext"
+          :disabled="loadingHalls"
+          @prev="hallsPrevPage"
+          @next="hallsNextPage"
+        />
+      </div>
       <div v-if="isMobile" class="admin-cards">
         <template v-if="loadingHalls">
           <div v-for="n in 6" :key="`sk-card-${n}`" class="admin-card">
@@ -72,11 +84,11 @@
           </div>
         </template>
         <template v-else>
-          <div v-for="hall in halls" :key="hall.id" class="admin-card">
+          <div v-for="hall in paginatedHalls" :key="hall.id" class="admin-card">
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ hall.name }}</div>
-                <div class="admin-card-subtitle">{{ hall.capacity }} pers. • {{ Number(hall.price_per_day || 0).toLocaleString() }} Fbu/jour</div>
+                <div class="admin-card-subtitle">{{ hall.capacity }} pers. • {{ formatMoney(hall.price_per_day) }}/jour</div>
               </div>
 
               <div class="actions-dropdown">
@@ -104,7 +116,7 @@
               </div>
               <div class="admin-kv">
                 <span class="k">Prix / Jour</span>
-                <span class="v">{{ Number(hall.price_per_day || 0).toLocaleString() }} Fbu</span>
+                <span class="v">{{ formatMoney(hall.price_per_day) }}</span>
               </div>
             </div>
           </div>
@@ -131,10 +143,10 @@
             </tr>
           </template>
           <template v-else>
-            <tr v-for="hall in halls" :key="hall.id">
+            <tr v-for="hall in paginatedHalls" :key="hall.id">
               <td><strong>{{ hall.name }}</strong></td>
               <td>{{ hall.capacity }} pers.</td>
-              <td>{{ Number(hall.price_per_day || 0).toLocaleString() }} Fbu</td>
+              <td>{{ formatMoney(hall.price_per_day) }}</td>
               <td class="actions-cell">
                 <div class="actions-dropdown">
                   <button class="btn-icon details" title="Détails" @click.stop="toggleActions(hall.id)">
@@ -175,7 +187,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">Prix / Jour (Fbu)</label>
-            <input v-model.number="form.price_per_day" type="number" class="form-input" min="0" required />
+            <input v-model="pricePerDayInput" inputmode="numeric" type="text" class="form-input" placeholder="0" required />
           </div>
         </div>
       </form>
@@ -199,7 +211,7 @@
         </div>
         <div class="detail-item">
           <span class="detail-label">Prix / Jour</span>
-          <span class="detail-val">{{ Number(selectedHall.price_per_day || 0).toLocaleString() }} Fbu</span>
+          <span class="detail-val">{{ formatMoney(selectedHall.price_per_day) }}</span>
         </div>
       </div>
       <template #footer>
@@ -222,8 +234,11 @@
 <script setup>
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
+import { useMoney } from '~/composables/useMoney'
+import { usePagination } from '~/composables/usePagination'
 
 definePageMeta({ layout: 'admin' })
+const { formatMoney, moneyInputModel } = useMoney()
 
 const halls = ref([])
 const loadingHalls = ref(false)
@@ -243,6 +258,17 @@ const form = ref({
   capacity: 1,
   price_per_day: 0
 })
+const pricePerDayInput = moneyInputModel(form, 'price_per_day')
+const {
+  paginatedItems: paginatedHalls,
+  totalItems: hallsTotalItems,
+  startIndex: hallsStartIndex,
+  endIndex: hallsEndIndex,
+  canPrev: hallsCanPrev,
+  canNext: hallsCanNext,
+  prevPage: hallsPrevPage,
+  nextPage: hallsNextPage,
+} = usePagination(computed(() => halls.value), 50)
 
 const totalCapacity = computed(() => halls.value.reduce((sum, hall) => sum + Number(hall.capacity || 0), 0))
 const averageDailyPrice = computed(() => {

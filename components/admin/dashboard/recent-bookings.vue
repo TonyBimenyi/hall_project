@@ -29,7 +29,7 @@
         </div>
         
         <div class="booking-meta">
-          <div class="booking-amount">{{ Number(booking.total_price || 0).toLocaleString() }} Fbu</div>
+          <div class="booking-amount">{{ formatMoney(booking.total_price) }}</div>
           <span :class="['badge', getBadgeClass(booking.status)]">
             {{ getStatusTranslation(booking.status) }}
           </span>
@@ -41,6 +41,9 @@
 
 <script setup>
 import { api } from '~/composables/useApi'
+import { useMoney } from '~/composables/useMoney'
+
+const { formatMoney } = useMoney()
 
 const bookings = ref([])
 

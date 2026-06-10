@@ -43,7 +43,7 @@
 
           <article class="card stat-card">
             <span class="label">{{ $t('dashboard.totalAmount') }}</span>
-            <strong>{{ displayTotalAmount.toLocaleString() }} Fbu</strong>
+            <strong>{{ formatMoney(displayTotalAmount) }}</strong>
           </article>
         </div>
 
@@ -73,7 +73,7 @@
                   <td>#LV-{{ booking.id }}</td>
                   <td>{{ eventTypeText(booking.event_type) }}</td>
                   <td>{{ booking.start_date }} → {{ booking.end_date }}</td>
-                  <td>{{ Number(booking.total_price || 0).toLocaleString() }} Fbu</td>
+                  <td>{{ formatMoney(booking.total_price) }}</td>
                   <td>
                     <span class="badge" :class="statusClass(booking.status)">
                       {{ statusText(booking.status) }}
@@ -129,6 +129,9 @@
 </template>
 
 <script setup>
+import { useMoney } from '~/composables/useMoney'
+
+const { formatMoney } = useMoney()
 import { api } from '~/composables/useApi'
 import { notify } from '~/composables/useNotification'
 

@@ -87,11 +87,11 @@
         </div>
         <div class="detail-item">
           <span class="detail-label">Période</span>
-          <span class="detail-val">Du {{ selectedEvent.start_date }} au {{ selectedEvent.end_date }}</span>
+          <span class="detail-val">{{ formatDateRange(selectedEvent.start_date, selectedEvent.end_date) }}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Montant</span>
-          <span class="detail-val">{{ selectedEvent.total_price.toLocaleString() }} Fbu</span>
+          <span class="detail-val">{{ formatMoney(selectedEvent.total_price) }}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Statut</span>
@@ -108,6 +108,11 @@
 </template>
 
 <script setup>
+import { useMoney } from '~/composables/useMoney'
+import { useDateFormat } from '~/composables/useDateFormat'
+
+const { formatMoney } = useMoney()
+const { formatDateRange } = useDateFormat()
 import { api } from '~/composables/useApi'
 
 definePageMeta({ layout: 'admin' })

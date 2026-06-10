@@ -86,7 +86,7 @@
           <span class="label">Revenu Total</span>
           <span class="value success">
             <span v-if="isLoading" class="skeleton-line skeleton-w-70"></span>
-            <template v-else>+{{ displayTotalRevenue.toLocaleString() }} Fbu</template>
+            <template v-else>+{{ formatMoney(displayTotalRevenue).replace(' Fbu', '') }} Fbu</template>
           </span>
         </div>
       </div>
@@ -96,7 +96,7 @@
           <span class="label">Revenu (période)</span>
           <span class="value primary">
             <span v-if="isLoading" class="skeleton-line skeleton-w-70"></span>
-            <template v-else>+{{ displayRevenueRange.toLocaleString() }} Fbu</template>
+            <template v-else>+{{ formatMoney(displayRevenueRange).replace(' Fbu', '') }} Fbu</template>
           </span>
         </div>
       </div>
@@ -106,7 +106,7 @@
           <span class="label">Dépenses (période)</span>
           <span class="value danger">
             <span v-if="isLoading" class="skeleton-line skeleton-w-70"></span>
-            <template v-else>-{{ displayExpensesRange.toLocaleString() }} Fbu</template>
+            <template v-else>-{{ formatMoney(displayExpensesRange).replace(' Fbu', '') }} Fbu</template>
           </span>
         </div>
       </div>
@@ -395,7 +395,7 @@ const addDays = (ymd, days) => {
   return toYmd(base)
 }
 
-const formatMoney = (v) => `${Number(v || 0).toLocaleString()} Fbu`
+const formatMoney = (v) => `${String(Math.round(Number(v || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} Fbu`
 
 const resolvePreset = (value) => {
   const todayYmd = toYmd(new Date())
@@ -793,9 +793,9 @@ const exportPdf = async () => {
   await nextTick()
   const rows = [
     ['Période', rangeLabel.value],
-    ['Revenu Total', `${Number(stats.value.total_revenue || 0).toLocaleString()} Fbu`],
-    ['Revenu (période)', `${Number(revenueInRange.value || 0).toLocaleString()} Fbu`],
-    ['Dépenses (période)', `${Number(expensesInRange.value || 0).toLocaleString()} Fbu`],
+    ['Revenu Total', formatMoney(stats.value.total_revenue || 0)],
+    ['Revenu (période)', formatMoney(revenueInRange.value || 0)],
+    ['Dépenses (période)', formatMoney(expensesInRange.value || 0)],
     ['Marge (période)', `${profitMarginInRange.value || 0}%`],
     ['Occupation (période)', `${occupationRate.value || 0}%`],
     ['Réservations (période - Total)', String(bookingCounts.value.total)],
