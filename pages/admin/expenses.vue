@@ -127,7 +127,7 @@
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ expense.description }}</div>
-                <div class="admin-card-subtitle">{{ expense.date }} • {{ expense.category }}</div>
+                <div class="admin-card-subtitle">{{ getExpenseDisplayId(expense) }} • {{ expense.date }} • {{ expense.category }}</div>
               </div>
 
               <div class="actions-dropdown">
@@ -149,6 +149,10 @@
             </div>
 
             <div class="admin-card-body">
+              <div class="admin-kv">
+                <span class="k">ID</span>
+                <span class="v">{{ getExpenseDisplayId(expense) }}</span>
+              </div>
               <div class="admin-kv">
                 <span class="k">Montant</span>
                 <span class="v">{{ formatMoney(expense.amount) }}</span>
@@ -174,6 +178,7 @@
       <table v-else ref="tableRef" class="admin-table">
         <thead>
           <tr>
+            <th>ID</th>
             <th>Date</th>
             <th>Description</th>
             <th>Catégorie</th>
@@ -187,6 +192,7 @@
           <template v-if="loadingExpenses">
             <tr v-for="n in 6" :key="`sk-${n}`">
               <td><div class="skeleton-line skeleton-w-40"></div></td>
+              <td><div class="skeleton-line skeleton-w-40"></div></td>
               <td><div class="skeleton-line skeleton-w-80"></div></td>
               <td><div class="skeleton-line skeleton-w-50"></div></td>
               <td><div class="skeleton-line skeleton-w-40"></div></td>
@@ -196,6 +202,7 @@
             </tr>
           </template>
           <tr v-else v-for="expense in paginatedExpenses" :key="expense.id">
+            <td><code>{{ getExpenseDisplayId(expense) }}</code></td>
             <td>{{ expense.date }}</td>
             <td><strong>{{ expense.description }}</strong></td>
             <td>{{ expense.category }}</td>
@@ -287,6 +294,10 @@
     <AdminAppModal v-model="showViewModal" title="Détails de la dépense" width="400px">
       <div v-if="selectedExpense" class="view-details">
         <div class="detail-item">
+          <span class="detail-label">ID</span>
+          <span class="detail-val">{{ getExpenseDisplayId(selectedExpense) }}</span>
+        </div>
+        <div class="detail-item">
           <span class="detail-label">Description</span>
           <span class="detail-val">{{ selectedExpense.description }}</span>
         </div>
@@ -340,9 +351,11 @@ import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
+import { useDisplayIds } from '~/composables/useDisplayIds'
 
 definePageMeta({ layout: 'admin' })
 const { formatMoney, moneyInputModel } = useMoney()
+const { buildHashSequenceMap } = useDisplayIds()
 
 const expenses = ref([])
 const tableRef = ref(null)
@@ -503,6 +516,9 @@ const filteredExpenses = computed(() => {
     return matchesSearch && matchesCategory && matchesStatus && fromOk && toOk
   })
 })
+
+const expenseDisplayIds = computed(() => buildHashSequenceMap(expenses.value))
+const getExpenseDisplayId = (expense) => expenseDisplayIds.value.get(expense?.id) || '#0001'
 
 const {
   paginatedItems: paginatedExpenses,

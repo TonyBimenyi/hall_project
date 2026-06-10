@@ -96,7 +96,7 @@
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ staff.name }}</div>
-                <div class="admin-card-subtitle">{{ staff.role }} • {{ staff.phone }}</div>
+                <div class="admin-card-subtitle">{{ getStaffDisplayId(staff) }} • {{ staff.role }} • {{ staff.phone }}</div>
               </div>
 
               <div class="actions-dropdown">
@@ -119,6 +119,10 @@
 
             <div class="admin-card-body">
               <div class="admin-kv">
+                <span class="k">ID</span>
+                <span class="v">{{ getStaffDisplayId(staff) }}</span>
+              </div>
+              <div class="admin-kv">
                 <span class="k">Statut</span>
                 <span class="v">
                   <span :class="['badge', getBadgeClass(staff.status)]">{{ translateStatus(staff.status) }}</span>
@@ -133,6 +137,7 @@
       <table v-else ref="tableRef" class="admin-table">
         <thead>
           <tr>
+            <th>ID</th>
             <th>Employé</th>
             <th>Rôle</th>
             <th>Contact</th>
@@ -143,6 +148,7 @@
         <tbody>
           <template v-if="loadingPersonnel">
             <tr v-for="n in 6" :key="`sk-${n}`">
+              <td><div class="skeleton-line skeleton-w-50"></div></td>
               <td class="staff-cell">
                 <div class="skeleton-lines">
                   <div class="skeleton-line skeleton-w-60"></div>
@@ -156,11 +162,12 @@
             </tr>
           </template>
           <tr v-else v-for="staff in paginatedPersonnel" :key="staff.id">
+            <td><code>{{ getStaffDisplayId(staff) }}</code></td>
             <td class="staff-cell">
               <div class="avatar">{{ staff.name.charAt(0) }}</div>
               <div class="staff-info">
                 <div class="name">{{ staff.name }}</div>
-                <div class="id">ID: #{{ staff.id }}</div>
+                <div class="id">{{ staff.role }}</div>
               </div>
             </td>
             <td>{{ staff.role }}</td>
@@ -236,6 +243,10 @@
     <AdminAppModal v-model="showViewModal" title="Détails de l'employé" width="400px">
       <div v-if="selectedStaff" class="view-details">
         <div class="detail-item">
+          <span class="detail-label">ID</span>
+          <span class="detail-val">{{ getStaffDisplayId(selectedStaff) }}</span>
+        </div>
+        <div class="detail-item">
           <span class="detail-label">Nom</span>
           <span class="detail-val">{{ selectedStaff.name }}</span>
         </div>
@@ -276,10 +287,12 @@
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { usePagination } from '~/composables/usePagination'
+import { useDisplayIds } from '~/composables/useDisplayIds'
 
 definePageMeta({ layout: 'admin' })
 
 const personnel = ref([])
+const { buildPersonnelSequenceMap } = useDisplayIds()
 const {
   paginatedItems: paginatedPersonnel,
   totalItems: personnelTotalItems,
@@ -390,6 +403,8 @@ onMounted(() => {
 const onDutyCount = computed(() => personnel.value.filter(p => p.status === 'on_duty').length)
 const availableCount = computed(() => personnel.value.filter(p => p.status === 'available').length)
 const offDutyCount = computed(() => personnel.value.filter(p => p.status === 'off_duty').length)
+const staffDisplayIds = computed(() => buildPersonnelSequenceMap(personnel.value))
+const getStaffDisplayId = (staff) => staffDisplayIds.value.get(staff?.id) || 'EMP-0001'
 
 const displayPersonnelCount = ref(0)
 const displayOnDutyCount = ref(0)

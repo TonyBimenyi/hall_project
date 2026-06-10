@@ -92,7 +92,7 @@
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ item.name }}</div>
-                <div class="admin-card-subtitle">{{ item.category }}</div>
+                <div class="admin-card-subtitle">{{ getMaterialDisplayId(item) }} • {{ item.category }}</div>
               </div>
 
               <div class="actions-dropdown">
@@ -121,6 +121,10 @@
 
             <div class="admin-card-body">
               <div class="admin-kv">
+                <span class="k">ID</span>
+                <span class="v">{{ getMaterialDisplayId(item) }}</span>
+              </div>
+              <div class="admin-kv">
                 <span class="k">Total</span>
                 <span class="v">{{ item.total_quantity }}</span>
               </div>
@@ -145,6 +149,7 @@
       <table v-else ref="tableRef" class="admin-table">
         <thead>
           <tr>
+            <th>ID</th>
             <th>Nom</th>
             <th>Catégorie</th>
             <th>Quantité Totale</th>
@@ -157,6 +162,7 @@
         <tbody>
           <template v-if="loadingMaterials">
             <tr v-for="n in 6" :key="`sk-${n}`">
+              <td><div class="skeleton-line skeleton-w-40"></div></td>
               <td><div class="skeleton-line skeleton-w-70"></div></td>
               <td><div class="skeleton-line skeleton-w-50"></div></td>
               <td><div class="skeleton-line skeleton-w-30"></div></td>
@@ -167,6 +173,7 @@
             </tr>
           </template>
           <tr v-else v-for="item in paginatedMaterials" :key="item.id">
+            <td><code>{{ getMaterialDisplayId(item) }}</code></td>
             <td><strong>{{ item.name }}</strong></td>
             <td>{{ item.category }}</td>
             <td>{{ item.total_quantity }}</td>
@@ -273,6 +280,10 @@
     <AdminAppModal v-model="showViewModal" title="Détails du matériel" width="400px">
       <div v-if="selectedMaterial" class="view-details">
         <div class="detail-item">
+          <span class="detail-label">ID</span>
+          <span class="detail-val">{{ getMaterialDisplayId(selectedMaterial) }}</span>
+        </div>
+        <div class="detail-item">
           <span class="detail-label">Nom</span>
           <span class="detail-val">{{ selectedMaterial.name }}</span>
         </div>
@@ -319,10 +330,12 @@
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { usePagination } from '~/composables/usePagination'
+import { useDisplayIds } from '~/composables/useDisplayIds'
 
 definePageMeta({ layout: 'admin' })
 
 const materials = ref([])
+const { buildHashSequenceMap } = useDisplayIds()
 const {
   paginatedItems: paginatedMaterials,
   totalItems: materialsTotalItems,
@@ -535,7 +548,8 @@ const openQtyModal = (item, mode) => {
 
 const qtyTitle = computed(() => qtyMode.value === 'lost' ? 'Modifier Perdu' : 'Modifier Endommagé')
 const qtyLabel = computed(() => qtyMode.value === 'lost' ? 'Quantité perdue' : 'Quantité endommagée')
-
+const materialDisplayIds = computed(() => buildHashSequenceMap(materials.value))
+const getMaterialDisplayId = (item) => materialDisplayIds.value.get(item?.id) || '#0001'
 const availablePreview = computed(() => {
   const total = Number(form.value.total_quantity || 0)
   const damaged = Number(form.value.damaged_quantity || 0)

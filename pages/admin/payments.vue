@@ -128,7 +128,7 @@
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ booking.customer_name }}</div>
-                <div class="admin-card-subtitle">{{ booking.hall_name }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
+                <div class="admin-card-subtitle">{{ getBookingDisplayId(booking) }} • {{ booking.hall_name }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
               </div>
               <div class="admin-card-actions">
                 <button class="btn btn-primary btn-sm" title="Payer" @click="openAddModal(booking)">
@@ -137,6 +137,10 @@
               </div>
             </div>
             <div class="admin-card-body">
+              <div class="admin-kv">
+                <span class="k">ID</span>
+                <span class="v">{{ getBookingDisplayId(booking) }}</span>
+              </div>
               <div class="admin-kv">
                 <span class="k">Total</span>
                 <span class="v">{{ formatMoney(booking.total_price) }}</span>
@@ -158,6 +162,7 @@
       <table v-else class="admin-table">
         <thead>
           <tr>
+            <th>ID</th>
             <th>Client</th>
             <th>Salle</th>
             <th>Période</th>
@@ -170,6 +175,7 @@
         <tbody>
           <template v-if="isLoading">
             <tr v-for="n in 5" :key="`sk-unpaid-${n}`">
+              <td><div class="skeleton-line skeleton-w-50"></div></td>
               <td>
                 <div class="skeleton-lines">
                   <div class="skeleton-line skeleton-w-60"></div>
@@ -186,6 +192,7 @@
           </template>
           <template v-else>
             <tr v-for="booking in paginatedUnpaidBookings" :key="booking.id">
+              <td><code>{{ getBookingDisplayId(booking) }}</code></td>
               <td>
                 <div class="customer-name">{{ booking.customer_name }}</div>
                 <div class="customer-email">{{ booking.customer_email }}</div>
@@ -202,7 +209,7 @@
               </td>
             </tr>
             <tr v-if="filteredUnpaidBookings.length === 0">
-              <td colspan="7" class="empty-cell">Toutes les réservations sont soldées</td>
+              <td colspan="8" class="empty-cell">Toutes les réservations sont soldées</td>
             </tr>
           </template>
         </tbody>
@@ -244,7 +251,7 @@
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ payment.booking_customer_name }}</div>
-                <div class="admin-card-subtitle">{{ formatDisplayDate(payment.date) }} • {{ formatMoney(payment.amount) }}</div>
+                <div class="admin-card-subtitle">{{ getPaymentDisplayId(payment) }} • {{ formatDisplayDate(payment.date) }} • {{ formatMoney(payment.amount) }}</div>
               </div>
               <div class="admin-card-actions">
                 <div class="actions-dropdown">
@@ -264,6 +271,10 @@
             </div>
 
             <div class="admin-card-body">
+              <div class="admin-kv">
+                <span class="k">ID</span>
+                <span class="v">{{ getPaymentDisplayId(payment) }}</span>
+              </div>
               <div class="admin-kv">
                 <span class="k">Référence</span>
                 <span class="v">{{ payment.reference }}</span>
@@ -289,6 +300,7 @@
       <table v-else class="admin-table">
         <thead>
           <tr>
+            <th>ID</th>
             <th>Date</th>
             <th>Client</th>
             <th>Référence</th>
@@ -302,6 +314,7 @@
         <tbody>
           <template v-if="isLoading">
             <tr v-for="n in 6" :key="`sk-payments-${n}`">
+              <td><div class="skeleton-line skeleton-w-50"></div></td>
               <td><div class="skeleton-line skeleton-w-40"></div></td>
               <td><div class="skeleton-line skeleton-w-50"></div></td>
               <td><div class="skeleton-line skeleton-w-60"></div></td>
@@ -314,6 +327,7 @@
           </template>
           <template v-else>
             <tr v-for="payment in paginatedPayments" :key="payment.id">
+              <td><code>{{ getPaymentDisplayId(payment) }}</code></td>
               <td>{{ formatDisplayDate(payment.date) }}</td>
               <td>{{ payment.booking_customer_name }}</td>
               <td><code>{{ payment.reference }}</code></td>
@@ -338,7 +352,7 @@
               </td>
             </tr>
             <tr v-if="filteredPayments.length === 0">
-              <td colspan="8" class="empty-cell">Aucun paiement enregistré</td>
+              <td colspan="9" class="empty-cell">Aucun paiement enregistré</td>
             </tr>
           </template>
         </tbody>
@@ -408,6 +422,7 @@
 
     <AdminAppModal v-model="showViewModal" title="Détails du paiement" width="420px">
       <div v-if="selectedPayment" class="view-details">
+        <div class="detail-item"><span class="detail-label">ID</span><span class="detail-val">{{ getPaymentDisplayId(selectedPayment) }}</span></div>
         <div class="detail-item"><span class="detail-label">Client</span><span class="detail-val">{{ selectedPayment.booking_customer_name }}</span></div>
         <div class="detail-item"><span class="detail-label">Réservation</span><span class="detail-val">{{ selectedPayment.booking_hall_name }}</span></div>
         <div class="detail-item"><span class="detail-label">Période</span><span class="detail-val">{{ formatDateRange(selectedPayment.booking_start_date, selectedPayment.booking_end_date) }}</span></div>
@@ -438,11 +453,13 @@ import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useDateFormat } from '~/composables/useDateFormat'
+import { useDisplayIds } from '~/composables/useDisplayIds'
 
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
 const { formatMoney, moneyInputModel } = useMoney()
 const { formatDateRange, formatDisplayDate } = useDateFormat()
+const { buildMonthlySequenceMap } = useDisplayIds()
 
 const payments = ref([])
 const bookings = ref([])
@@ -541,6 +558,9 @@ const filteredUnpaidBookings = computed(() => {
   })
 })
 
+const bookingDisplayIds = computed(() => buildMonthlySequenceMap(bookings.value, 'LBR', booking => booking.start_date))
+const getBookingDisplayId = (booking) => bookingDisplayIds.value.get(booking?.id) || 'LBR00000001'
+
 const {
   paginatedItems: paginatedUnpaidBookings,
   totalItems: unpaidTotalItems,
@@ -611,6 +631,9 @@ const filteredPayments = computed(() => {
     return matchesSearch && matchesStatus && matchesMethod && fromOk && toOk
   })
 })
+
+const paymentDisplayIds = computed(() => buildMonthlySequenceMap(payments.value, 'LBP', payment => payment.date))
+const getPaymentDisplayId = (payment) => paymentDisplayIds.value.get(payment?.id) || 'LBP00000001'
 
 const {
   paginatedItems: paginatedPayments,

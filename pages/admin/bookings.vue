@@ -118,7 +118,7 @@
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ booking.customer_name }}</div>
-                <div class="admin-card-subtitle">{{ booking.hall_name }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
+                <div class="admin-card-subtitle">{{ getBookingDisplayId(booking) }} • {{ booking.hall_name }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
               </div>
 
               <div class="admin-card-actions">
@@ -164,6 +164,10 @@
 
             <div class="admin-card-body">
               <div class="admin-kv">
+                <span class="k">ID</span>
+                <span class="v">{{ getBookingDisplayId(booking) }}</span>
+              </div>
+              <div class="admin-kv">
                 <span class="k">Événement</span>
                 <span class="v">{{ booking.event_type }}</span>
               </div>
@@ -187,6 +191,7 @@
         <table ref="tableRef" class="bookings-table admin-table">
           <thead>
             <tr>
+              <th>ID</th>
               <th>Client</th>
               <th>Salle</th>
               <th>Événement</th>
@@ -199,6 +204,7 @@
           <tbody>
             <template v-if="loadingBookings">
               <tr v-for="n in 6" :key="`sk-${n}`">
+                <td><div class="skeleton-line skeleton-w-50"></div></td>
                 <td class="customer-cell">
                   <div class="skeleton-lines">
                     <div class="skeleton-line skeleton-w-70"></div>
@@ -219,6 +225,7 @@
               </tr>
             </template>
             <tr v-else v-for="booking in paginatedBookings" :key="booking.id">
+              <td><code>{{ getBookingDisplayId(booking) }}</code></td>
               <td class="customer-cell">
                 <div class="customer-name">{{ booking.customer_name }}</div>
                 <div class="customer-email">{{ booking.customer_email }}</div>
@@ -318,6 +325,10 @@
     <AdminAppModal v-model="showViewModal" title="Détails de la réservation" width="500px">
       <div v-if="selectedBooking" class="view-details">
         <div class="detail-item">
+          <span class="detail-label">ID</span>
+          <span class="detail-val">{{ getBookingDisplayId(selectedBooking) }}</span>
+        </div>
+        <div class="detail-item">
           <span class="detail-label">Client</span>
           <span class="detail-val">{{ selectedBooking.customer_name }}</span>
         </div>
@@ -370,10 +381,12 @@ import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useDateFormat } from '~/composables/useDateFormat'
+import { useDisplayIds } from '~/composables/useDisplayIds'
 
 definePageMeta({ layout: 'admin' })
 const { formatMoney, formatNumberSpaces, moneyInputModel, parseMoney } = useMoney()
 const { formatDateRange, formatDisplayDate } = useDateFormat()
+const { buildMonthlySequenceMap } = useDisplayIds()
 
 const search = ref('')
 const statusFilter = ref('')
@@ -569,6 +582,9 @@ const filteredBookings = computed(() => {
     return matchesSearch && matchesStatus && matchesHall && matchesEventType && fromOk && toOk && minOk && maxOk
   })
 })
+
+const bookingDisplayIds = computed(() => buildMonthlySequenceMap(bookings.value, 'LBR', booking => booking.start_date))
+const getBookingDisplayId = (booking) => bookingDisplayIds.value.get(booking?.id) || 'LBR00000001'
 
 const {
   paginatedItems: paginatedBookings,
