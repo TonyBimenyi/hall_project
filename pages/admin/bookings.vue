@@ -134,6 +134,13 @@
                   <button
                     v-if="booking.status === 'pending'"
                     class="actions-item"
+                    @click="printBookingJeton(booking)"
+                  >
+                    <i class="fas fa-print"></i> Imprimer le jeton
+                  </button>
+                  <button
+                    v-if="booking.status === 'pending'"
+                    class="actions-item"
                     :class="{ 'is-loading': actionBookingId === booking.id && actionType === 'approve' }"
                     :disabled="actionBookingId === booking.id"
                     @click="approve(booking)"
@@ -249,6 +256,9 @@
                     <NuxtLink class="actions-item" :to="`/admin/payments?booking=${booking.id}`" @click="closeActions">
                       <i class="fas fa-coins"></i> Payer
                     </NuxtLink>
+                    <button v-if="booking.status === 'pending'" class="actions-item" @click="printBookingJeton(booking)">
+                      <i class="fas fa-print"></i> Imprimer le jeton
+                    </button>
                     <button v-if="booking.status === 'pending'" class="actions-item" :class="{ 'is-loading': actionBookingId === booking.id && actionType === 'approve' }" :disabled="actionBookingId === booking.id" @click="approve(booking)">
                       <i class="fas fa-check-circle"></i> Approuver
                     </button>
@@ -317,8 +327,17 @@
           </div>
           <div class="form-group">
             <label class="form-label">Montant (Fbu)</label>
-            <input v-model="totalPriceInput" inputmode="numeric" type="text" class="form-input" required />
+            <input
+              v-model="totalPriceInput"
+              inputmode="numeric"
+              type="text"
+              class="form-input"
+              :disabled="!isEditing"
+              :readonly="!isEditing"
+              required
+            />
             <small class="form-hint" v-if="daysCount > 0">{{ daysCount }} jour(s) à {{ formatMoney(pricePerDay) }}/jour</small>
+            <small class="form-hint" v-if="!isEditing">Montant calcule automatiquement selon la salle et la periode.</small>
           </div>
         </div>
       </form>
@@ -404,6 +423,14 @@ const { formatMoney, formatNumberSpaces, moneyInputModel, parseMoney } = useMone
 const { formatDateRange, formatDisplayDate } = useDateFormat()
 const { buildMonthlySequenceMap } = useDisplayIds()
 const eventTypeOptions = ['Mariage', 'Séminaire', 'Gala', 'Anniversaire', 'Réunion', 'Autres']
+const jetonLogoUrl = new URL('../../labertha-logo.png', import.meta.url).href
+const villaAddress = 'Karurama, Cibitoke, Bujumbura, Burundi'
+const villaContacts = [
+  '+257 66 47 66 43 (WhatsApp & Appel)',
+  '+257 76 65 39 31 (Appel)',
+  'info@labertha-villa.com',
+  'labertha-villa.com',
+]
 
 const search = ref('')
 const statusFilter = ref('')
@@ -529,27 +556,35 @@ const fetchHalls = async () => {
   }
 }
 
+const updateResponsiveState = () => {
+  if (!process.client) return
+  const nextIsMobile = window.innerWidth <= 992
+  if (nextIsMobile !== isMobile.value) {
+    isMobile.value = nextIsMobile
+    filtersOpen.value = !nextIsMobile
+  } else {
+    isMobile.value = nextIsMobile
+  }
+}
+
+const closeActionsOnDocumentClick = () => {
+  openActionsId.value = null
+}
+
 onMounted(() => {
   fetchBookings()
   fetchHalls()
   if (process.client) {
-    const update = () => {
-      const nextIsMobile = window.innerWidth <= 992
-      if (nextIsMobile !== isMobile.value) {
-        isMobile.value = nextIsMobile
-        filtersOpen.value = !nextIsMobile
-      } else {
-        isMobile.value = nextIsMobile
-      }
-    }
-    update()
-    window.addEventListener('resize', update)
-    onBeforeUnmount(() => window.removeEventListener('resize', update))
-
-    const onDocClick = () => { openActionsId.value = null }
-    document.addEventListener('click', onDocClick)
-    onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+    updateResponsiveState()
+    window.addEventListener('resize', updateResponsiveState)
+    document.addEventListener('click', closeActionsOnDocumentClick)
   }
+})
+
+onBeforeUnmount(() => {
+  if (!process.client) return
+  window.removeEventListener('resize', updateResponsiveState)
+  document.removeEventListener('click', closeActionsOnDocumentClick)
 })
 
 const toggleActions = (id) => {
@@ -639,11 +674,22 @@ const saveBooking = async () => {
       await api.put(`bookings/${form.value.id}/`, payload)
       notify('Réservation mise à jour avec succès', 'success')
     } else {
-      await api.post('bookings/', payload)
-      notify('Nouvelle réservation créée', 'success')
+      const response = await api.post('bookings/', payload)
+      await fetchBookings()
+      const createdBooking = bookings.value.find(booking => booking.id === response.data?.id) || response.data
+      if (payload.customer_email) {
+        notify(response.data?.email_sent ? 'Nouvelle réservation créée et email envoyé' : 'Nouvelle réservation créée, mais email non envoyé', response.data?.email_sent ? 'success' : 'warning')
+      } else {
+        notify('Nouvelle réservation créée', 'success')
+      }
+      if (createdBooking) {
+        printReservationJeton(createdBooking, Boolean(response.data?.email_sent))
+      }
     }
     showFormModal.value = false
-    fetchBookings()
+    if (isEditing.value) {
+      fetchBookings()
+    }
   } catch (error) {
     notify('Erreur lors de l\'enregistrement', 'danger')
   } finally {
@@ -747,6 +793,11 @@ const confirmDelete = (booking) => {
   showDeleteModal.value = true
 }
 
+const printBookingJeton = (booking) => {
+  closeActions()
+  printReservationJeton(booking)
+}
+
 const normalizeEventType = (eventType, eventTypeOther = '') => {
   if (eventType !== 'Autres') return eventType
   const details = String(eventTypeOther || '').trim()
@@ -768,10 +819,170 @@ const mapBookingToForm = (booking) => {
   }
 }
 
-const buildBookingPayload = () => ({
-  ...form.value,
-  event_type: normalizeEventType(form.value.event_type, form.value.event_type_other),
-})
+const buildBookingPayload = () => {
+  const { event_type_other, ...payload } = form.value
+  return {
+    ...payload,
+    customer_name: String(payload.customer_name || '').trim(),
+    customer_email: String(payload.customer_email || '').trim(),
+    event_type: normalizeEventType(form.value.event_type, event_type_other),
+  }
+}
+
+const escapeHtml = (value) => String(value || '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;')
+
+const getCurrentPrintUserLabel = () => {
+  if (!process.client) return 'Utilisateur'
+
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}')
+    const first = String(user?.first_name || '').trim()
+    const last = String(user?.last_name || '').trim()
+    const full = `${first} ${last}`.trim()
+
+    return full || user?.full_name || user?.email || user?.username || 'Utilisateur'
+  } catch {
+    return 'Utilisateur'
+  }
+}
+
+const printReservationJeton = (booking, emailSent = null) => {
+  if (!process.client) return
+  const win = window.open('', '_blank', 'width=900,height=700')
+  if (!win) return
+
+  const displayId = getBookingDisplayId(booking)
+  const printedBy = getCurrentPrintUserLabel()
+  const reservationNumber = booking?.id || '-'
+  let emailLine = `<div class="row"><span>Email client</span><strong>Non renseigne</strong></div>`
+  if (booking.customer_email) {
+    emailLine = `<div class="row"><span>Email client</span><strong>${escapeHtml(booking.customer_email)}</strong></div>`
+    if (typeof emailSent === 'boolean') {
+      emailLine += `<div class="row"><span>Email envoye</span><strong>${emailSent ? 'Oui' : 'Non'}</strong></div>`
+    }
+  }
+
+  win.document.write(`<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Jeton de reservation</title>
+      <style>
+        body { font-family: Arial, sans-serif; background: #eef2f7; padding: 24px; color: #0f172a; }
+        .ticket { max-width: 820px; margin: 0 auto; background: #fff; border: 1px solid #dbe3ee; border-radius: 28px; overflow: hidden; box-shadow: 0 24px 50px rgba(15, 23, 42, 0.10); }
+        .head { padding: 28px 30px 24px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #8b6b12 100%); color: #fff; }
+        .brand { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+        .brand-main { display: flex; align-items: center; gap: 16px; }
+        .logo-wrap { width: 76px; height: 76px; border-radius: 22px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.24); display: flex; align-items: center; justify-content: center; overflow: hidden; backdrop-filter: blur(4px); }
+        .logo-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .brand-copy small { display: block; text-transform: uppercase; letter-spacing: 0.28em; font-size: 11px; color: rgba(255,255,255,.72); margin-bottom: 8px; }
+        .brand-copy h1 { margin: 0; font-size: 30px; line-height: 1.05; }
+        .brand-copy p { margin: 8px 0 0; color: rgba(255,255,255,.84); max-width: 420px; }
+        .chip { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; border-radius: 999px; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.22); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; }
+        .body { padding: 28px 30px 16px; }
+        .top-meta { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 20px; }
+        .code-block { display: flex; flex-direction: column; gap: 8px; }
+        .code-label { color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; }
+        .code { display: inline-block; padding: 12px 16px; border-radius: 16px; background: linear-gradient(135deg, #eff6ff, #f8fafc); color: #1d4ed8; font-size: 24px; font-weight: 800; letter-spacing: 0.05em; border: 1px solid #bfdbfe; }
+        .meta-panel { min-width: 260px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 18px; padding: 16px; }
+        .meta-line { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 6px 0; }
+        .meta-line span { color: #64748b; font-weight: 700; }
+        .meta-line strong { color: #0f172a; text-align: right; }
+        .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+        .row { display: flex; justify-content: space-between; gap: 12px; padding: 15px 16px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; }
+        .row span { color: #64748b; font-weight: 700; }
+        .row strong { text-align: right; }
+        .note { margin-top: 18px; padding: 16px 18px; border-radius: 16px; background: #fffaf0; border: 1px solid #fcd34d; color: #92400e; }
+        .footer { margin-top: 22px; padding: 18px 30px 22px; border-top: 1px solid #e2e8f0; background: #f8fafc; }
+        .footer-title { font-size: 13px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #475569; margin-bottom: 10px; }
+        .footer-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; }
+        .footer-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px 16px; }
+        .footer-card p { margin: 0; color: #334155; line-height: 1.6; }
+        .footer-card ul { list-style: none; padding: 0; margin: 0; }
+        .footer-card li { padding: 3px 0; color: #334155; }
+        @media (max-width: 720px) {
+          .brand, .top-meta, .footer-grid, .grid { grid-template-columns: 1fr; display: grid; }
+          .brand-main { align-items: flex-start; }
+          .meta-panel { min-width: 0; }
+          .row, .meta-line { flex-direction: column; }
+          .row strong, .meta-line strong { text-align: left; }
+        }
+        @media print {
+          body { background: #fff; padding: 0; }
+          .ticket { border: none; box-shadow: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="ticket">
+        <div class="head">
+          <div class="brand">
+            <div class="brand-main">
+              <div class="logo-wrap">
+                <img src="${escapeHtml(jetonLogoUrl)}" alt="Logo Labertha Villa" />
+              </div>
+              <div class="brand-copy">
+                <small>Reception & Evenementiel</small>
+                <h1>LaBertha Villa</h1>
+                <p>Jeton officiel de reservation a presenter pour le suivi et l'accueil.</p>
+              </div>
+            </div>
+            <div class="chip">Reservation</div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="top-meta">
+            <div class="code-block">
+              <span class="code-label">Code de reservation</span>
+              <div class="code">${escapeHtml(displayId)}</div>
+            </div>
+            <div class="meta-panel">
+              <div class="meta-line"><span>Numero</span><strong>${escapeHtml(reservationNumber)}</strong></div>
+              <div class="meta-line"><span>Imprime par</span><strong>${escapeHtml(printedBy)}</strong></div>
+              <div class="meta-line"><span>Date d'impression</span><strong>${escapeHtml(new Date().toLocaleString('fr-FR'))}</strong></div>
+            </div>
+          </div>
+          <div class="grid">
+            <div class="row"><span>Client</span><strong>${escapeHtml(booking.customer_name)}</strong></div>
+            <div class="row"><span>Salle</span><strong>${escapeHtml(booking.hall_name || '')}</strong></div>
+            <div class="row"><span>Evenement</span><strong>${escapeHtml(booking.event_type)}</strong></div>
+            <div class="row"><span>Periode</span><strong>${escapeHtml(formatDateRange(booking.start_date, booking.end_date))}</strong></div>
+            <div class="row"><span>Montant</span><strong>${escapeHtml(formatMoney(booking.total_price))}</strong></div>
+            <div class="row"><span>Statut</span><strong>${escapeHtml(getStatusTranslation(booking.status))}</strong></div>
+            ${emailLine}
+          </div>
+          <div class="note">
+            Merci de conserver ce jeton. Il peut vous etre demande lors du suivi de votre dossier ou a l'arrivee.
+          </div>
+        </div>
+        <div class="footer">
+          <div class="footer-title">Informations de contact</div>
+          <div class="footer-grid">
+            <div class="footer-card">
+              <p><strong>Adresse</strong><br />${escapeHtml(villaAddress)}</p>
+            </div>
+            <div class="footer-card">
+              <ul>
+                ${villaContacts.map(contact => `<li>${escapeHtml(contact)}</li>`).join('')}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <script>
+        window.onload = function () {
+          window.print();
+        };
+      <\/script>
+    </body>
+  </html>`)
+  win.document.close()
+}
 </script>
 
 <style scoped>

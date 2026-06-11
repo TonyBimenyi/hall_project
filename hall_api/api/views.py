@@ -9,7 +9,7 @@ from .serializers import (
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from decimal import Decimal
 from django.contrib.auth import get_user_model
@@ -21,10 +21,12 @@ from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMessage
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.password_validation import validate_password
 from datetime import timedelta, date
+from pathlib import Path
+from io import BytesIO
 import hashlib
 import secrets
 
@@ -212,6 +214,228 @@ def _build_magic_login_url(request, raw_token: str):
     
     return f"{origin.rstrip('/')}/login?token={raw_token}"
 
+def _booking_status_label(status_value: str) -> str:
+    return {
+        'pending': 'En attente',
+        'confirmed': 'Confirmé',
+        'paid': 'Payé',
+        'cancelled': 'Annulé',
+    }.get(status_value, status_value or '')
+
+def _normalize_booking_date_key(value):
+    if not value:
+        return '0000'
+    return f"{value.month:02d}{str(value.year)[-2:]}"
+
+def _build_booking_display_id(booking: Booking) -> str:
+    start_date = getattr(booking, 'start_date', None)
+    if not start_date:
+        return f"LBR0000{int(getattr(booking, 'id', 0) or 0):04d}"
+
+    sequence = Booking.objects.filter(
+        start_date__year=start_date.year,
+        start_date__month=start_date.month,
+    ).filter(
+        Q(start_date__lt=start_date) | Q(start_date=start_date, id__lte=booking.id)
+    ).count()
+    return f"LBR{_normalize_booking_date_key(start_date)}{sequence:04d}"
+
+def _get_logo_path():
+    logo_path = Path(__file__).resolve().parents[2] / 'labertha-logo.png'
+    return logo_path if logo_path.exists() else None
+
+def _format_jeton_money(value) -> str:
+    try:
+        amount = Decimal(value or '0')
+    except Exception:
+        amount = Decimal('0')
+    text = f"{amount:,.2f}".replace(',', ' ')
+    if text.endswith('.00'):
+        text = text[:-3]
+    return f"{text} Fbu"
+
+def _format_jeton_period(start_date, end_date) -> str:
+    if not start_date or not end_date:
+        return '-'
+    return f"{start_date.strftime('%d-%m-%Y')} au {end_date.strftime('%d-%m-%Y')}"
+
+def _build_reservation_jeton_pdf(booking: Booking) -> bytes:
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        Image,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+
+    display_id = _build_booking_display_id(booking)
+    status_label = _booking_status_label(getattr(booking, 'status', ''))
+    printed_at = timezone.localtime().strftime('%d/%m/%Y %H:%M')
+    customer_email = getattr(booking, 'customer_email', '') or 'Non renseigne'
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=16 * mm,
+        rightMargin=16 * mm,
+        topMargin=14 * mm,
+        bottomMargin=14 * mm,
+    )
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name='BrandSmall', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#D8C58A'), leading=11))
+    styles.add(ParagraphStyle(name='BrandTitle', parent=styles['Heading1'], fontSize=22, textColor=colors.white, leading=26, spaceAfter=4))
+    styles.add(ParagraphStyle(name='BrandText', parent=styles['BodyText'], fontSize=10, textColor=colors.HexColor('#F8FAFC'), leading=13))
+    styles.add(ParagraphStyle(name='Chip', parent=styles['Normal'], fontSize=10, textColor=colors.white, alignment=TA_RIGHT))
+    styles.add(ParagraphStyle(name='Label', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#64748B')))
+    styles.add(ParagraphStyle(name='Code', parent=styles['Heading2'], fontSize=18, textColor=colors.HexColor('#1D4ED8'), leading=22))
+    styles.add(ParagraphStyle(name='MetaValue', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#0F172A'), alignment=TA_RIGHT))
+    styles.add(ParagraphStyle(name='CellLabel', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#64748B')))
+    styles.add(ParagraphStyle(name='CellValue', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#0F172A'), alignment=TA_RIGHT))
+    styles.add(ParagraphStyle(name='FooterTitle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#475569')))
+    styles.add(ParagraphStyle(name='FooterText', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#334155'), leading=14))
+    styles.add(ParagraphStyle(name='NoteText', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#92400E'), leading=14))
+
+    story = []
+
+    logo_path = _get_logo_path()
+    logo = Image(str(logo_path), width=22 * mm, height=22 * mm) if logo_path else Paragraph('LV', styles['BrandTitle'])
+    brand_copy = [
+        Paragraph('RECEPTION & EVENEMENTIEL', styles['BrandSmall']),
+        Paragraph('LaBertha Villa', styles['BrandTitle']),
+        Paragraph("Jeton officiel de reservation a presenter pour le suivi et l'accueil.", styles['BrandText']),
+    ]
+    brand_table = Table(
+        [[logo, brand_copy, Paragraph('Reservation', styles['Chip'])]],
+        colWidths=[26 * mm, 120 * mm, 32 * mm],
+    )
+    brand_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#0F172A')),
+        ('BOX', (0, 0), (-1, -1), 0, colors.HexColor('#0F172A')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 14),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 14),
+        ('TOPPADDING', (0, 0), (-1, -1), 16),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
+        ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+        ('BACKGROUND', (2, 0), (2, 0), colors.HexColor('#8B6B12')),
+        ('TEXTCOLOR', (2, 0), (2, 0), colors.white),
+    ]))
+    story.append(brand_table)
+    story.append(Spacer(1, 10))
+
+    meta_info_table = Table([
+        [Paragraph('Numero', styles['Label']), Paragraph(str(booking.id), styles['MetaValue'])],
+        [Paragraph('Imprime par', styles['Label']), Paragraph('Systeme Labertha Villa', styles['MetaValue'])],
+        [Paragraph("Date d'impression", styles['Label']), Paragraph(printed_at, styles['MetaValue'])],
+    ], colWidths=[34 * mm, 42 * mm])
+    meta_info_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+
+    top_meta = Table([
+        [
+            [
+                Paragraph('Code de reservation', styles['Label']),
+                Spacer(1, 4),
+                Paragraph(display_id, styles['Code']),
+            ],
+            meta_info_table,
+        ]
+    ], colWidths=[90 * mm, 84 * mm])
+    top_meta.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BOX', (1, 0), (1, 0), 1, colors.HexColor('#E2E8F0')),
+        ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#F8FAFC')),
+        ('LEFTPADDING', (1, 0), (1, 0), 12),
+        ('RIGHTPADDING', (1, 0), (1, 0), 12),
+        ('TOPPADDING', (1, 0), (1, 0), 10),
+        ('BOTTOMPADDING', (1, 0), (1, 0), 10),
+    ]))
+    story.append(top_meta)
+    story.append(Spacer(1, 12))
+
+    details = [
+        ('Client', booking.customer_name),
+        ('Salle', booking.hall.name),
+        ('Evenement', booking.event_type),
+        ('Periode', _format_jeton_period(booking.start_date, booking.end_date)),
+        ('Montant', _format_jeton_money(booking.total_price)),
+        ('Statut', status_label),
+        ('Email client', customer_email),
+    ]
+    detail_rows = []
+    for index in range(0, len(details), 2):
+        left_label, left_value = details[index]
+        if index + 1 < len(details):
+            right_label, right_value = details[index + 1]
+        else:
+            right_label, right_value = '', ''
+        detail_rows.append([
+            Paragraph(left_label, styles['CellLabel']),
+            Paragraph(str(left_value), styles['CellValue']),
+            Paragraph(right_label, styles['CellLabel']),
+            Paragraph(str(right_value), styles['CellValue']),
+        ])
+
+    details_table = Table(detail_rows, colWidths=[28 * mm, 58 * mm, 28 * mm, 58 * mm])
+    details_table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#E2E8F0')),
+        ('INNERGRID', (0, 0), (-1, -1), 1, colors.HexColor('#E2E8F0')),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+    ]))
+    story.append(details_table)
+    story.append(Spacer(1, 12))
+
+    note_table = Table([[Paragraph("Merci de conserver ce jeton. Il peut vous etre demande lors du suivi de votre dossier ou a l'arrivee.", styles['NoteText'])]], colWidths=[174 * mm])
+    note_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#FFFAF0')),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#FCD34D')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 12),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+    ]))
+    story.append(note_table)
+    story.append(Spacer(1, 14))
+
+    footer_title = Paragraph('INFORMATIONS DE CONTACT', styles['FooterTitle'])
+    footer_table = Table([
+        [
+            Paragraph('<b>Adresse</b><br/>Karurama, Cibitoke, Bujumbura, Burundi', styles['FooterText']),
+            Paragraph('+257 66 47 66 43 (WhatsApp & Appel)<br/>+257 76 65 39 31 (Appel)<br/>info@labertha-villa.com<br/>labertha-villa.com', styles['FooterText']),
+        ]
+    ], colWidths=[86 * mm, 88 * mm])
+    footer_table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#E2E8F0')),
+        ('INNERGRID', (0, 0), (-1, -1), 1, colors.HexColor('#E2E8F0')),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F8FAFC')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 12),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+    ]))
+    story.append(footer_title)
+    story.append(Spacer(1, 6))
+    story.append(footer_table)
+
+    doc.build(story)
+    return buffer.getvalue()
+
 def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, magic_url: str, account_created: bool):
     first_name, _ = _split_full_name(full_name)
     greeting_name = first_name or full_name or 'Client'
@@ -221,13 +445,7 @@ def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, 
         if account_created
         else ""
     )
-    status_map = {
-        'pending': 'En attente',
-        'confirmed': 'Confirmé',
-        'paid': 'Payé',
-        'cancelled': 'Annulé',
-    }
-    status_label = status_map.get(getattr(booking, 'status', ''), getattr(booking, 'status', ''))
+    status_label = _booking_status_label(getattr(booking, 'status', ''))
     intro_line = (
         "Votre réservation a été enregistrée avec succès.\n\n"
         if booking.status == 'pending'
@@ -237,6 +455,7 @@ def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, 
         f"Bonjour {greeting_name},\n\n"
         f"{intro_line}"
         "Détails de la réservation :\n"
+        f"- ID de réservation : {booking.id}\n"
         f"- Salle : {booking.hall.name}\n"
         f"- Type d evenement : {booking.event_type}\n"
         f"- date debbut : {booking.start_date}\n"
@@ -250,13 +469,15 @@ def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, 
         "Si vous le souhaitez, vous pourrez ensuite définir un mot de passe permanent dans les paramètres de votre compte.\n\n"
         "Merci de votre confiance et à bientôt.\n"
     )
-    send_mail(
+    message = EmailMessage(
         subject=subject,
-        message=body,
+        body=body,
         from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@hall.local',
-        recipient_list=[to_email],
-        fail_silently=False,
+        to=[to_email],
     )
+    jeton_pdf = _build_reservation_jeton_pdf(booking)
+    message.attach(f"jeton-reservation-{booking.id}.pdf", jeton_pdf, 'application/pdf')
+    message.send(fail_silently=False)
 
 def _phone_username_candidates(raw_username):
     raw = '' if raw_username is None else str(raw_username)
@@ -462,6 +683,61 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(updated_by=_actor(self.request))
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+
+        booking = serializer.instance
+        email_sent = False
+        email = (getattr(booking, 'customer_email', '') or '').strip().lower()
+
+        if email:
+            User = get_user_model()
+            user = User.objects.filter(email__iexact=email).first()
+            account_created = False
+
+            if user is None:
+                account_created = True
+                raw_username = _normalize_phone(getattr(booking, 'customer_phone', '') or '') or email
+                username = raw_username
+                suffix = 1
+                while User.objects.filter(username=username).exists():
+                    suffix += 1
+                    username = f"{raw_username}-{suffix}"
+
+                first_name, last_name = _split_full_name(getattr(booking, 'customer_name', '') or '')
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    password=None,
+                    first_name=first_name,
+                    last_name=last_name,
+                    is_active=True,
+                )
+            elif not user.is_active:
+                user.is_active = True
+                user.save(update_fields=['is_active'])
+
+            try:
+                raw_token, _ = _issue_magic_token(user)
+                magic_url = _build_magic_login_url(request, raw_token)
+                _send_reservation_email(
+                    to_email=email,
+                    full_name=getattr(booking, 'customer_name', '') or '',
+                    booking=booking,
+                    magic_url=magic_url,
+                    account_created=account_created,
+                )
+                email_sent = True
+            except Exception:
+                email_sent = False
+
+        headers = self.get_success_headers(serializer.data)
+        response_data = dict(serializer.data)
+        response_data['email_sent'] = email_sent
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny], url_path='guest')
     def guest(self, request):
