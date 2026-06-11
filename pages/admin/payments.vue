@@ -29,6 +29,9 @@
             class="search-input-clean"
           />
         </div>
+        <button class="btn btn-sm" @click="resetFilters" style="margin-right: 8px;">
+          <i class="fas fa-redo"></i> Réinitialiser
+        </button>
         <button class="btn-icon filters-toggle" :class="{ active: filtersOpen }" title="Filtres" @click="filtersOpen = !filtersOpen">
           <i class="fas fa-filter"></i>
         </button>
@@ -44,8 +47,17 @@
           <option value="">Toutes les méthodes</option>
           <option v-for="m in methods" :key="m" :value="m">{{ m }}</option>
         </select>
-        <input v-model="dateFrom" type="date" class="filter-input-clean" />
-        <input v-model="dateTo" type="date" class="filter-input-clean" />
+        <select v-model="preset" class="filter-select-clean">
+          <option value="7d">7 jours</option>
+          <option value="28d">28 jours</option>
+          <option value="90d">90 jours</option>
+          <option value="this_month">Ce mois</option>
+          <option value="last_month">Mois dernier</option>
+          <option value="year">Cette année</option>
+          <option value="custom">Personnalisé</option>
+        </select>
+        <input v-if="preset === 'custom'" v-model="customStart" type="date" class="filter-input-clean" />
+        <input v-if="preset === 'custom'" v-model="customEnd" type="date" class="filter-input-clean" />
       </div>
     </div>
 
@@ -138,7 +150,7 @@
             </div>
             <div class="admin-card-body">
               <div class="admin-kv">
-                <span class="k">ID</span>
+                <span class="k">Code</span>
                 <span class="v">{{ getBookingDisplayId(booking) }}</span>
               </div>
               <div class="admin-kv">
@@ -147,7 +159,7 @@
               </div>
               <div class="admin-kv">
                 <span class="k">Déjà payé</span>
-                <span class="v">{{ formatMoney(booking.paid_amount) }}</span>
+                <span :class="['v', { 'text-red': toNumber(booking.paid_amount) === 0, 'text-yellow': toNumber(booking.paid_amount) > 0 && toNumber(booking.paid_amount) < toNumber(booking.total_price) }]">{{ formatMoney(booking.paid_amount) }}</span>
               </div>
               <div class="admin-kv">
                 <span class="k">Reste</span>
@@ -162,7 +174,7 @@
       <table v-else class="admin-table">
         <thead>
           <tr>
-            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('id') }" @click="toggleUnpaidSort('id')">ID <i :class="unpaidSortIconClass('id')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('code') }" @click="toggleUnpaidSort('code')">Code <i :class="unpaidSortIconClass('code')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('customer_name') }" @click="toggleUnpaidSort('customer_name')">Client <i :class="unpaidSortIconClass('customer_name')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('hall_name') }" @click="toggleUnpaidSort('hall_name')">Salle <i :class="unpaidSortIconClass('hall_name')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('start_date') }" @click="toggleUnpaidSort('start_date')">Période <i :class="unpaidSortIconClass('start_date')"></i></button></th>
@@ -200,7 +212,7 @@
               <td>{{ booking.hall_name }}</td>
               <td>{{ formatDateRange(booking.start_date, booking.end_date) }}</td>
               <td>{{ formatMoney(booking.total_price) }}</td>
-              <td>{{ formatMoney(booking.paid_amount) }}</td>
+              <td :class="{ 'text-red': toNumber(booking.paid_amount) === 0, 'text-yellow': toNumber(booking.paid_amount) > 0 && toNumber(booking.paid_amount) < toNumber(booking.total_price) }">{{ formatMoney(booking.paid_amount) }}</td>
               <td><span class="remain">{{ formatMoney(booking.remaining_amount) }}</span></td>
               <td>
                 <button class="btn btn-primary btn-sm" @click="openAddModal(booking)">
@@ -272,7 +284,7 @@
 
             <div class="admin-card-body">
               <div class="admin-kv">
-                <span class="k">ID</span>
+                <span class="k">Code</span>
                 <span class="v">{{ getPaymentDisplayId(payment) }}</span>
               </div>
               <div class="admin-kv">
@@ -300,7 +312,7 @@
       <table v-else class="admin-table">
         <thead>
           <tr>
-            <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('id') }" @click="togglePaymentSort('id')">ID <i :class="paymentSortIconClass('id')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('code') }" @click="togglePaymentSort('code')">Code <i :class="paymentSortIconClass('code')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('date') }" @click="togglePaymentSort('date')">Date <i :class="paymentSortIconClass('date')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('booking_customer_name') }" @click="togglePaymentSort('booking_customer_name')">Client <i :class="paymentSortIconClass('booking_customer_name')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('reference') }" @click="togglePaymentSort('reference')">Référence <i :class="paymentSortIconClass('reference')"></i></button></th>
@@ -320,7 +332,7 @@
               <td><div class="skeleton-line skeleton-w-60"></div></td>
               <td><div class="skeleton-line skeleton-w-30"></div></td>
               <td><div class="skeleton-line skeleton-w-40"></div></td>
-              <td><div class="skeleton-line skeleton-w-30"></div></td>
+              <td><div class="skeleton-line skeleton-w-40"></div></td>
               <td><div class="skeleton-line skeleton-w-30"></div></td>
               <td><div class="skeleton-line skeleton-w-60"></div></td>
             </tr>
@@ -422,7 +434,7 @@
 
     <AdminAppModal v-model="showViewModal" title="Détails du paiement" width="420px">
       <div v-if="selectedPayment" class="view-details">
-        <div class="detail-item"><span class="detail-label">ID</span><span class="detail-val">{{ getPaymentDisplayId(selectedPayment) }}</span></div>
+        <div class="detail-item"><span class="detail-label">Code</span><span class="detail-val">{{ getPaymentDisplayId(selectedPayment) }}</span></div>
         <div class="detail-item"><span class="detail-label">Client</span><span class="detail-val">{{ selectedPayment.booking_customer_name }}</span></div>
         <div class="detail-item"><span class="detail-label">Réservation</span><span class="detail-val">{{ selectedPayment.booking_hall_name }}</span></div>
         <div class="detail-item"><span class="detail-label">Période</span><span class="detail-val">{{ formatDateRange(selectedPayment.booking_start_date, selectedPayment.booking_end_date) }}</span></div>
@@ -472,8 +484,9 @@ const exportingXls = ref(false)
 const search = ref('')
 const statusFilter = ref('')
 const methodFilter = ref('')
-const dateFrom = ref('')
-const dateTo = ref('')
+const preset = ref('28d')
+const customStart = ref('')
+const customEnd = ref('')
 const loadingPayments = ref(false)
 const loadingBookingsData = ref(false)
 const isMobile = ref(false)
@@ -488,6 +501,79 @@ const toggleActions = (id) => {
 
 const closeActions = () => {
   openActionsId.value = null
+}
+
+const resetFilters = () => {
+  search.value = ''
+  statusFilter.value = ''
+  methodFilter.value = ''
+  preset.value = '28d'
+  customStart.value = ''
+  customEnd.value = ''
+}
+
+const toYmd = (date) => {
+  const d = (date instanceof Date) ? date : new Date(date)
+  if (Number.isNaN(d.getTime())) return ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const addDays = (ymd, days) => {
+  const base = new Date(`${ymd}T00:00:00`)
+  base.setDate(base.getDate() + days)
+  return toYmd(base)
+}
+
+const resolvePreset = (value) => {
+  const todayYmd = toYmd(new Date())
+  if (value === '7d') return { start: addDays(todayYmd, -6), end: todayYmd }
+  if (value === '28d') return { start: addDays(todayYmd, -27), end: todayYmd }
+  if (value === '90d') return { start: addDays(todayYmd, -89), end: todayYmd }
+  if (value === 'year') {
+    const now = new Date()
+    const start = `${now.getFullYear()}-01-01`
+    return { start, end: todayYmd }
+  }
+  if (value === 'this_month') {
+    const now = new Date()
+    const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    return { start, end: todayYmd }
+  }
+  if (value === 'last_month') {
+    const now = new Date()
+    const firstThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const lastPrevMonth = new Date(firstThisMonth)
+    lastPrevMonth.setDate(0)
+    const startPrevMonth = new Date(lastPrevMonth.getFullYear(), lastPrevMonth.getMonth(), 1)
+    return { start: toYmd(startPrevMonth), end: toYmd(lastPrevMonth) }
+  }
+  if (value === 'custom') {
+    const start = String(customStart.value || '').slice(0, 10)
+    const end = String(customEnd.value || '').slice(0, 10)
+    if (start && end && end >= start) return { start, end }
+    return resolvePreset('28d')
+  }
+  return resolvePreset('28d')
+}
+
+const activeRange = computed(() => resolvePreset(preset.value))
+const rangeStartYmd = computed(() => activeRange.value.start)
+const rangeEndYmd = computed(() => activeRange.value.end)
+
+const inRangeYmd = (ymd, rangeStart, rangeEnd) => {
+  const v = String(ymd || '').slice(0, 10)
+  if (!v || !rangeStart || !rangeEnd) return false
+  return v >= rangeStart && v <= rangeEnd
+}
+
+const dateOverlapsRange = (start, end, rangeStart, rangeEnd) => {
+  const s = String(start || '').slice(0, 10)
+  const e = String(end || '').slice(0, 10)
+  if (!s || !e || !rangeStart || !rangeEnd) return false
+  return s <= rangeEnd && e >= rangeStart
 }
 
 const isLoading = computed(() => loadingPayments.value || loadingBookingsData.value)
@@ -557,7 +643,8 @@ const filteredUnpaidBookings = computed(() => {
       String(b.customer_name || '').toLowerCase().includes(q) ||
       String(b.customer_email || '').toLowerCase().includes(q) ||
       String(b.hall_name || '').toLowerCase().includes(q)
-    return matchesSearch
+    const matchesDate = dateOverlapsRange(b.start_date, b.end_date, rangeStartYmd.value, rangeEndYmd.value)
+    return matchesSearch && matchesDate
   })
 })
 
@@ -576,8 +663,46 @@ const {
   },
 })
 
-const bookingDisplayIds = computed(() => buildMonthlySequenceMap(bookings.value, 'LBR', booking => booking.start_date))
-const getBookingDisplayId = (booking) => bookingDisplayIds.value.get(booking?.id) || 'LBR00000001'
+const getBookingDisplayId = (booking) => booking?.code || 'LBR00000001'
+
+const filteredPayments = computed(() => {
+  const q = search.value.toLowerCase().trim()
+  return (payments.value || []).filter((p) => {
+    const matchesSearch = q === '' ||
+      String(p.booking_customer_name || '').toLowerCase().includes(q) ||
+      String(p.reference || '').toLowerCase().includes(q)
+    const matchesStatus = statusFilter.value === '' || p.status === statusFilter.value
+    const matchesMethod = methodFilter.value === '' || p.method === methodFilter.value
+    const matchesDate = inRangeYmd(p.date, rangeStartYmd.value, rangeEndYmd.value)
+    return matchesSearch && matchesStatus && matchesMethod && matchesDate
+  })
+})
+
+const {
+  sortedItems: sortedPayments,
+  toggleSort: togglePaymentSort,
+  isSortActive: isPaymentSortActive,
+  sortIconClass: paymentSortIconClass,
+} = useTableSort(filteredPayments, {
+  initialKey: 'id',
+  initialDirection: 'desc',
+  accessors: {
+    amount: payment => toNumber(payment?.amount),
+  },
+})
+
+const getPaymentDisplayId = (payment) => payment?.code || 'LBP00000001'
+
+const {
+  paginatedItems: paginatedPayments,
+  totalItems: paymentsTotalItems,
+  startIndex: paymentsStartIndex,
+  endIndex: paymentsEndIndex,
+  canPrev: paymentsCanPrev,
+  canNext: paymentsCanNext,
+  prevPage: paymentsPrevPage,
+  nextPage: paymentsNextPage,
+} = usePagination(sortedPayments, 5)
 
 const {
   paginatedItems: paginatedUnpaidBookings,
@@ -588,12 +713,12 @@ const {
   canNext: unpaidCanNext,
   prevPage: unpaidPrevPage,
   nextPage: unpaidNextPage,
-} = usePagination(sortedUnpaidBookings, 50)
+} = usePagination(sortedUnpaidBookings, 5)
 
-const selectedBookingForForm = computed(() => unpaidBookings.value.find(b => b.id === form.value.booking) || null)
-const totalRevenue = computed(() => payments.value.filter(p => p.status === 'paid').reduce((a, p) => a + toNumber(p.amount), 0))
-const totalRemaining = computed(() => unpaidBookings.value.reduce((a, b) => a + toNumber(b.remaining_amount), 0))
-const methods = computed(() => Array.from(new Set((payments.value || []).map(p => p.method).filter(Boolean))).sort())
+const selectedBookingForForm = computed(() => filteredUnpaidBookings.value.find(b => b.id === form.value.booking) || null)
+const totalRevenue = computed(() => filteredPayments.value.filter(p => p.status === 'paid').reduce((a, p) => a + toNumber(p.amount), 0))
+const totalRemaining = computed(() => filteredUnpaidBookings.value.reduce((a, b) => a + toNumber(b.remaining_amount), 0))
+const methods = computed(() => Array.from(new Set((filteredPayments.value || []).map(p => p.method).filter(Boolean))).sort())
 
 const displayTotalRevenue = ref(0)
 const displayTotalRemaining = ref(0)
@@ -628,54 +753,12 @@ const animateCounter = (outRef, toValue) => {
 
 watch(totalRevenue, (v) => animateCounter(displayTotalRevenue, v), { immediate: true })
 watch(totalRemaining, (v) => animateCounter(displayTotalRemaining, v), { immediate: true })
-watch(() => unpaidBookings.value.length, (v) => animateCounter(displayUnpaidBookings, v), { immediate: true })
-watch(() => payments.value.length, (v) => animateCounter(displayPaymentsCount, v), { immediate: true })
+watch(() => filteredUnpaidBookings.value.length, (v) => animateCounter(displayUnpaidBookings, v), { immediate: true })
+watch(() => filteredPayments.value.length, (v) => animateCounter(displayPaymentsCount, v), { immediate: true })
 
 onBeforeUnmount(() => {
   for (const id of rafMap.values()) cancelAnimationFrame(id)
 })
-
-const filteredPayments = computed(() => {
-  const q = search.value.toLowerCase().trim()
-  return (payments.value || []).filter((p) => {
-    const matchesSearch = q === '' ||
-      String(p.booking_customer_name || '').toLowerCase().includes(q) ||
-      String(p.reference || '').toLowerCase().includes(q)
-    const matchesStatus = statusFilter.value === '' || p.status === statusFilter.value
-    const matchesMethod = methodFilter.value === '' || p.method === methodFilter.value
-    const date = p.date ? new Date(p.date) : null
-    const fromOk = !dateFrom.value || (date && date >= new Date(dateFrom.value))
-    const toOk = !dateTo.value || (date && date <= new Date(dateTo.value))
-    return matchesSearch && matchesStatus && matchesMethod && fromOk && toOk
-  })
-})
-
-const {
-  sortedItems: sortedPayments,
-  toggleSort: togglePaymentSort,
-  isSortActive: isPaymentSortActive,
-  sortIconClass: paymentSortIconClass,
-} = useTableSort(filteredPayments, {
-  initialKey: 'id',
-  initialDirection: 'desc',
-  accessors: {
-    amount: payment => toNumber(payment?.amount),
-  },
-})
-
-const paymentDisplayIds = computed(() => buildMonthlySequenceMap(payments.value, 'LBP', payment => payment.date))
-const getPaymentDisplayId = (payment) => paymentDisplayIds.value.get(payment?.id) || 'LBP00000001'
-
-const {
-  paginatedItems: paginatedPayments,
-  totalItems: paymentsTotalItems,
-  startIndex: paymentsStartIndex,
-  endIndex: paymentsEndIndex,
-  canPrev: paymentsCanPrev,
-  canNext: paymentsCanNext,
-  prevPage: paymentsPrevPage,
-  nextPage: paymentsNextPage,
-} = usePagination(sortedPayments, 50)
 
 const fetchPayments = async () => {
   loadingPayments.value = true
@@ -861,6 +944,8 @@ onMounted(async () => {
 .customer-name { font-weight: 700; color: #0f172a; }
 .customer-email { font-size: .8rem; color: #94a3b8; }
 .remain { color: #b45309; font-weight: 800; }
+.text-red { color: #dc2626; font-weight: 800; }
+.text-yellow { color: #d97706; font-weight: 800; }
 .empty-cell { text-align: center; color: #94a3b8; font-weight: 600; padding: 1rem; }
 .booking-summary { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: .85rem 1rem; display: grid; gap: .3rem; margin-bottom: .25rem; }
 .btn-sm { padding: .45rem .75rem; font-size: .78rem; }

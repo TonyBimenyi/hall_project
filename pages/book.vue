@@ -111,9 +111,17 @@
           <form class="admin-form" @submit.prevent="submitBooking">
             <div class="form-grid">
               <div class="form-group">
-                <label class="form-label">{{ $t('booking.fullName') }}</label>
+                <label class="form-label">Prénom</label>
                 <input
-                  v-model="form.customer_name"
+                  v-model="form.customer_first_name"
+                  class="form-input"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Nom</label>
+                <input
+                  v-model="form.customer_last_name"
                   class="form-input"
                   required
                 />
@@ -174,6 +182,49 @@
               </div>
             </div>
 
+            <div v-if="hallAdditionalServices.length" class="addons-section">
+              <div class="addons-head">
+                <strong>Services additionnels</strong>
+                <span v-if="addonsTotal > 0" class="addons-total">+ {{ formatMoney(addonsTotal) }}</span>
+              </div>
+              <div class="addons-list">
+                <div v-for="service in hallAdditionalServices" :key="service.name" class="addon-item">
+                  <div v-if="!service.has_subservices" class="addon-line">
+                    <label class="checkbox-row">
+                      <input
+                        type="checkbox"
+                        :checked="isServiceSelected(service.name)"
+                        @change="toggleSimpleService(service)"
+                      />
+                      <span>{{ service.name }}</span>
+                    </label>
+                    <strong>{{ formatMoney(service.price) }}</strong>
+                  </div>
+                  <div v-else class="addon-sub-block">
+                    <div class="addon-sub-head">
+                      <strong>{{ service.name }}</strong>
+                      <span class="muted-line">Choisissez les sous-services</span>
+                    </div>
+                    <div class="addon-subs">
+                      <label
+                        v-for="sub in (service.subservices || [])"
+                        :key="`${service.name}-${sub.name}`"
+                        class="checkbox-row addon-sub-line"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="isSubserviceSelected(service.name, sub.name)"
+                          @change="toggleSubservice(service.name, sub.name)"
+                        />
+                        <span>{{ sub.name }}</span>
+                        <strong>{{ formatMoney(sub.price) }}</strong>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label">{{ $t('booking.startDate') }}</label>
@@ -222,11 +273,13 @@ export default {
       rangeEnd: null,
       currentUser: {},
       form: {
-        customer_name: '',
+        customer_first_name: '',
+        customer_last_name: '',
         customer_email: '',
         customer_phone: '',
         hall: '',
         event_type: 'wedding',
+        additional_services_selected: [],
         status: 'pending'
       },
       weekdays: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
@@ -236,6 +289,38 @@ export default {
   computed: {
     selectedHall() {
       return this.halls.find(h => h.id === this.form.hall)
+    },
+
+    hallAdditionalServices() {
+      return Array.isArray(this.selectedHall?.additional_services)
+        ? this.selectedHall.additional_services
+        : []
+    },
+
+    addonsTotal() {
+      const services = this.hallAdditionalServices
+      const selected = Array.isArray(this.form.additional_services_selected)
+        ? this.form.additional_services_selected
+        : []
+      if (!services.length || !selected.length) return 0
+
+      const serviceIndex = new Map(services.map(s => [String(s?.name || ''), s]))
+      let total = 0
+      for (const item of selected) {
+        const name = String(item?.name || '')
+        const cfg = serviceIndex.get(name)
+        if (!cfg) continue
+        if (cfg.has_subservices) {
+          const subs = Array.isArray(item?.subservices) ? item.subservices : []
+          const subIndex = new Map((cfg.subservices || []).map(sub => [String(sub?.name || ''), Number(sub?.price || 0)]))
+          for (const sub of subs) {
+            total += subIndex.get(String(sub?.name || '')) || 0
+          }
+        } else {
+          total += Number(cfg.price || 0)
+        }
+      }
+      return total
     },
 
     startDate() {
@@ -316,9 +401,8 @@ export default {
 
     totalPrice() {
       if (!this.selectedHall || this.totalDays <= 0) return 0
-      return Math.round(
-        Number(this.selectedHall.price_per_day || 0) * this.totalDays
-      )
+      const base = Number(this.selectedHall.price_per_day || 0) * this.totalDays
+      return Math.round(base + Number(this.addonsTotal || 0))
     }
   },
 
@@ -342,6 +426,59 @@ export default {
 
     isInRange(d, s, e) {
       return s && e && d > s && d < e
+    },
+
+    isServiceSelected(serviceName) {
+      return (this.form.additional_services_selected || []).some(
+        s => String(s?.name || '') === String(serviceName || '')
+      )
+    },
+
+    toggleSimpleService(service) {
+      const name = String(service?.name || '').trim()
+      if (!name) return
+      const selected = Array.isArray(this.form.additional_services_selected)
+        ? [...this.form.additional_services_selected]
+        : []
+      const idx = selected.findIndex(s => String(s?.name || '') === name)
+      if (idx >= 0) selected.splice(idx, 1)
+      else selected.push({ name })
+      this.form.additional_services_selected = selected
+    },
+
+    isSubserviceSelected(serviceName, subName) {
+      const item = (this.form.additional_services_selected || []).find(
+        s => String(s?.name || '') === String(serviceName || '')
+      )
+      const subs = Array.isArray(item?.subservices) ? item.subservices : []
+      return subs.some(sub => String(sub?.name || '') === String(subName || ''))
+    },
+
+    toggleSubservice(serviceName, subName) {
+      const name = String(serviceName || '').trim()
+      const sub = String(subName || '').trim()
+      if (!name || !sub) return
+      const selected = Array.isArray(this.form.additional_services_selected)
+        ? [...this.form.additional_services_selected]
+        : []
+      let item = selected.find(s => String(s?.name || '') === name)
+      if (!item) {
+        selected.push({ name, subservices: [{ name: sub }] })
+        this.form.additional_services_selected = selected
+        return
+      }
+      const subs = Array.isArray(item.subservices) ? [...item.subservices] : []
+      const idx = subs.findIndex(s => String(s?.name || '') === sub)
+      if (idx >= 0) subs.splice(idx, 1)
+      else subs.push({ name: sub })
+      if (subs.length === 0) {
+        this.form.additional_services_selected = selected.filter(
+          s => String(s?.name || '') !== name
+        )
+      } else {
+        item.subservices = subs
+        this.form.additional_services_selected = selected
+      }
     },
 
     prevMonth() {
@@ -427,11 +564,11 @@ export default {
           this.form.customer_email = res.data.email
         }
 
-        const fullName =
-          `${res.data?.first_name || ''} ${res.data?.last_name || ''}`.trim()
-
-        if (!this.form.customer_name && fullName) {
-          this.form.customer_name = fullName
+        if (!this.form.customer_first_name && res.data?.first_name) {
+          this.form.customer_first_name = res.data.first_name
+        }
+        if (!this.form.customer_last_name && res.data?.last_name) {
+          this.form.customer_last_name = res.data.last_name
         }
       } catch {
         this.currentUser = {}
@@ -457,20 +594,23 @@ export default {
 
         const response = await api.post('bookings/guest/', {
           hall: this.form.hall,
-          full_name: this.form.customer_name,
+          full_name: `${String(this.form.customer_first_name || '').trim()} ${String(this.form.customer_last_name || '').trim()}`.trim(),
           email: this.form.customer_email,
           phone: this.form.customer_phone,
           event_type: this.form.event_type,
           start_date: this.formatYMD(this.rangeStart),
           end_date: this.formatYMD(finalEnd),
+          additional_services_selected: this.form.additional_services_selected,
         })
 
         notify(response?.data?.message || this.$t('booking.notify.bookingSuccess'), 'success')
 
-        this.form.customer_name = ''
+        this.form.customer_first_name = ''
+        this.form.customer_last_name = ''
         this.form.customer_email = ''
         this.form.customer_phone = ''
         this.form.event_type = 'wedding'
+        this.form.additional_services_selected = []
         this.clearDates()
 
         await this.fetchCalendar()
@@ -493,6 +633,7 @@ export default {
   watch: {
     'form.hall'() {
       this.fetchCalendar()
+      this.form.additional_services_selected = []
     }
   }
 }
@@ -641,6 +782,57 @@ button:disabled {
 
 .summary-item span, .summary-total span {
   color: #64748b;
+}
+
+.addons-section {
+  border-top: 1px solid #eef2f7;
+  padding-top: 14px;
+  margin-top: 8px;
+}
+.addons-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.addons-total {
+  color: #0f172a;
+  font-weight: 900;
+}
+.addons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.addon-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #f8fafc;
+}
+.addon-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.addon-sub-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.addon-subs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.addon-sub-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .summary-item.controls {

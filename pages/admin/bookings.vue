@@ -35,6 +35,9 @@
             class="search-input-clean"
           />
         </div>
+        <button class="btn btn-sm" @click="resetFilters" style="margin-right: 8px;">
+          <i class="fas fa-redo"></i> Réinitialiser
+        </button>
         <button class="btn-icon filters-toggle" :class="{ active: filtersOpen }" title="Filtres" @click="filtersOpen = !filtersOpen">
           <i class="fas fa-filter"></i>
         </button>
@@ -67,10 +70,21 @@
           </select>
         </div>
         <div class="filter-wrapper">
-          <input v-model="dateFrom" type="date" class="filter-input-clean" />
+          <select v-model="preset" class="filter-select-clean">
+            <option value="7d">7 jours</option>
+            <option value="28d">28 jours</option>
+            <option value="90d">90 jours</option>
+            <option value="this_month">Ce mois</option>
+            <option value="last_month">Mois dernier</option>
+            <option value="year">Cette année</option>
+            <option value="custom">Personnalisé</option>
+          </select>
         </div>
-        <div class="filter-wrapper">
-          <input v-model="dateTo" type="date" class="filter-input-clean" />
+        <div v-if="preset === 'custom'" class="filter-wrapper">
+          <input v-model="customStart" type="date" class="filter-input-clean" />
+        </div>
+        <div v-if="preset === 'custom'" class="filter-wrapper">
+          <input v-model="customEnd" type="date" class="filter-input-clean" />
         </div>
         <div class="filter-wrapper">
           <input v-model="minAmountInput" inputmode="numeric" type="text" class="filter-input-clean" placeholder="Min (Fbu)" />
@@ -172,7 +186,7 @@
 
             <div class="admin-card-body">
               <div class="admin-kv">
-                <span class="k">ID</span>
+                <span class="k">Code</span>
                 <span class="v">{{ getBookingDisplayId(booking) }}</span>
               </div>
               <div class="admin-kv">
@@ -199,7 +213,7 @@
         <table ref="tableRef" class="bookings-table admin-table">
           <thead>
             <tr>
-              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('id') }" @click="toggleBookingSort('id')">ID <i :class="bookingSortIconClass('id')"></i></button></th>
+              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('code') }" @click="toggleBookingSort('code')">Code <i :class="bookingSortIconClass('code')"></i></button></th>
               <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('customer_name') }" @click="toggleBookingSort('customer_name')">Client <i :class="bookingSortIconClass('customer_name')"></i></button></th>
               <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('hall_name') }" @click="toggleBookingSort('hall_name')">Salle <i :class="bookingSortIconClass('hall_name')"></i></button></th>
               <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('event_type') }" @click="toggleBookingSort('event_type')">Événement <i :class="bookingSortIconClass('event_type')"></i></button></th>
@@ -287,9 +301,13 @@
     <AdminAppModal v-model="showFormModal" :title="isEditing ? 'Modifier la réservation' : 'Nouvelle réservation'" width="600px">
       <form @submit.prevent="saveBooking" class="admin-form">
         <div class="form-grid">
-          <div class="form-group full">
-            <label class="form-label">Client</label>
-            <input v-model="form.customer_name" type="text" class="form-input" placeholder="Nom complet" required />
+          <div class="form-group">
+            <label class="form-label">Prénom</label>
+            <input v-model="form.customer_first_name" type="text" class="form-input" placeholder="Prénom" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nom</label>
+            <input v-model="form.customer_last_name" type="text" class="form-input" placeholder="Nom" required />
           </div>
           <div class="form-group full">
             <label class="form-label">Email</label>
@@ -319,11 +337,97 @@
           </div>
           <div class="form-group">
             <label class="form-label">Date Début</label>
-            <input v-model="form.start_date" type="date" class="form-input" required @change="calculatePrice" />
+            <input :value="form.start_date" type="text" class="form-input" placeholder="YYYY-MM-DD" readonly required />
           </div>
           <div class="form-group">
             <label class="form-label">Date Fin</label>
-            <input v-model="form.end_date" type="date" class="form-input" required @change="calculatePrice" />
+            <input :value="form.end_date" type="text" class="form-input" placeholder="YYYY-MM-DD" readonly required />
+          </div>
+          <div class="form-group full">
+            <div class="calendar-top">
+              <strong>{{ calendarMonthLabel }}</strong>
+              <div class="calendar-nav">
+                <button class="icon-btn" type="button" @click="prevCalendarMonth">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="icon-btn" type="button" @click="nextCalendarMonth">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="btn btn-outline btn-sm" type="button" @click="clearCalendarDates">
+                  Effacer
+                </button>
+              </div>
+            </div>
+            <div class="weekday-row">
+              <span v-for="d in calendarWeekdays" :key="d">{{ d }}</span>
+            </div>
+            <div class="calendar-grid-admin">
+              <button
+                v-for="cell in adminCalendarCells"
+                :key="cell.key"
+                class="day-cell"
+                :class="{
+                  muted: !cell.currentMonth,
+                  disabled: cell.isPast || (!isEditing && cell.isBooked),
+                  start: isSameCalendarDate(cell.date, calendarRangeStart),
+                  end: isSameCalendarDate(cell.date, calendarRangeEnd),
+                  inrange: isCalendarInRange(cell.date, calendarRangeStart, calendarRangeEnd),
+                  booked: cell.isBooked
+                }"
+                :disabled="cell.isPast || (!isEditing && cell.isBooked)"
+                type="button"
+                @click="onAdminCalendarDayClick(cell.date)"
+              >
+                {{ cell.date.getDate() }}
+              </button>
+            </div>
+            <div class="calendar-legend">
+              <span><i class="dot booked"></i> Réservé</span>
+              <span><i class="dot selected"></i> Début/Fin</span>
+              <span><i class="dot range"></i> Période</span>
+            </div>
+          </div>
+          <div v-if="hallAdditionalServices.length" class="form-group full addons-section">
+            <div class="addons-head">
+              <strong>Services additionnels</strong>
+              <span v-if="addonsTotal > 0" class="addons-total">+ {{ formatMoney(addonsTotal) }}</span>
+            </div>
+            <div class="addons-list">
+              <div v-for="service in hallAdditionalServices" :key="service.name" class="addon-item">
+                <div v-if="!service.has_subservices" class="addon-line">
+                  <label class="checkbox-row">
+                    <input
+                      type="checkbox"
+                      :checked="isServiceSelected(service.name)"
+                      @change="toggleSimpleService(service)"
+                    />
+                    <span>{{ service.name }}</span>
+                  </label>
+                  <strong>{{ formatMoney(service.price) }}</strong>
+                </div>
+                <div v-else class="addon-sub-block">
+                  <div class="addon-sub-head">
+                    <strong>{{ service.name }}</strong>
+                    <span class="muted-line">Choisissez les sous-services</span>
+                  </div>
+                  <div class="addon-subs">
+                    <label
+                      v-for="sub in (service.subservices || [])"
+                      :key="`${service.name}-${sub.name}`"
+                      class="checkbox-row addon-sub-line"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="isSubserviceSelected(service.name, sub.name)"
+                        @change="toggleSubservice(service.name, sub.name)"
+                      />
+                      <span>{{ sub.name }}</span>
+                      <strong>{{ formatMoney(sub.price) }}</strong>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Montant (Fbu)</label>
@@ -351,7 +455,7 @@
     <AdminAppModal v-model="showViewModal" title="Détails de la réservation" width="500px">
       <div v-if="selectedBooking" class="view-details">
         <div class="detail-item">
-          <span class="detail-label">ID</span>
+          <span class="detail-label">Code</span>
           <span class="detail-val">{{ getBookingDisplayId(selectedBooking) }}</span>
         </div>
         <div class="detail-item">
@@ -377,6 +481,29 @@
         <div class="detail-item">
           <span class="detail-label">Montant</span>
           <span class="detail-val">{{ formatMoney(selectedBooking.total_price) }}</span>
+        </div>
+        <div v-if="Number(selectedBooking.addons_total || 0) > 0" class="detail-item">
+          <span class="detail-label">Services additionnels</span>
+          <span class="detail-val">{{ formatMoney(selectedBooking.addons_total) }}</span>
+        </div>
+        <div v-if="selectedBooking.additional_services_selected?.length" class="detail-block">
+          <span class="detail-label">Détails services</span>
+          <div class="detail-val services-preview">
+            <div
+              v-for="(svc, idx) in selectedBooking.additional_services_selected"
+              :key="`${svc.name}-${idx}`"
+              class="service-preview-item"
+            >
+              <div class="service-preview-title">
+                <strong>{{ svc.name }}</strong>
+              </div>
+              <div v-if="svc.subservices?.length" class="service-preview-subs">
+                <div v-for="(sub, sidx) in svc.subservices" :key="`${svc.name}-${sidx}`" class="service-preview-sub">
+                  <span>{{ sub.name }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="detail-item">
           <span class="detail-label">Statut</span>
@@ -436,10 +563,69 @@ const search = ref('')
 const statusFilter = ref('')
 const hallFilter = ref('')
 const eventTypeFilter = ref('')
-const dateFrom = ref('')
-const dateTo = ref('')
+const preset = ref('28d')
+const customStart = ref('')
+const customEnd = ref('')
 const minAmount = ref(null)
 const maxAmount = ref(null)
+
+const toYmd = (date) => {
+  const d = (date instanceof Date) ? date : new Date(date)
+  if (Number.isNaN(d.getTime())) return ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const addDays = (ymd, days) => {
+  const base = new Date(`${ymd}T00:00:00`)
+  base.setDate(base.getDate() + days)
+  return toYmd(base)
+}
+
+const resolvePreset = (value) => {
+  const todayYmd = toYmd(new Date())
+  if (value === '7d') return { start: addDays(todayYmd, -6), end: todayYmd }
+  if (value === '28d') return { start: addDays(todayYmd, -27), end: todayYmd }
+  if (value === '90d') return { start: addDays(todayYmd, -89), end: todayYmd }
+  if (value === 'year') {
+    const now = new Date()
+    const start = `${now.getFullYear()}-01-01`
+    return { start, end: todayYmd }
+  }
+  if (value === 'this_month') {
+    const now = new Date()
+    const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    return { start, end: todayYmd }
+  }
+  if (value === 'last_month') {
+    const now = new Date()
+    const firstThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const lastPrevMonth = new Date(firstThisMonth)
+    lastPrevMonth.setDate(0)
+    const startPrevMonth = new Date(lastPrevMonth.getFullYear(), lastPrevMonth.getMonth(), 1)
+    return { start: toYmd(startPrevMonth), end: toYmd(lastPrevMonth) }
+  }
+  if (value === 'custom') {
+    const start = String(customStart.value || '').slice(0, 10)
+    const end = String(customEnd.value || '').slice(0, 10)
+    if (start && end && end >= start) return { start, end }
+    return resolvePreset('28d')
+  }
+  return resolvePreset('28d')
+}
+
+const activeRange = computed(() => resolvePreset(preset.value))
+const rangeStartYmd = computed(() => activeRange.value.start)
+const rangeEndYmd = computed(() => activeRange.value.end)
+
+const dateOverlapsRange = (start, end, rangeStart, rangeEnd) => {
+  const s = String(start || '').slice(0, 10)
+  const e = String(end || '').slice(0, 10)
+  if (!s || !e || !rangeStart || !rangeEnd) return false
+  return s <= rangeEnd && e >= rangeStart
+}
 const showFormModal = ref(false)
 const showViewModal = ref(false)
 const showDeleteModal = ref(false)
@@ -457,6 +643,121 @@ const loadingHalls = ref(false)
 const isMobile = ref(false)
 const filtersOpen = ref(false)
 const openActionsId = ref(null)
+
+const calendarRanges = ref([])
+const calendarViewMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+const calendarRangeStart = ref(null)
+const calendarRangeEnd = ref(null)
+const calendarWeekdays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+
+const formatCalendarYMD = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const isSameCalendarDate = (a, b) => !!(a && b && formatCalendarYMD(a) === formatCalendarYMD(b))
+const isCalendarInRange = (d, s, e) => !!(s && e && d > s && d < e)
+
+const calendarMonthLabel = computed(() => calendarViewMonth.value.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }))
+const bookedSet = computed(() => {
+  const set = new Set()
+  for (const r of calendarRanges.value) {
+    const start = new Date(r.start_date)
+    const end = new Date(r.end_date)
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      set.add(formatCalendarYMD(new Date(d)))
+    }
+  }
+  return set
+})
+
+const adminCalendarCells = computed(() => {
+  const first = new Date(calendarViewMonth.value.getFullYear(), calendarViewMonth.value.getMonth(), 1)
+  const firstWeekday = (first.getDay() + 6) % 7
+  const start = new Date(first)
+  start.setDate(first.getDate() - firstWeekday)
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(start)
+    d.setDate(start.getDate() + i)
+    const ymd = formatCalendarYMD(d)
+    return {
+      key: `${ymd}-${i}`,
+      date: d,
+      currentMonth: d.getMonth() === calendarViewMonth.value.getMonth(),
+      isPast: d < today,
+      isBooked: bookedSet.value.has(ymd),
+    }
+  })
+})
+
+const prevCalendarMonth = () => {
+  calendarViewMonth.value = new Date(calendarViewMonth.value.getFullYear(), calendarViewMonth.value.getMonth() - 1, 1)
+}
+
+const nextCalendarMonth = () => {
+  calendarViewMonth.value = new Date(calendarViewMonth.value.getFullYear(), calendarViewMonth.value.getMonth() + 1, 1)
+}
+
+const clearCalendarDates = () => {
+  calendarRangeStart.value = null
+  calendarRangeEnd.value = null
+  form.value.start_date = ''
+  form.value.end_date = ''
+  daysCount.value = 0
+  calculatePrice()
+}
+
+const hasCalendarConflict = (start, end) => {
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    if (bookedSet.value.has(formatCalendarYMD(new Date(d)))) return true
+  }
+  return false
+}
+
+const syncFormDatesFromCalendarRange = () => {
+  if (!calendarRangeStart.value) return
+  const end = calendarRangeEnd.value || calendarRangeStart.value
+  form.value.start_date = formatCalendarYMD(calendarRangeStart.value)
+  form.value.end_date = formatCalendarYMD(end)
+  calculatePrice()
+}
+
+const onAdminCalendarDayClick = (date) => {
+  if (!calendarRangeStart.value || calendarRangeEnd.value) {
+    calendarRangeStart.value = date
+    calendarRangeEnd.value = null
+    syncFormDatesFromCalendarRange()
+    return
+  }
+
+  if (date < calendarRangeStart.value) {
+    calendarRangeStart.value = date
+    calendarRangeEnd.value = null
+    syncFormDatesFromCalendarRange()
+    return
+  }
+
+  if (!isEditing.value && hasCalendarConflict(calendarRangeStart.value, date)) {
+    notify('Certaines dates sont déjà réservées pour cette salle.', 'warning')
+    return
+  }
+
+  calendarRangeEnd.value = date
+  syncFormDatesFromCalendarRange()
+}
+
+const fetchCalendarRanges = async () => {
+  if (!form.value?.hall) {
+    calendarRanges.value = []
+    return
+  }
+  try {
+    const res = await api.get('bookings/calendar/', { params: { hall: form.value.hall } })
+    calendarRanges.value = Array.isArray(res.data) ? res.data : []
+  } catch {
+    calendarRanges.value = []
+  }
+}
 
 const exportXls = async () => {
   if (!tableRef.value) return
@@ -501,13 +802,15 @@ const exportPdf = async () => {
 
 const form = ref({
   id: null,
-  customer_name: '',
+  customer_first_name: '',
+  customer_last_name: '',
   customer_email: '',
   hall: '',
   event_type: 'Mariage',
   event_type_other: '',
   start_date: '',
   end_date: '',
+  additional_services_selected: [],
   total_price: 0,
   status: 'pending'
 })
@@ -595,8 +898,47 @@ const closeActions = () => {
   openActionsId.value = null
 }
 
+const resetFilters = () => {
+  search.value = ''
+  statusFilter.value = ''
+  hallFilter.value = ''
+  eventTypeFilter.value = ''
+  preset.value = '28d'
+  customStart.value = ''
+  customEnd.value = ''
+  minAmount.value = null
+  maxAmount.value = null
+}
+
 const pricePerDay = ref(0)
 const daysCount = ref(0)
+
+const selectedHall = computed(() => halls.value.find(h => String(h.id) === String(form.value.hall)) || null)
+const hallAdditionalServices = computed(() => Array.isArray(selectedHall.value?.additional_services) ? selectedHall.value.additional_services : [])
+
+const addonsTotal = computed(() => {
+  const services = hallAdditionalServices.value
+  const selected = Array.isArray(form.value.additional_services_selected) ? form.value.additional_services_selected : []
+  if (!services.length || !selected.length) return 0
+
+  const serviceIndex = new Map(services.map(s => [String(s?.name || ''), s]))
+  let total = 0
+  for (const item of selected) {
+    const name = String(item?.name || '')
+    const cfg = serviceIndex.get(name)
+    if (!cfg) continue
+    if (cfg.has_subservices) {
+      const subs = Array.isArray(item?.subservices) ? item.subservices : []
+      const subIndex = new Map((cfg.subservices || []).map(sub => [String(sub?.name || ''), Number(sub?.price || 0)]))
+      for (const sub of subs) {
+        total += subIndex.get(String(sub?.name || '')) || 0
+      }
+      continue
+    }
+    total += Number(cfg.price || 0)
+  }
+  return total
+})
 
 const calculatePrice = () => {
   if (form.value.start_date && form.value.end_date && form.value.hall) {
@@ -609,8 +951,79 @@ const calculatePrice = () => {
     const hall = halls.value.find(h => h.id === form.value.hall)
     if (hall) {
       pricePerDay.value = hall.price_per_day
-      form.value.total_price = diffDays * hall.price_per_day
+      form.value.total_price = (diffDays * Number(hall.price_per_day || 0)) + Number(addonsTotal.value || 0)
     }
+  }
+}
+
+watch(
+  () => form.value.additional_services_selected,
+  () => calculatePrice(),
+  { deep: true }
+)
+
+watch(
+  () => form.value.hall,
+  async (nextHall, prevHall) => {
+    if (!showFormModal.value) return
+    await fetchCalendarRanges()
+    if (!isEditing.value && String(nextHall || '') !== String(prevHall || '')) {
+      clearCalendarDates()
+    }
+    if (String(nextHall || '') !== String(prevHall || '')) {
+      form.value.additional_services_selected = []
+    }
+    calculatePrice()
+  }
+)
+
+const isServiceSelected = (serviceName) => {
+  return (form.value.additional_services_selected || []).some(s => String(s?.name || '') === String(serviceName || ''))
+}
+
+const toggleSimpleService = (service) => {
+  const name = String(service?.name || '').trim()
+  if (!name) return
+  const selected = Array.isArray(form.value.additional_services_selected) ? [...form.value.additional_services_selected] : []
+  const idx = selected.findIndex(s => String(s?.name || '') === name)
+  if (idx >= 0) {
+    selected.splice(idx, 1)
+  } else {
+    selected.push({ name })
+  }
+  form.value.additional_services_selected = selected
+}
+
+const isSubserviceSelected = (serviceName, subName) => {
+  const item = (form.value.additional_services_selected || []).find(s => String(s?.name || '') === String(serviceName || ''))
+  const subs = Array.isArray(item?.subservices) ? item.subservices : []
+  return subs.some(sub => String(sub?.name || '') === String(subName || ''))
+}
+
+const toggleSubservice = (serviceName, subName) => {
+  const name = String(serviceName || '').trim()
+  const sub = String(subName || '').trim()
+  if (!name || !sub) return
+  const selected = Array.isArray(form.value.additional_services_selected) ? [...form.value.additional_services_selected] : []
+  let item = selected.find(s => String(s?.name || '') === name)
+  if (!item) {
+    item = { name, subservices: [{ name: sub }] }
+    selected.push(item)
+    form.value.additional_services_selected = selected
+    return
+  }
+  const subs = Array.isArray(item.subservices) ? [...item.subservices] : []
+  const idx = subs.findIndex(s => String(s?.name || '') === sub)
+  if (idx >= 0) {
+    subs.splice(idx, 1)
+  } else {
+    subs.push({ name: sub })
+  }
+  if (subs.length === 0) {
+    form.value.additional_services_selected = selected.filter(s => String(s?.name || '') !== name)
+  } else {
+    item.subservices = subs
+    form.value.additional_services_selected = selected
   }
 }
 
@@ -627,15 +1040,13 @@ const filteredBookings = computed(() => {
       ? String(b.event_type || '').startsWith('Autres: ')
       : b.event_type === eventTypeFilter.value)
 
-    const start = b.start_date ? new Date(b.start_date) : null
-    const fromOk = !dateFrom.value || (start && start >= new Date(dateFrom.value))
-    const toOk = !dateTo.value || (start && start <= new Date(dateTo.value))
+    const matchesDate = dateOverlapsRange(b.start_date, b.end_date, rangeStartYmd.value, rangeEndYmd.value)
 
     const amount = Number(b.total_price || 0)
     const minOk = minAmount.value == null || minAmount.value === '' || amount >= Number(minAmount.value)
     const maxOk = maxAmount.value == null || maxAmount.value === '' || amount <= Number(maxAmount.value)
 
-    return matchesSearch && matchesStatus && matchesHall && matchesEventType && fromOk && toOk && minOk && maxOk
+    return matchesSearch && matchesStatus && matchesHall && matchesEventType && matchesDate && minOk && maxOk
   })
 })
 
@@ -652,8 +1063,7 @@ const {
   },
 })
 
-const bookingDisplayIds = computed(() => buildMonthlySequenceMap(bookings.value, 'LBR', booking => booking.start_date))
-const getBookingDisplayId = (booking) => bookingDisplayIds.value.get(booking?.id) || 'LBR00000001'
+const getBookingDisplayId = (booking) => booking?.code || 'LBR00000001'
 
 const {
   paginatedItems: paginatedBookings,
@@ -691,7 +1101,8 @@ const saveBooking = async () => {
       fetchBookings()
     }
   } catch (error) {
-    notify('Erreur lors de l\'enregistrement', 'danger')
+    const data = error?.response?.data || {}
+    notify(data.additional_services_selected || data.dates || data.detail || 'Erreur lors de l\'enregistrement', 'danger')
   } finally {
     savingBooking.value = false
   }
@@ -768,8 +1179,25 @@ const getBadgeClass = (status) => {
 
 const openAddModal = () => {
   isEditing.value = false
-  form.value = { id: null, customer_name: '', customer_email: '', hall: halls.value[0]?.id || '', event_type: 'Mariage', event_type_other: '', start_date: '', end_date: '', total_price: 0, status: 'pending' }
+  form.value = {
+    id: null,
+    customer_first_name: '',
+    customer_last_name: '',
+    customer_email: '',
+    hall: halls.value[0]?.id || '',
+    event_type: 'Mariage',
+    event_type_other: '',
+    start_date: '',
+    end_date: '',
+    additional_services_selected: [],
+    total_price: 0,
+    status: 'pending',
+  }
   daysCount.value = 0
+  calendarViewMonth.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  calendarRangeStart.value = null
+  calendarRangeEnd.value = null
+  fetchCalendarRanges()
   showFormModal.value = true
 }
 
@@ -777,6 +1205,28 @@ const editBooking = (booking) => {
   closeActions()
   isEditing.value = true
   form.value = mapBookingToForm(booking)
+  if (form.value.start_date) {
+    const d = new Date(form.value.start_date)
+    if (!Number.isNaN(d.getTime())) {
+      d.setHours(0, 0, 0, 0)
+      calendarViewMonth.value = new Date(d.getFullYear(), d.getMonth(), 1)
+      calendarRangeStart.value = d
+    }
+  } else {
+    calendarRangeStart.value = null
+  }
+  if (form.value.end_date) {
+    const d2 = new Date(form.value.end_date)
+    if (!Number.isNaN(d2.getTime())) {
+      d2.setHours(0, 0, 0, 0)
+      calendarRangeEnd.value = d2
+    } else {
+      calendarRangeEnd.value = null
+    }
+  } else {
+    calendarRangeEnd.value = null
+  }
+  fetchCalendarRanges()
   calculatePrice()
   showFormModal.value = true
 }
@@ -807,23 +1257,32 @@ const normalizeEventType = (eventType, eventTypeOther = '') => {
 const mapBookingToForm = (booking) => {
   const rawEventType = String(booking?.event_type || '')
   const isKnown = eventTypeOptions.includes(rawEventType)
+  const rawFull = String(booking?.customer_name || '').trim()
+  const nameParts = rawFull.split(' ').filter(Boolean)
+  const customer_first_name = nameParts[0] || ''
+  const customer_last_name = nameParts.length > 1 ? nameParts.slice(1).join(' ') : ''
+
   if (isKnown) {
-    return { ...booking, event_type_other: '' }
+    return { ...booking, customer_first_name, customer_last_name, additional_services_selected: booking?.additional_services_selected || [], event_type_other: '' }
   }
 
   const otherPrefix = 'Autres: '
   return {
     ...booking,
+    customer_first_name,
+    customer_last_name,
+    additional_services_selected: booking?.additional_services_selected || [],
     event_type: 'Autres',
     event_type_other: rawEventType.startsWith(otherPrefix) ? rawEventType.slice(otherPrefix.length) : rawEventType,
   }
 }
 
 const buildBookingPayload = () => {
-  const { event_type_other, ...payload } = form.value
+  const { event_type_other, customer_first_name, customer_last_name, ...payload } = form.value
+  const fullName = `${String(customer_first_name || '').trim()} ${String(customer_last_name || '').trim()}`.trim()
   return {
     ...payload,
-    customer_name: String(payload.customer_name || '').trim(),
+    customer_name: fullName,
     customer_email: String(payload.customer_email || '').trim(),
     event_type: normalizeEventType(form.value.event_type, event_type_other),
   }
@@ -1273,5 +1732,215 @@ const printReservationJeton = (booking, emailSent = null) => {
 
 .form-group.full {
   grid-column: span 2;
+}
+
+.calendar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  margin-bottom: 10px;
+}
+
+.calendar-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #64748b;
+  font-weight: 800;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.weekday-row span {
+  text-align: center;
+}
+
+.calendar-grid-admin {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.day-cell {
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.day-cell.muted {
+  opacity: 0.55;
+}
+
+.day-cell.booked {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.18);
+  color: #991b1b;
+}
+
+.day-cell.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.day-cell.start,
+.day-cell.end {
+  background: rgba(212, 175, 55, 0.18);
+  border-color: rgba(212, 175, 55, 0.35);
+  color: #0f172a;
+}
+
+.day-cell.inrange {
+  background: rgba(212, 175, 55, 0.12);
+  border-color: rgba(212, 175, 55, 0.22);
+}
+
+.calendar-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.calendar-legend .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.calendar-legend .dot.booked {
+  background: #dc2626;
+}
+
+.calendar-legend .dot.selected {
+  background: #d4af37;
+}
+
+.calendar-legend .dot.range {
+  background: rgba(212, 175, 55, 0.45);
+}
+
+.addons-section {
+  border-top: 1px solid #eef2f7;
+  padding-top: 14px;
+}
+
+.addons-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.addons-total {
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.addons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.addon-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #f8fafc;
+}
+
+.addon-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.addon-sub-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.addon-subs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.addon-sub-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.services-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.service-preview-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+}
+
+.service-preview-title,
+.service-preview-sub {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.service-preview-subs {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #475569;
 }
 </style>

@@ -110,8 +110,10 @@ const login = async () => {
 
   loading.value = true
   try {
-    const phoneNorm = String(username.value || '').replace(/\s+/g, '').replace(/\D/g, '')
-    const loginUsername = phoneNorm || username.value
+    const raw = String(username.value || '').trim()
+    const compact = raw.replace(/\s+/g, '')
+    const isPhoneLike = /^\+?\d+$/.test(compact)
+    const loginUsername = isPhoneLike ? compact.replace(/\D/g, '') : raw
 
     const response = await axios.post(`${getApiOrigin()}/api/token/`, {
       username: loginUsername,

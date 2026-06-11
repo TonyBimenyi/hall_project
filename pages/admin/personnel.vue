@@ -96,7 +96,7 @@
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ staff.name }}</div>
-                <div class="admin-card-subtitle">{{ getStaffDisplayId(staff) }} • {{ staff.role }} • {{ staff.phone }}</div>
+                <div class="admin-card-subtitle">{{ getStaffDisplayId(staff) }} • {{ staff.role }} • {{ staff.account_username || staff.phone || '-' }}</div>
               </div>
 
               <div class="actions-dropdown">
@@ -178,7 +178,8 @@
             </td>
             <td>{{ staff.role }}</td>
             <td>
-              <div>{{ staff.phone }}</div>
+              <div>{{ staff.account_username || '-' }}</div>
+              <div v-if="staff.phone" class="muted-line">{{ staff.phone }}</div>
               <div v-if="staff.email" class="muted-line">{{ staff.email }}</div>
             </td>
             <td>
@@ -218,8 +219,12 @@
     <AdminAppModal v-model="showFormModal" :title="isEditing ? 'Modifier l\'employé' : 'Ajouter un employé'" width="500px">
       <form @submit.prevent="saveStaff" class="admin-form">
         <div class="form-group">
-          <label class="form-label">Nom complet</label>
-          <input v-model="form.name" type="text" class="form-input" required placeholder="Ex: Jean Dupont" />
+          <label class="form-label">Prénom</label>
+          <input v-model="form.first_name" type="text" class="form-input" required placeholder="Ex: Jean" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nom</label>
+          <input v-model="form.last_name" type="text" class="form-input" required placeholder="Ex: Dupont" />
         </div>
         <div class="form-group">
           <label class="form-label">Rôle</label>
@@ -233,9 +238,13 @@
             <option value="Serveur">Serveur</option>
           </select>
         </div>
+        <div v-if="(!isEditing && form.create_account) || (isEditing && form.has_account)" class="form-group">
+          <label class="form-label">Nom d'utilisateur</label>
+          <input v-model="form.username" type="text" class="form-input" :required="form.create_account || form.has_account" placeholder="Ex: reception-01" />
+        </div>
         <div class="form-group">
-          <label class="form-label">Téléphone</label>
-          <input v-model="form.phone" type="text" class="form-input" required placeholder="+225 07..." />
+          <label class="form-label">Téléphone (optionnel)</label>
+          <input v-model="form.phone" type="text" class="form-input" placeholder="+257 ..." />
         </div>
         <div class="form-group">
           <label class="form-label">Email</label>
@@ -290,7 +299,7 @@
         </div>
         <div class="detail-item">
           <span class="detail-label">Contact</span>
-          <span class="detail-val">{{ selectedStaff.phone }}</span>
+          <span class="detail-val">{{ selectedStaff.phone || '-' }}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Email</span>
@@ -436,9 +445,12 @@ const selectedStaff = ref(null)
 
 const form = ref({
   id: null,
-  name: '',
+  first_name: '',
+  last_name: '',
   role: 'Serveur',
+  username: '',
   phone: '',
+  email: '',
   status: 'available'
 })
 
@@ -523,9 +535,11 @@ onBeforeUnmount(() => {
 const resetForm = () => {
   form.value = {
     id: null,
-    name: '',
+    first_name: '',
+    last_name: '',
     role: 'Serveur',
     email: '',
+    username: '',
     phone: '',
     status: 'available',
     create_account: true,
@@ -549,7 +563,18 @@ const viewStaff = (staff) => {
 const editStaff = (staff) => {
   closeActions()
   isEditing.value = true
-  form.value = { ...staff, create_account: !!staff.has_account, temporary_password: '' }
+  const rawName = String(staff?.name || '').trim()
+  const parts = rawName.split(' ').filter(Boolean)
+  const first_name = parts[0] || ''
+  const last_name = parts.length > 1 ? parts.slice(1).join(' ') : ''
+  form.value = {
+    ...staff,
+    first_name,
+    last_name,
+    username: staff?.account_username || '',
+    create_account: !!staff.has_account,
+    temporary_password: '',
+  }
   showFormModal.value = true
 }
 
@@ -563,18 +588,33 @@ const saveStaff = async () => {
   if (savingStaff.value) return
   savingStaff.value = true
   try {
+    const fullName = `${String(form.value.first_name || '').trim()} ${String(form.value.last_name || '').trim()}`.trim()
+    const payload = {
+      name: fullName,
+      role: form.value.role,
+      email: form.value.email,
+      phone: form.value.phone,
+      status: form.value.status,
+      username: form.value.username,
+    }
+
+    if (!isEditing.value) {
+      payload.create_account = !!form.value.create_account
+      payload.temporary_password = form.value.temporary_password
+    }
+
     if (isEditing.value) {
-      await api.put(`personnel/${form.value.id}/`, form.value)
+      await api.put(`personnel/${form.value.id}/`, payload)
       notify('Personnel mis à jour avec succès')
     } else {
-      await api.post('personnel/', form.value)
+      await api.post('personnel/', payload)
       notify('Nouvel employé ajouté avec succès')
     }
     showFormModal.value = false
     fetchPersonnel()
   } catch (error) {
     const data = error?.response?.data || {}
-    const msg = data.detail || data.phone || data.email || data.temporary_password || 'Erreur lors de l\'enregistrement'
+    const msg = data.detail || data.username || data.phone || data.email || data.temporary_password || 'Erreur lors de l\'enregistrement'
     notify(msg, 'danger')
   } finally {
     savingStaff.value = false

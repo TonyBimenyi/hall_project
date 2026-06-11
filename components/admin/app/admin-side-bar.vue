@@ -37,6 +37,9 @@
           {{ currentPageTitle }}
         </h1>
 
+        <!-- Notifications Bell -->
+        <NotificationBell />
+
         <!-- USER -->
         <div class="user-profile" @click="showProfileMenu = !showProfileMenu">
           <div class="avatar-wrapper">
@@ -84,8 +87,12 @@
 
 <script>
 import { api } from '~/composables/useApi'
+import NotificationBell from '~/components/admin/NotificationBell.vue'
 
 export default {
+  components: {
+    NotificationBell
+  },
   data() {
     return {
       isCollapsed: false,
@@ -98,6 +105,7 @@ export default {
       navigation: [
         { title: 'Tableau de bord', url: '/admin', icon: 'fa-solid fa-house' },
         { title: 'Calendrier', url: '/admin/calendar', icon: 'fa-solid fa-calendar-alt' },
+        { title: 'Notifications', url: '/admin/notifications', icon: 'fa-solid fa-bell' },
         { title: 'Salles', url: '/admin/halls', icon: 'fa-solid fa-building' },
         { title: 'Réservations', url: '/admin/bookings', icon: 'fa-solid fa-calendar-days' },
         { title: 'Paiements', url: '/admin/payments', icon: 'fa-solid fa-credit-card' },

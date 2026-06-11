@@ -16,6 +16,74 @@ class HallSerializer(serializers.ModelSerializer):
         model = Hall
         fields = '__all__'
 
+    def validate_additional_services(self, value):
+        if value in (None, ''):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Les services additionnels doivent être une liste')
+
+        normalized = []
+        for service in value:
+            if not isinstance(service, dict):
+                raise serializers.ValidationError('Format de service invalide')
+
+            name = str(service.get('name') or '').strip()
+            has_subservices = bool(service.get('has_subservices'))
+            subservices = service.get('subservices') or []
+
+            if not name:
+                raise serializers.ValidationError("Chaque service doit avoir un nom")
+
+            if has_subservices:
+                if not isinstance(subservices, list) or not subservices:
+                    raise serializers.ValidationError(f"Le service '{name}' doit contenir au moins un sous-service")
+
+                normalized_subservices = []
+                for subservice in subservices:
+                    if not isinstance(subservice, dict):
+                        raise serializers.ValidationError(f"Sous-service invalide pour '{name}'")
+
+                    sub_name = str(subservice.get('name') or '').strip()
+                    sub_price = subservice.get('price', 0)
+                    try:
+                        sub_price = Decimal(str(sub_price or 0))
+                    except Exception as exc:
+                        raise serializers.ValidationError(f"Prix invalide pour un sous-service de '{name}'") from exc
+                    if sub_price < 0:
+                        raise serializers.ValidationError(f"Le prix d'un sous-service de '{name}' doit être >= 0")
+                    if not sub_name:
+                        raise serializers.ValidationError(f"Chaque sous-service de '{name}' doit avoir un nom")
+
+                    normalized_subservices.append({
+                        'name': sub_name,
+                        'price': str(sub_price.quantize(Decimal('0.01'))),
+                    })
+
+                normalized.append({
+                    'name': name,
+                    'price': '0.00',
+                    'has_subservices': True,
+                    'subservices': normalized_subservices,
+                })
+                continue
+
+            price = service.get('price', 0)
+            try:
+                price = Decimal(str(price or 0))
+            except Exception as exc:
+                raise serializers.ValidationError(f"Prix invalide pour le service '{name}'") from exc
+            if price < 0:
+                raise serializers.ValidationError(f"Le prix du service '{name}' doit être >= 0")
+
+            normalized.append({
+                'name': name,
+                'price': str(price.quantize(Decimal('0.01'))),
+                'has_subservices': False,
+                'subservices': [],
+            })
+
+        return normalized
+
     def get_created_by_name(self, obj):
         return _user_label(getattr(obj, 'created_by', None))
 
@@ -31,6 +99,40 @@ class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = '__all__'
+
+    def validate_additional_services_selected(self, value):
+        if value in (None, ''):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Les services sélectionnés doivent être une liste')
+
+        normalized = []
+        for item in value:
+            if not isinstance(item, dict):
+                raise serializers.ValidationError('Format de service sélectionné invalide')
+            name = str(item.get('name') or '').strip()
+            if not name:
+                raise serializers.ValidationError("Chaque service sélectionné doit avoir un nom")
+
+            subservices = item.get('subservices') or []
+            if subservices and not isinstance(subservices, list):
+                raise serializers.ValidationError(f"Sous-services invalides pour '{name}'")
+
+            normalized_subservices = []
+            for sub in subservices:
+                if not isinstance(sub, dict):
+                    raise serializers.ValidationError(f"Sous-service invalide pour '{name}'")
+                sub_name = str(sub.get('name') or '').strip()
+                if not sub_name:
+                    raise serializers.ValidationError(f"Chaque sous-service de '{name}' doit avoir un nom")
+                normalized_subservices.append({'name': sub_name})
+
+            payload = {'name': name}
+            if normalized_subservices:
+                payload['subservices'] = normalized_subservices
+            normalized.append(payload)
+
+        return normalized
 
     def get_remaining_amount(self, obj):
         total = obj.total_price or Decimal('0.00')

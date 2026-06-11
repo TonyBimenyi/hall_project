@@ -47,7 +47,7 @@ export const usePagination = (itemsRef, pageSize = 50) => {
 
   watch(() => unref(itemsRef), () => {
     currentPage.value = 1
-  })
+  }, { deep: true })
 
   watch(totalPages, (pages) => {
     if (currentPage.value > pages) currentPage.value = pages

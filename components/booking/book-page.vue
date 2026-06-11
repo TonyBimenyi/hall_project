@@ -90,6 +90,48 @@
               </select>
               <p v-if="fieldErrors.event_type" class="field-error">{{ fieldErrors.event_type }}</p>
             </div>
+            <div v-if="hallAdditionalServices.length" class="addons-card">
+              <div class="addons-head">
+                <strong>Services additionnels</strong>
+                <span v-if="addonsTotal > 0" class="addons-total">+ {{ addonsTotal }} Fbu</span>
+              </div>
+              <div class="addons-list">
+                <div v-for="service in hallAdditionalServices" :key="service.name" class="addon-item">
+                  <div v-if="!service.has_subservices" class="addon-line">
+                    <label class="checkbox-row">
+                      <input
+                        type="checkbox"
+                        :checked="isServiceSelected(service.name)"
+                        @change="toggleSimpleService(service)"
+                      />
+                      <span>{{ service.name }}</span>
+                    </label>
+                    <strong>{{ Number(service.price || 0).toFixed(2) }} Fbu</strong>
+                  </div>
+                  <div v-else class="addon-sub-block">
+                    <div class="addon-sub-head">
+                      <strong>{{ service.name }}</strong>
+                      <span class="muted">Sous-services</span>
+                    </div>
+                    <div class="addon-subs">
+                      <label
+                        v-for="sub in (service.subservices || [])"
+                        :key="`${service.name}-${sub.name}`"
+                        class="checkbox-row addon-sub-line"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="isSubserviceSelected(service.name, sub.name)"
+                          @change="toggleSubservice(service.name, sub.name)"
+                        />
+                        <span>{{ sub.name }}</span>
+                        <strong>{{ Number(sub.price || 0).toFixed(2) }} Fbu</strong>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div class="price-display">
               <span class="price-label">{{ $t('book.estimated_total') }}</span>
               <span class="price-value">{{ totalCost }} Fbu</span>
@@ -122,8 +164,13 @@
               <p v-if="fieldErrors.guest_count" class="field-error">{{ fieldErrors.guest_count }}</p>
             </div>
             <div class="form-group">
-              <label>{{ $t('book.your_name') }}</label>
-              <input type="text" v-model="name" :class="{ 'error-border': fieldErrors.full_name }" />
+              <label>Prénom</label>
+              <input type="text" v-model="firstName" :class="{ 'error-border': fieldErrors.full_name }" />
+              <p v-if="fieldErrors.full_name" class="field-error">{{ fieldErrors.full_name }}</p>
+            </div>
+            <div class="form-group">
+              <label>Nom</label>
+              <input type="text" v-model="lastName" :class="{ 'error-border': fieldErrors.full_name }" />
               <p v-if="fieldErrors.full_name" class="field-error">{{ fieldErrors.full_name }}</p>
             </div>
             <div class="form-group">
@@ -187,12 +234,14 @@ export default {
       rangeEnd: null,
       eventType: "",
       guestCount: 100,
-      name: "",
+      firstName: "",
+      lastName: "",
       email: "",
       phone: "",
       notes: "",
       hallPrice: 0,
       hallId: null,
+      additional_services_selected: [],
       halls: [],
       fieldErrors: {},
       loading: false,
@@ -224,10 +273,43 @@ export default {
     endDate() {
       return this.rangeEnd ? this.formatYMD(this.rangeEnd) : ""
     },
+    selectedHall() {
+      return this.halls.find(h => String(h.id) === String(this.hallId)) || null
+    },
+    hallAdditionalServices() {
+      return Array.isArray(this.selectedHall?.additional_services)
+        ? this.selectedHall.additional_services
+        : []
+    },
+    addonsTotal() {
+      const services = this.hallAdditionalServices
+      const selected = Array.isArray(this.additional_services_selected)
+        ? this.additional_services_selected
+        : []
+      if (!services.length || !selected.length) return 0
+
+      const serviceIndex = new Map(services.map(s => [String(s?.name || ''), s]))
+      let total = 0
+      for (const item of selected) {
+        const name = String(item?.name || '')
+        const cfg = serviceIndex.get(name)
+        if (!cfg) continue
+        if (cfg.has_subservices) {
+          const subs = Array.isArray(item?.subservices) ? item.subservices : []
+          const subIndex = new Map((cfg.subservices || []).map(sub => [String(sub?.name || ''), Number(sub?.price || 0)]))
+          for (const sub of subs) {
+            total += subIndex.get(String(sub?.name || '')) || 0
+          }
+        } else {
+          total += Number(cfg.price || 0)
+        }
+      }
+      return Math.round(total)
+    },
     totalCost() {
       if (!this.rangeStart || !this.rangeEnd) return 0
       const days = (this.rangeEnd - this.rangeStart) / (1000 * 60 * 60 * 24) + 1
-      return (days * this.hallPrice).toFixed(2)
+      return (days * this.hallPrice + this.addonsTotal).toFixed(2)
     }
   },
   watch: {
@@ -235,6 +317,7 @@ export default {
       this.updateHallPrice()
       this.clearRange()
       this.fetchReservedDates()
+      this.additional_services_selected = []
     }
   },
   mounted() {
@@ -244,7 +327,8 @@ export default {
     } catch {
       user = {}
     }
-    this.name = `${user.first_name || ''} ${user.last_name || ''}`.trim()
+    this.firstName = String(user.first_name || '').trim()
+    this.lastName = String(user.last_name || '').trim()
     this.email = user.email || ''
     this.fetchHalls()
   },
@@ -267,13 +351,62 @@ export default {
       const hall = this.halls.find(h => h.id === this.hallId)
       this.hallPrice = hall ? Number(hall.price_per_day) : 0
     },
+    isServiceSelected(serviceName) {
+      return (this.additional_services_selected || []).some(
+        s => String(s?.name || '') === String(serviceName || '')
+      )
+    },
+    toggleSimpleService(service) {
+      const name = String(service?.name || '').trim()
+      if (!name) return
+      const selected = Array.isArray(this.additional_services_selected)
+        ? [...this.additional_services_selected]
+        : []
+      const idx = selected.findIndex(s => String(s?.name || '') === name)
+      if (idx >= 0) selected.splice(idx, 1)
+      else selected.push({ name })
+      this.additional_services_selected = selected
+    },
+    isSubserviceSelected(serviceName, subName) {
+      const item = (this.additional_services_selected || []).find(
+        s => String(s?.name || '') === String(serviceName || '')
+      )
+      const subs = Array.isArray(item?.subservices) ? item.subservices : []
+      return subs.some(sub => String(sub?.name || '') === String(subName || ''))
+    },
+    toggleSubservice(serviceName, subName) {
+      const name = String(serviceName || '').trim()
+      const sub = String(subName || '').trim()
+      if (!name || !sub) return
+      const selected = Array.isArray(this.additional_services_selected)
+        ? [...this.additional_services_selected]
+        : []
+      let item = selected.find(s => String(s?.name || '') === name)
+      if (!item) {
+        selected.push({ name, subservices: [{ name: sub }] })
+        this.additional_services_selected = selected
+        return
+      }
+      const subs = Array.isArray(item.subservices) ? [...item.subservices] : []
+      const idx = subs.findIndex(s => String(s?.name || '') === sub)
+      if (idx >= 0) subs.splice(idx, 1)
+      else subs.push({ name: sub })
+      if (subs.length === 0) {
+        this.additional_services_selected = selected.filter(
+          s => String(s?.name || '') !== name
+        )
+      } else {
+        item.subservices = subs
+        this.additional_services_selected = selected
+      }
+    },
     async submitBooking() {
       this.fieldErrors = {}
       if (!this.rangeStart) this.fieldErrors.start_date = 'Date début requise'
       if (!this.rangeEnd) this.fieldErrors.end_date = 'Date fin requise'
       if (!this.eventType) this.fieldErrors.event_type = "Type d'événement requis"
       if (!this.hallId) this.fieldErrors.hall = 'Salle requise'
-      if (!this.name) this.fieldErrors.full_name = 'Nom complet requis'
+      if (!this.firstName || !this.lastName) this.fieldErrors.full_name = 'Nom et prénom requis'
       if (!this.email) this.fieldErrors.email = 'Email requis'
       if (!this.phone) this.fieldErrors.phone = 'Téléphone requis'
       if (Object.keys(this.fieldErrors).length) {
@@ -284,12 +417,13 @@ export default {
         this.loading = true
         const response = await api.post('bookings/guest/', {
           hall: this.hallId,
-          full_name: this.name,
+          full_name: `${String(this.firstName || '').trim()} ${String(this.lastName || '').trim()}`.trim(),
           email: this.email,
           phone: this.phone,
           event_type: this.eventType,
           start_date: this.startDate,
-          end_date: this.endDate
+          end_date: this.endDate,
+          additional_services_selected: this.additional_services_selected,
         })
         notify(response?.data?.message || 'Réservation confirmée. Vérifiez votre email.', 'success')
         this.clearRange()
@@ -297,6 +431,7 @@ export default {
         this.guestCount = 100
         this.phone = ''
         this.notes = ''
+        this.additional_services_selected = []
       } catch (err) {
         if (err.response && err.response.data) {
           const data = err.response.data
@@ -713,6 +848,76 @@ textarea:focus {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.addons-card {
+  margin-top: 1rem;
+  border-top: 1px solid #eef2f7;
+  padding-top: 1rem;
+}
+
+.addons-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.addons-total {
+  font-weight: 800;
+  color: #061b49;
+}
+
+.addons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.addon-item {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.addon-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.addon-sub-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.addon-subs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.addon-sub-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.addon-sub-line input {
+  margin-right: 10px;
+}
+
+.muted {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
 /* Responsive – prevent overflow even more aggressively */

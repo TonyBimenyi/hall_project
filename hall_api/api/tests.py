@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .models import Booking, Hall
-from .views import _send_reservation_email
+from .views import _compute_booking_totals
 
 
 class PendingBookingAutomationTests(TestCase):
@@ -62,39 +62,31 @@ class PendingBookingAutomationTests(TestCase):
         self.assertIn(str(booking.id), mail.outbox[0].body)
 
 
-class ReservationEmailAttachmentTests(TestCase):
-    def setUp(self):
-        self.hall = Hall.objects.create(
-            name='Salle Prestige',
-            capacity=180,
-            price_per_day='200000.00',
+class BookingAddonsPricingTests(TestCase):
+    def test_compute_totals_with_additional_services(self):
+        hall = Hall.objects.create(
+            name='Salle Services',
+            capacity=100,
+            price_per_day='100000.00',
+            additional_services=[
+                {'name': 'Sonorisation', 'price': '25000.00', 'has_subservices': False, 'subservices': []},
+                {'name': 'Décoration', 'price': '0.00', 'has_subservices': True, 'subservices': [
+                    {'name': 'Simple', 'price': '30000.00'},
+                    {'name': 'Premium', 'price': '60000.00'},
+                ]},
+            ],
         )
 
-    def test_reservation_email_attaches_printable_jeton_pdf(self):
-        booking = Booking.objects.create(
-            hall=self.hall,
-            customer_name='Alice Client',
-            customer_email='alice@example.com',
-            event_type='Gala',
-            start_date=timezone.localdate() + timedelta(days=7),
-            end_date=timezone.localdate() + timedelta(days=8),
-            total_price='400000.00',
-            status='pending',
-        )
+        start = timezone.localdate() + timedelta(days=10)
+        end = start + timedelta(days=1)
+        selected = [
+            {'name': 'Sonorisation'},
+            {'name': 'Décoration', 'subservices': [{'name': 'Premium'}]},
+        ]
 
-        _send_reservation_email(
-            to_email='alice@example.com',
-            full_name='Alice Client',
-            booking=booking,
-            magic_url='http://localhost:3000/login?token=test-token',
-            account_created=False,
-        )
-
-        self.assertEqual(len(mail.outbox), 1)
-        email = mail.outbox[0]
-        self.assertEqual(email.to, ['alice@example.com'])
-        self.assertEqual(len(email.attachments), 1)
-        filename, content, mimetype = email.attachments[0]
-        self.assertEqual(filename, f'jeton-reservation-{booking.id}.pdf')
-        self.assertEqual(mimetype, 'application/pdf')
-        self.assertTrue(content.startswith(b'%PDF'))
+        base_total, addons_total, total, normalized_selected = _compute_booking_totals(hall, start, end, selected)
+        self.assertEqual(str(base_total), '200000.00')
+        self.assertEqual(str(addons_total), '85000.00')
+        self.assertEqual(str(total), '285000.00')
+        self.assertEqual(normalized_selected[0]['name'], 'Sonorisation')
+        self.assertEqual(normalized_selected[1]['name'], 'Décoration')

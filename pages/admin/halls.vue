@@ -190,6 +190,72 @@
             <input v-model="pricePerDayInput" inputmode="numeric" type="text" class="form-input" placeholder="0" required />
           </div>
         </div>
+        <div class="services-section">
+          <div class="services-head">
+            <div>
+              <h3>Services additionnels</h3>
+              <p>Ajoutez les options payantes de cette salle avec ou sans sous-services.</p>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" @click="addService">
+              <i class="fas fa-plus"></i> Ajouter un service
+            </button>
+          </div>
+
+          <div v-if="form.additional_services.length === 0" class="services-empty">
+            Aucun service additionnel pour cette salle.
+          </div>
+
+          <div v-for="(service, serviceIndex) in form.additional_services" :key="service.id" class="service-card">
+            <div class="service-card-head">
+              <strong>Service {{ serviceIndex + 1 }}</strong>
+              <button type="button" class="btn-icon delete" title="Supprimer" @click="removeService(serviceIndex)">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Nom du service</label>
+                <input v-model="service.name" list="default-service-options" type="text" class="form-input" placeholder="Ex: Sonorisation" />
+              </div>
+              <div class="form-group">
+                <label class="checkbox-row service-checkbox">
+                  <input v-model="service.has_subservices" type="checkbox" @change="onServiceHasSubservicesChange(service)" />
+                  <span>Ce service a des sous-services</span>
+                </label>
+              </div>
+            </div>
+
+            <div v-if="!service.has_subservices" class="form-group">
+              <label class="form-label">Prix du service (Fbu)</label>
+              <input v-model="buildServicePriceModel(service).value" inputmode="numeric" type="text" class="form-input" placeholder="0" />
+            </div>
+
+            <div v-else class="subservices-section">
+              <div class="subservices-head">
+                <strong>Sous-services</strong>
+                <button type="button" class="btn btn-outline btn-sm" @click="addSubservice(service)">
+                  <i class="fas fa-plus"></i> Ajouter un sous-service
+                </button>
+              </div>
+
+              <div
+                v-for="(subservice, subIndex) in service.subservices"
+                :key="subservice.id"
+                class="subservice-row"
+              >
+                <input v-model="subservice.name" type="text" class="form-input" :placeholder="`Sous-service ${subIndex + 1}`" />
+                <input v-model="buildSubservicePriceModel(subservice).value" inputmode="numeric" type="text" class="form-input" placeholder="Prix (Fbu)" />
+                <button type="button" class="btn-icon delete" title="Supprimer" @click="removeSubservice(service, subIndex)">
+                  <i class="fas fa-trash-alt"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+          <datalist id="default-service-options">
+            <option v-for="serviceName in defaultServiceOptions" :key="serviceName" :value="serviceName"></option>
+          </datalist>
+        </div>
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showFormModal = false">Annuler</button>
@@ -212,6 +278,24 @@
         <div class="detail-item">
           <span class="detail-label">Prix / Jour</span>
           <span class="detail-val">{{ formatMoney(selectedHall.price_per_day) }}</span>
+        </div>
+        <div class="detail-block">
+          <span class="detail-label">Services additionnels</span>
+          <div v-if="!selectedHall.additional_services?.length" class="detail-val muted-block">Aucun service additionnel</div>
+          <div v-else class="services-preview">
+            <div v-for="(service, index) in selectedHall.additional_services" :key="`${service.name}-${index}`" class="service-preview-item">
+              <div class="service-preview-title">
+                <strong>{{ service.name }}</strong>
+                <span v-if="!service.has_subservices">{{ formatMoney(service.price) }}</span>
+              </div>
+              <div v-if="service.has_subservices" class="service-preview-subs">
+                <div v-for="(subservice, subIndex) in service.subservices || []" :key="`${service.name}-${subIndex}`" class="service-preview-sub">
+                  <span>{{ subservice.name }}</span>
+                  <strong>{{ formatMoney(subservice.price) }}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="detail-item">
           <span class="detail-label">Créé par</span>
@@ -247,7 +331,7 @@ import { usePagination } from '~/composables/usePagination'
 import { useTableSort } from '~/composables/useTableSort'
 
 definePageMeta({ layout: 'admin' })
-const { formatMoney, moneyInputModel } = useMoney()
+const { formatMoney, moneyInputModel, parseMoney, formatNumberSpaces } = useMoney()
 
 const halls = ref([])
 const loadingHalls = ref(false)
@@ -265,9 +349,11 @@ const form = ref({
   id: null,
   name: '',
   capacity: 1,
-  price_per_day: 0
+  price_per_day: 0,
+  additional_services: [],
 })
 const pricePerDayInput = moneyInputModel(form, 'price_per_day')
+const defaultServiceOptions = ['Sonorisation', 'Décoration', 'Boissons', 'Lieu de prise des photos', 'Autre']
 const {
   sortedItems: sortedHalls,
   toggleSort: toggleHallSort,
@@ -373,12 +459,105 @@ const toggleActions = (id) => {
   openActionsId.value = openActionsId.value === id ? null : id
 }
 
+const createSubservice = (values = {}) => ({
+  id: `sub-${Math.random().toString(36).slice(2, 10)}`,
+  name: values.name || '',
+  price: Number(values.price || 0),
+})
+
+const createService = (values = {}) => ({
+  id: `svc-${Math.random().toString(36).slice(2, 10)}`,
+  name: values.name || defaultServiceOptions[0],
+  price: Number(values.price || 0),
+  has_subservices: !!values.has_subservices,
+  subservices: Array.isArray(values.subservices) ? values.subservices.map(createSubservice) : [],
+})
+
+const buildServicePriceModel = (service) => computed({
+  get: () => (service.price ? formatNumberSpaces(service.price) : ''),
+  set: (value) => {
+    service.price = parseMoney(value)
+  },
+})
+
+const buildSubservicePriceModel = (subservice) => computed({
+  get: () => (subservice.price ? formatNumberSpaces(subservice.price) : ''),
+  set: (value) => {
+    subservice.price = parseMoney(value)
+  },
+})
+
+const addService = () => {
+  form.value.additional_services.push(createService())
+}
+
+const removeService = (index) => {
+  form.value.additional_services.splice(index, 1)
+}
+
+const addSubservice = (service) => {
+  service.subservices.push(createSubservice())
+}
+
+const removeSubservice = (service, index) => {
+  service.subservices.splice(index, 1)
+}
+
+const onServiceHasSubservicesChange = (service) => {
+  if (service.has_subservices) {
+    service.price = 0
+    if (!service.subservices.length) {
+      service.subservices.push(createSubservice())
+    }
+    return
+  }
+  service.subservices = []
+}
+
+const normalizeAdditionalServices = (services) => {
+  if (!Array.isArray(services)) return []
+  return services
+    .map((service) => {
+      const name = String(service?.name || '').trim()
+      if (!name) return null
+      const hasSubservices = !!service?.has_subservices
+      if (hasSubservices) {
+        const subservices = Array.isArray(service?.subservices)
+          ? service.subservices
+            .map((subservice) => {
+              const subName = String(subservice?.name || '').trim()
+              if (!subName) return null
+              return {
+                name: subName,
+                price: parseMoney(subservice?.price || 0),
+              }
+            })
+            .filter(Boolean)
+          : []
+        return {
+          name,
+          price: 0,
+          has_subservices: true,
+          subservices,
+        }
+      }
+      return {
+        name,
+        price: parseMoney(service?.price || 0),
+        has_subservices: false,
+        subservices: [],
+      }
+    })
+    .filter(Boolean)
+}
+
 const resetForm = () => {
   form.value = {
     id: null,
     name: '',
     capacity: 1,
-    price_per_day: 0
+    price_per_day: 0,
+    additional_services: [],
   }
 }
 
@@ -397,7 +576,12 @@ const viewHall = (hall) => {
 const editHall = (hall) => {
   openActionsId.value = null
   isEditing.value = true
-  form.value = { ...hall, capacity: Number(hall.capacity), price_per_day: Number(hall.price_per_day) }
+  form.value = {
+    ...hall,
+    capacity: Number(hall.capacity),
+    price_per_day: Number(hall.price_per_day),
+    additional_services: normalizeAdditionalServices(hall.additional_services).map(createService),
+  }
   showFormModal.value = true
 }
 
@@ -411,17 +595,24 @@ const saveHall = async () => {
   if (savingHall.value) return
   savingHall.value = true
   try {
+    const payload = {
+      name: String(form.value.name || '').trim(),
+      capacity: Number(form.value.capacity || 0),
+      price_per_day: Number(form.value.price_per_day || 0),
+      additional_services: normalizeAdditionalServices(form.value.additional_services),
+    }
     if (isEditing.value) {
-      await api.put(`halls/${form.value.id}/`, form.value)
+      await api.put(`halls/${form.value.id}/`, payload)
       notify('Salle mise à jour avec succès', 'success')
     } else {
-      await api.post('halls/', form.value)
+      await api.post('halls/', payload)
       notify('Nouvelle salle ajoutée avec succès', 'success')
     }
     showFormModal.value = false
     fetchHalls()
   } catch (error) {
-    notify('Erreur lors de l\'enregistrement', 'danger')
+    const data = error?.response?.data || {}
+    notify(data.additional_services || data.detail || 'Erreur lors de l\'enregistrement', 'danger')
   } finally {
     savingHall.value = false
   }
@@ -617,10 +808,133 @@ const deleteHall = async () => {
   border-bottom: 1px solid #f1f5f9;
 }
 
+.services-section {
+  margin-top: 1rem;
+  border-top: 1px solid #eef2f7;
+  padding-top: 1rem;
+}
+
+.services-head,
+.subservices-head,
+.service-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.services-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.services-head p {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.services-empty {
+  margin-top: 0.75rem;
+  padding: 1rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  color: #64748b;
+  font-weight: 600;
+  background: #f8fafc;
+}
+
+.service-card {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fafcff;
+}
+
+.service-card-head {
+  margin-bottom: 0.9rem;
+}
+
+.service-checkbox {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.subservices-section {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed #dbe3ee;
+}
+
+.subservice-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.btn-icon.delete:hover {
+  color: var(--danger);
+}
+
+.detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.muted-block {
+  color: #64748b;
+}
+
+.services-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.service-preview-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+}
+
+.service-preview-title,
+.service-preview-sub {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.service-preview-title {
+  color: #0f172a;
+}
+
+.service-preview-subs {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #475569;
+}
+
 @media (max-width: 900px) {
   .header-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .subservice-row {
+    grid-template-columns: 1fr;
   }
 }
 </style>

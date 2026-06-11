@@ -57,7 +57,11 @@
             <input v-model="form.email" type="email" placeholder="email@exemple.com" />
           </label>
           <label class="field">
-            <span>Téléphone</span>
+            <span>Nom d'utilisateur</span>
+            <input v-model="form.username" type="text" placeholder="Ex: reception-01" />
+          </label>
+          <label class="field">
+            <span>Téléphone (optionnel)</span>
             <input v-model="form.phone" type="text" :disabled="!canEditPhone" placeholder="+257 ..." />
           </label>
         </div>
@@ -112,6 +116,7 @@ const form = ref({
   first_name: '',
   last_name: '',
   email: '',
+  username: '',
   phone: '',
 })
 
@@ -136,6 +141,7 @@ const applyProfile = (data) => {
     first_name: data?.first_name || '',
     last_name: data?.last_name || '',
     email: data?.email || '',
+    username: data?.username || '',
     phone: data?.phone || '',
   }
   if (process.client) {
@@ -159,6 +165,7 @@ const saveProfile = async () => {
       first_name: form.value.first_name,
       last_name: form.value.last_name,
       email: form.value.email,
+      username: form.value.username,
       phone: form.value.phone,
     }
     const res = await api.patch('me/', payload)
@@ -166,7 +173,7 @@ const saveProfile = async () => {
     notify('Profil mis à jour avec succès', 'success')
   } catch (error) {
     const data = error?.response?.data || {}
-    notify(data.detail || data.email || data.phone || 'Impossible de mettre à jour le profil', 'danger')
+    notify(data.detail || data.username || data.email || data.phone || 'Impossible de mettre à jour le profil', 'danger')
   } finally {
     savingProfile.value = false
   }

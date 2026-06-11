@@ -3,12 +3,18 @@ from django.conf import settings
 from decimal import Decimal
 from django.utils import timezone
 
+
+
+
 class Hall(models.Model):
     name = models.CharField(max_length=100)
     capacity = models.IntegerField()
     price_per_day = models.DecimalField(max_digits=12, decimal_places=2)
+    additional_services = models.JSONField(default=list, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_halls')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_halls')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
@@ -29,12 +35,28 @@ class Booking(models.Model):
     end_date = models.DateField()
     total_price = models.DecimalField(max_digits=12, decimal_places=2)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    addons_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    additional_services_selected = models.JSONField(default=list, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     pending_reminder_sent_at = models.DateTimeField(null=True, blank=True)
     auto_cancelled_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='bookings')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_bookings')
+    code = models.CharField(max_length=20, unique=True, editable=False, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            # Get month and year from created_at
+            month_year = self.created_at.strftime('%m%y')
+            # Count existing bookings in this month/year
+            count = Booking.objects.filter(
+                created_at__year=self.created_at.year,
+                created_at__month=self.created_at.month
+            ).count() + 1  # +1 because we're counting existing ones, then adding this one
+            self.code = f"LBR{month_year}{count:04d}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.customer_name} - {self.hall.name}"
@@ -55,10 +77,12 @@ class Personnel(models.Model):
     name = models.CharField(max_length=100)
     role = models.CharField(max_length=100)
     email = models.EmailField(blank=True, default='')
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20, blank=True, default='')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_personnel')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_personnel')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
@@ -91,6 +115,8 @@ class Material(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='good')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_materials')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_materials')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
@@ -109,6 +135,8 @@ class Expense(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='paid')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_expenses')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_expenses')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.description
@@ -132,6 +160,22 @@ class Payment(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='paid')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_payments')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_payments')
+    code = models.CharField(max_length=20, unique=True, editable=False, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            # Get month and year from date (or created_at if date is not available?)
+            # The user said "use the month of creation of the item", so let's use created_at
+            month_year = self.created_at.strftime('%m%y')
+            # Count existing payments in this month/year
+            count = Payment.objects.filter(
+                created_at__year=self.created_at.year,
+                created_at__month=self.created_at.month
+            ).count() + 1
+            self.code = f"LBP{month_year}{count:04d}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.reference

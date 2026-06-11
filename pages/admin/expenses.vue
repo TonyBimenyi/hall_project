@@ -69,6 +69,9 @@
             class="search-input-clean"
           />
         </div>
+        <button class="btn btn-sm" @click="resetFilters" style="margin-right: 8px;">
+          <i class="fas fa-redo"></i> Réinitialiser
+        </button>
         <button class="btn-icon filters-toggle" :class="{ active: filtersOpen }" title="Filtres" @click="filtersOpen = !filtersOpen">
           <i class="fas fa-filter"></i>
         </button>
@@ -88,8 +91,17 @@
           <option value="paid">Payé</option>
           <option value="pending">En attente</option>
         </select>
-        <input v-model="dateFrom" type="date" class="filter-input-clean" />
-        <input v-model="dateTo" type="date" class="filter-input-clean" />
+        <select v-model="preset" class="filter-select-clean">
+          <option value="7d">7 jours</option>
+          <option value="28d">28 jours</option>
+          <option value="90d">90 jours</option>
+          <option value="this_month">Ce mois</option>
+          <option value="last_month">Mois dernier</option>
+          <option value="year">Cette année</option>
+          <option value="custom">Personnalisé</option>
+        </select>
+        <input v-if="preset === 'custom'" v-model="customStart" type="date" class="filter-input-clean" />
+        <input v-if="preset === 'custom'" v-model="customEnd" type="date" class="filter-input-clean" />
       </div>
     </div>
 
@@ -373,8 +385,66 @@ const exportingXls = ref(false)
 const search = ref('')
 const categoryFilter = ref('')
 const statusFilter = ref('')
-const dateFrom = ref('')
-const dateTo = ref('')
+const preset = ref('28d')
+const customStart = ref('')
+const customEnd = ref('')
+
+const toYmd = (date) => {
+  const d = (date instanceof Date) ? date : new Date(date)
+  if (Number.isNaN(d.getTime())) return ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const addDays = (ymd, days) => {
+  const base = new Date(`${ymd}T00:00:00`)
+  base.setDate(base.getDate() + days)
+  return toYmd(base)
+}
+
+const resolvePreset = (value) => {
+  const todayYmd = toYmd(new Date())
+  if (value === '7d') return { start: addDays(todayYmd, -6), end: todayYmd }
+  if (value === '28d') return { start: addDays(todayYmd, -27), end: todayYmd }
+  if (value === '90d') return { start: addDays(todayYmd, -89), end: todayYmd }
+  if (value === 'year') {
+    const now = new Date()
+    const start = `${now.getFullYear()}-01-01`
+    return { start, end: todayYmd }
+  }
+  if (value === 'this_month') {
+    const now = new Date()
+    const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    return { start, end: todayYmd }
+  }
+  if (value === 'last_month') {
+    const now = new Date()
+    const firstThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const lastPrevMonth = new Date(firstThisMonth)
+    lastPrevMonth.setDate(0)
+    const startPrevMonth = new Date(lastPrevMonth.getFullYear(), lastPrevMonth.getMonth(), 1)
+    return { start: toYmd(startPrevMonth), end: toYmd(lastPrevMonth) }
+  }
+  if (value === 'custom') {
+    const start = String(customStart.value || '').slice(0, 10)
+    const end = String(customEnd.value || '').slice(0, 10)
+    if (start && end && end >= start) return { start, end }
+    return resolvePreset('28d')
+  }
+  return resolvePreset('28d')
+}
+
+const activeRange = computed(() => resolvePreset(preset.value))
+const rangeStartYmd = computed(() => activeRange.value.start)
+const rangeEndYmd = computed(() => activeRange.value.end)
+
+const inRangeYmd = (ymd, rangeStart, rangeEnd) => {
+  const v = String(ymd || '').slice(0, 10)
+  if (!v || !rangeStart || !rangeEnd) return false
+  return v >= rangeStart && v <= rangeEnd
+}
 const loadingExpenses = ref(false)
 const isMobile = ref(false)
 const filtersOpen = ref(false)
@@ -388,6 +458,15 @@ const toggleActions = (id) => {
 
 const closeActions = () => {
   openActionsId.value = null
+}
+
+const resetFilters = () => {
+  search.value = ''
+  categoryFilter.value = ''
+  statusFilter.value = ''
+  preset.value = '28d'
+  customStart.value = ''
+  customEnd.value = ''
 }
 
 const exportXls = async () => {
@@ -519,10 +598,8 @@ const filteredExpenses = computed(() => {
       String(e.paid_by || '').toLowerCase().includes(q)
     const matchesCategory = categoryFilter.value === '' || e.category === categoryFilter.value
     const matchesStatus = statusFilter.value === '' || e.status === statusFilter.value
-    const date = e.date ? new Date(e.date) : null
-    const fromOk = !dateFrom.value || (date && date >= new Date(dateFrom.value))
-    const toOk = !dateTo.value || (date && date <= new Date(dateTo.value))
-    return matchesSearch && matchesCategory && matchesStatus && fromOk && toOk
+    const matchesDate = inRangeYmd(e.date, rangeStartYmd.value, rangeEndYmd.value)
+    return matchesSearch && matchesCategory && matchesStatus && matchesDate
   })
 })
 

@@ -9,7 +9,7 @@ from .serializers import (
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count
 from django.utils import timezone
 from decimal import Decimal
 from django.contrib.auth import get_user_model
@@ -21,12 +21,10 @@ from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
 from django.conf import settings
-from django.core.mail import send_mail, EmailMessage
+from django.core.mail import send_mail
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.password_validation import validate_password
 from datetime import timedelta, date
-from pathlib import Path
-from io import BytesIO
 import hashlib
 import secrets
 
@@ -214,228 +212,6 @@ def _build_magic_login_url(request, raw_token: str):
     
     return f"{origin.rstrip('/')}/login?token={raw_token}"
 
-def _booking_status_label(status_value: str) -> str:
-    return {
-        'pending': 'En attente',
-        'confirmed': 'Confirmé',
-        'paid': 'Payé',
-        'cancelled': 'Annulé',
-    }.get(status_value, status_value or '')
-
-def _normalize_booking_date_key(value):
-    if not value:
-        return '0000'
-    return f"{value.month:02d}{str(value.year)[-2:]}"
-
-def _build_booking_display_id(booking: Booking) -> str:
-    start_date = getattr(booking, 'start_date', None)
-    if not start_date:
-        return f"LBR0000{int(getattr(booking, 'id', 0) or 0):04d}"
-
-    sequence = Booking.objects.filter(
-        start_date__year=start_date.year,
-        start_date__month=start_date.month,
-    ).filter(
-        Q(start_date__lt=start_date) | Q(start_date=start_date, id__lte=booking.id)
-    ).count()
-    return f"LBR{_normalize_booking_date_key(start_date)}{sequence:04d}"
-
-def _get_logo_path():
-    logo_path = Path(__file__).resolve().parents[2] / 'labertha-logo.png'
-    return logo_path if logo_path.exists() else None
-
-def _format_jeton_money(value) -> str:
-    try:
-        amount = Decimal(value or '0')
-    except Exception:
-        amount = Decimal('0')
-    text = f"{amount:,.2f}".replace(',', ' ')
-    if text.endswith('.00'):
-        text = text[:-3]
-    return f"{text} Fbu"
-
-def _format_jeton_period(start_date, end_date) -> str:
-    if not start_date or not end_date:
-        return '-'
-    return f"{start_date.strftime('%d-%m-%Y')} au {end_date.strftime('%d-%m-%Y')}"
-
-def _build_reservation_jeton_pdf(booking: Booking) -> bytes:
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_RIGHT
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.lib.units import mm
-    from reportlab.platypus import (
-        Image,
-        Paragraph,
-        SimpleDocTemplate,
-        Spacer,
-        Table,
-        TableStyle,
-    )
-
-    display_id = _build_booking_display_id(booking)
-    status_label = _booking_status_label(getattr(booking, 'status', ''))
-    printed_at = timezone.localtime().strftime('%d/%m/%Y %H:%M')
-    customer_email = getattr(booking, 'customer_email', '') or 'Non renseigne'
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=16 * mm,
-        rightMargin=16 * mm,
-        topMargin=14 * mm,
-        bottomMargin=14 * mm,
-    )
-    styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name='BrandSmall', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#D8C58A'), leading=11))
-    styles.add(ParagraphStyle(name='BrandTitle', parent=styles['Heading1'], fontSize=22, textColor=colors.white, leading=26, spaceAfter=4))
-    styles.add(ParagraphStyle(name='BrandText', parent=styles['BodyText'], fontSize=10, textColor=colors.HexColor('#F8FAFC'), leading=13))
-    styles.add(ParagraphStyle(name='Chip', parent=styles['Normal'], fontSize=10, textColor=colors.white, alignment=TA_RIGHT))
-    styles.add(ParagraphStyle(name='Label', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#64748B')))
-    styles.add(ParagraphStyle(name='Code', parent=styles['Heading2'], fontSize=18, textColor=colors.HexColor('#1D4ED8'), leading=22))
-    styles.add(ParagraphStyle(name='MetaValue', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#0F172A'), alignment=TA_RIGHT))
-    styles.add(ParagraphStyle(name='CellLabel', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#64748B')))
-    styles.add(ParagraphStyle(name='CellValue', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#0F172A'), alignment=TA_RIGHT))
-    styles.add(ParagraphStyle(name='FooterTitle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#475569')))
-    styles.add(ParagraphStyle(name='FooterText', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#334155'), leading=14))
-    styles.add(ParagraphStyle(name='NoteText', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#92400E'), leading=14))
-
-    story = []
-
-    logo_path = _get_logo_path()
-    logo = Image(str(logo_path), width=22 * mm, height=22 * mm) if logo_path else Paragraph('LV', styles['BrandTitle'])
-    brand_copy = [
-        Paragraph('RECEPTION & EVENEMENTIEL', styles['BrandSmall']),
-        Paragraph('LaBertha Villa', styles['BrandTitle']),
-        Paragraph("Jeton officiel de reservation a presenter pour le suivi et l'accueil.", styles['BrandText']),
-    ]
-    brand_table = Table(
-        [[logo, brand_copy, Paragraph('Reservation', styles['Chip'])]],
-        colWidths=[26 * mm, 120 * mm, 32 * mm],
-    )
-    brand_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#0F172A')),
-        ('BOX', (0, 0), (-1, -1), 0, colors.HexColor('#0F172A')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 14),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 14),
-        ('TOPPADDING', (0, 0), (-1, -1), 16),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
-        ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
-        ('BACKGROUND', (2, 0), (2, 0), colors.HexColor('#8B6B12')),
-        ('TEXTCOLOR', (2, 0), (2, 0), colors.white),
-    ]))
-    story.append(brand_table)
-    story.append(Spacer(1, 10))
-
-    meta_info_table = Table([
-        [Paragraph('Numero', styles['Label']), Paragraph(str(booking.id), styles['MetaValue'])],
-        [Paragraph('Imprime par', styles['Label']), Paragraph('Systeme Labertha Villa', styles['MetaValue'])],
-        [Paragraph("Date d'impression", styles['Label']), Paragraph(printed_at, styles['MetaValue'])],
-    ], colWidths=[34 * mm, 42 * mm])
-    meta_info_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-    ]))
-
-    top_meta = Table([
-        [
-            [
-                Paragraph('Code de reservation', styles['Label']),
-                Spacer(1, 4),
-                Paragraph(display_id, styles['Code']),
-            ],
-            meta_info_table,
-        ]
-    ], colWidths=[90 * mm, 84 * mm])
-    top_meta.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('BOX', (1, 0), (1, 0), 1, colors.HexColor('#E2E8F0')),
-        ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#F8FAFC')),
-        ('LEFTPADDING', (1, 0), (1, 0), 12),
-        ('RIGHTPADDING', (1, 0), (1, 0), 12),
-        ('TOPPADDING', (1, 0), (1, 0), 10),
-        ('BOTTOMPADDING', (1, 0), (1, 0), 10),
-    ]))
-    story.append(top_meta)
-    story.append(Spacer(1, 12))
-
-    details = [
-        ('Client', booking.customer_name),
-        ('Salle', booking.hall.name),
-        ('Evenement', booking.event_type),
-        ('Periode', _format_jeton_period(booking.start_date, booking.end_date)),
-        ('Montant', _format_jeton_money(booking.total_price)),
-        ('Statut', status_label),
-        ('Email client', customer_email),
-    ]
-    detail_rows = []
-    for index in range(0, len(details), 2):
-        left_label, left_value = details[index]
-        if index + 1 < len(details):
-            right_label, right_value = details[index + 1]
-        else:
-            right_label, right_value = '', ''
-        detail_rows.append([
-            Paragraph(left_label, styles['CellLabel']),
-            Paragraph(str(left_value), styles['CellValue']),
-            Paragraph(right_label, styles['CellLabel']),
-            Paragraph(str(right_value), styles['CellValue']),
-        ])
-
-    details_table = Table(detail_rows, colWidths=[28 * mm, 58 * mm, 28 * mm, 58 * mm])
-    details_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#E2E8F0')),
-        ('INNERGRID', (0, 0), (-1, -1), 1, colors.HexColor('#E2E8F0')),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
-        ('LEFTPADDING', (0, 0), (-1, -1), 10),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-        ('TOPPADDING', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-    ]))
-    story.append(details_table)
-    story.append(Spacer(1, 12))
-
-    note_table = Table([[Paragraph("Merci de conserver ce jeton. Il peut vous etre demande lors du suivi de votre dossier ou a l'arrivee.", styles['NoteText'])]], colWidths=[174 * mm])
-    note_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#FFFAF0')),
-        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#FCD34D')),
-        ('LEFTPADDING', (0, 0), (-1, -1), 12),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
-        ('TOPPADDING', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-    ]))
-    story.append(note_table)
-    story.append(Spacer(1, 14))
-
-    footer_title = Paragraph('INFORMATIONS DE CONTACT', styles['FooterTitle'])
-    footer_table = Table([
-        [
-            Paragraph('<b>Adresse</b><br/>Karurama, Cibitoke, Bujumbura, Burundi', styles['FooterText']),
-            Paragraph('+257 66 47 66 43 (WhatsApp & Appel)<br/>+257 76 65 39 31 (Appel)<br/>info@labertha-villa.com<br/>labertha-villa.com', styles['FooterText']),
-        ]
-    ], colWidths=[86 * mm, 88 * mm])
-    footer_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#E2E8F0')),
-        ('INNERGRID', (0, 0), (-1, -1), 1, colors.HexColor('#E2E8F0')),
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F8FAFC')),
-        ('LEFTPADDING', (0, 0), (-1, -1), 12),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
-        ('TOPPADDING', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-    ]))
-    story.append(footer_title)
-    story.append(Spacer(1, 6))
-    story.append(footer_table)
-
-    doc.build(story)
-    return buffer.getvalue()
-
 def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, magic_url: str, account_created: bool):
     first_name, _ = _split_full_name(full_name)
     greeting_name = first_name or full_name or 'Client'
@@ -445,7 +221,13 @@ def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, 
         if account_created
         else ""
     )
-    status_label = _booking_status_label(getattr(booking, 'status', ''))
+    status_map = {
+        'pending': 'En attente',
+        'confirmed': 'Confirmé',
+        'paid': 'Payé',
+        'cancelled': 'Annulé',
+    }
+    status_label = status_map.get(getattr(booking, 'status', ''), getattr(booking, 'status', ''))
     intro_line = (
         "Votre réservation a été enregistrée avec succès.\n\n"
         if booking.status == 'pending'
@@ -469,15 +251,13 @@ def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, 
         "Si vous le souhaitez, vous pourrez ensuite définir un mot de passe permanent dans les paramètres de votre compte.\n\n"
         "Merci de votre confiance et à bientôt.\n"
     )
-    message = EmailMessage(
+    send_mail(
         subject=subject,
-        body=body,
+        message=body,
         from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@hall.local',
-        to=[to_email],
+        recipient_list=[to_email],
+        fail_silently=False,
     )
-    jeton_pdf = _build_reservation_jeton_pdf(booking)
-    message.attach(f"jeton-reservation-{booking.id}.pdf", jeton_pdf, 'application/pdf')
-    message.send(fail_silently=False)
 
 def _phone_username_candidates(raw_username):
     raw = '' if raw_username is None else str(raw_username)
@@ -511,6 +291,97 @@ def _phone_username_candidates(raw_username):
 def _normalize_phone(raw_phone):
     return ''.join(ch for ch in str(raw_phone or '') if ch.isdigit())
 
+
+def _index_hall_additional_services(hall: Hall):
+    services = getattr(hall, 'additional_services', None) or []
+    index = {}
+    for service in services:
+        try:
+            name = str(service.get('name') or '').strip()
+        except Exception:
+            continue
+        if not name:
+            continue
+
+        has_sub = bool(service.get('has_subservices'))
+        price = service.get('price', '0.00')
+        subservices = service.get('subservices') or []
+        sub_index = {}
+        if has_sub and isinstance(subservices, list):
+            for sub in subservices:
+                if not isinstance(sub, dict):
+                    continue
+                sub_name = str(sub.get('name') or '').strip()
+                if not sub_name:
+                    continue
+                sub_index[sub_name] = Decimal(str(sub.get('price') or '0.00'))
+
+        index[name] = {
+            'has_subservices': has_sub,
+            'price': Decimal(str(price or '0.00')),
+            'subservices': sub_index,
+        }
+    return index
+
+
+def _compute_addons_total(hall: Hall, selected_services):
+    selected_services = selected_services or []
+    if not isinstance(selected_services, list):
+        raise DjangoValidationError('Les services sélectionnés doivent être une liste')
+
+    services_index = _index_hall_additional_services(hall)
+    addons_total = Decimal('0.00')
+    normalized_selected = []
+
+    for item in selected_services:
+        if not isinstance(item, dict):
+            raise DjangoValidationError('Format de service sélectionné invalide')
+
+        name = str(item.get('name') or '').strip()
+        if not name:
+            raise DjangoValidationError("Chaque service sélectionné doit avoir un nom")
+        if name not in services_index:
+            raise DjangoValidationError(f"Service '{name}' introuvable pour cette salle")
+
+        cfg = services_index[name]
+        if cfg['has_subservices']:
+            subs = item.get('subservices') or []
+            if not isinstance(subs, list) or not subs:
+                raise DjangoValidationError(f"Choisissez au moins un sous-service pour '{name}'")
+
+            normalized_subs = []
+            for sub in subs:
+                if not isinstance(sub, dict):
+                    raise DjangoValidationError(f"Sous-service invalide pour '{name}'")
+                sub_name = str(sub.get('name') or '').strip()
+                if not sub_name:
+                    raise DjangoValidationError(f"Sous-service invalide pour '{name}'")
+                if sub_name not in cfg['subservices']:
+                    raise DjangoValidationError(f"Sous-service '{sub_name}' introuvable pour '{name}'")
+                addons_total += cfg['subservices'][sub_name]
+                normalized_subs.append({'name': sub_name})
+
+            normalized_selected.append({'name': name, 'subservices': normalized_subs})
+            continue
+
+        if item.get('subservices'):
+            raise DjangoValidationError(f"Le service '{name}' n'a pas de sous-services")
+
+        addons_total += cfg['price']
+        normalized_selected.append({'name': name})
+
+    return addons_total.quantize(Decimal('0.01')), normalized_selected
+
+
+def _compute_booking_totals(hall: Hall, start_dt: date, end_dt: date, selected_services):
+    if end_dt < start_dt:
+        raise DjangoValidationError('La date fin doit être après la date début')
+    days = (end_dt - start_dt).days + 1
+    base_total = (Decimal(days) * (hall.price_per_day or Decimal('0.00'))).quantize(Decimal('0.01'))
+    addons_total, normalized_selected = _compute_addons_total(hall, selected_services)
+    total = (base_total + addons_total).quantize(Decimal('0.01'))
+    return base_total, addons_total, total, normalized_selected
+
 def _get_security_profile(user):
     if not user or not getattr(user, 'pk', None):
         return None
@@ -520,7 +391,7 @@ def _get_security_profile(user):
 def _user_payload(user):
     security = _get_security_profile(user)
     personnel = getattr(user, 'personnel_record', None)
-    phone = getattr(personnel, 'phone', '') or user.get_username()
+    phone = getattr(personnel, 'phone', '') if personnel is not None else ''
     full_name = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
     return {
         'id': user.id,
@@ -596,6 +467,7 @@ class MeView(APIView):
         first_name = str(payload.get('first_name') or user.first_name or '').strip()
         last_name = str(payload.get('last_name') or user.last_name or '').strip()
         email = str(payload.get('email') or user.email or '').strip()
+        username = str(payload.get('username') or '').strip()
         phone = str(payload.get('phone') or '').strip()
 
         user.first_name = first_name
@@ -603,18 +475,16 @@ class MeView(APIView):
         user.email = email
         update_fields = ['first_name', 'last_name', 'email']
 
+        if username and username != user.get_username():
+            exists = get_user_model().objects.filter(username=username).exclude(id=user.id).exists()
+            if exists:
+                return Response({'username': "Ce nom d'utilisateur est déjà utilisé"}, status=status.HTTP_400_BAD_REQUEST)
+            user.username = username
+            update_fields.append('username')
+
         personnel = getattr(user, 'personnel_record', None)
         if personnel is not None:
-            if phone:
-                normalized_phone = _normalize_phone(phone)
-                if len(normalized_phone) < 8:
-                    return Response({'phone': 'Numéro de téléphone invalide'}, status=status.HTTP_400_BAD_REQUEST)
-                existing_user = get_user_model().objects.filter(username=normalized_phone).exclude(id=user.id).exists()
-                if existing_user:
-                    return Response({'phone': 'Ce numéro est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
-                personnel.phone = phone
-                user.username = normalized_phone
-                update_fields.append('username')
+            personnel.phone = phone
             personnel.name = f"{first_name} {last_name}".strip() or personnel.name
             personnel.email = email
             personnel.save(update_fields=['name', 'email', 'phone'])
@@ -679,10 +549,32 @@ class BookingViewSet(viewsets.ModelViewSet):
         return Booking.objects.filter(created_by=user).order_by('-id')
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user, updated_by=self.request.user)
+        hall = serializer.validated_data.get('hall')
+        start_dt = serializer.validated_data.get('start_date')
+        end_dt = serializer.validated_data.get('end_date')
+        selected = serializer.validated_data.get('additional_services_selected') or []
+        _, addons_total, total, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected)
+        serializer.save(
+            created_by=self.request.user,
+            updated_by=self.request.user,
+            total_price=total,
+            addons_total=addons_total,
+            additional_services_selected=normalized_selected,
+        )
 
     def perform_update(self, serializer):
-        serializer.save(updated_by=_actor(self.request))
+        instance = serializer.instance
+        hall = serializer.validated_data.get('hall', getattr(instance, 'hall', None))
+        start_dt = serializer.validated_data.get('start_date', getattr(instance, 'start_date', None))
+        end_dt = serializer.validated_data.get('end_date', getattr(instance, 'end_date', None))
+        selected = serializer.validated_data.get('additional_services_selected', getattr(instance, 'additional_services_selected', [])) or []
+        _, addons_total, total, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected)
+        serializer.save(
+            updated_by=_actor(self.request),
+            total_price=total,
+            addons_total=addons_total,
+            additional_services_selected=normalized_selected,
+        )
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -750,6 +642,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         event_type = (payload.get('event_type') or '').strip()
         start_date = payload.get('start_date') or payload.get('date_debut') or payload.get('date_start')
         end_date = payload.get('end_date') or payload.get('date_fin') or payload.get('date_end')
+        selected_services = payload.get('additional_services_selected') or []
 
         if not full_name:
             return Response({'full_name': 'Nom complet requis'}, status=status.HTTP_400_BAD_REQUEST)
@@ -789,8 +682,10 @@ class BookingViewSet(viewsets.ModelViewSet):
         if overlap_exists:
             return Response({'dates': 'Ces dates ne sont pas disponibles pour cette salle'}, status=status.HTTP_400_BAD_REQUEST)
 
-        days = (end_dt - start_dt).days + 1
-        total_price = (Decimal(days) * (hall.price_per_day or Decimal('0.00'))).quantize(Decimal('0.01'))
+        try:
+            _, addons_total, total_price, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected_services)
+        except DjangoValidationError as e:
+            return Response({'additional_services_selected': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         User = get_user_model()
         user = User.objects.filter(email__iexact=email).first()
@@ -827,6 +722,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             start_date=start_dt,
             end_date=end_dt,
             total_price=total_price,
+            addons_total=addons_total,
+            additional_services_selected=normalized_selected,
             status='pending',
             created_by=user,
         )
@@ -960,24 +857,24 @@ class PersonnelViewSet(viewsets.ModelViewSet):
         create_account = str(payload.get('create_account') or '').lower() in ('1', 'true', 'yes', 'on')
         temp_password = payload.get('temporary_password') or ''
         email = str(payload.get('email') or '').strip().lower()
+        username = str(payload.get('username') or '').strip()
         phone = str(payload.get('phone') or '').strip()
         name = str(payload.get('name') or '').strip()
 
         user = None
         if create_account:
-            normalized_phone = _normalize_phone(phone)
-            if len(normalized_phone) < 8:
-                return Response({'phone': 'Numéro de téléphone invalide'}, status=status.HTTP_400_BAD_REQUEST)
+            if not username:
+                return Response({'username': "Nom d'utilisateur requis"}, status=status.HTTP_400_BAD_REQUEST)
             if not temp_password:
                 return Response({'temporary_password': 'Mot de passe temporaire requis'}, status=status.HTTP_400_BAD_REQUEST)
-            if get_user_model().objects.filter(username=normalized_phone).exists():
-                return Response({'phone': 'Ce numéro est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
+            if get_user_model().objects.filter(username=username).exists():
+                return Response({'username': "Ce nom d'utilisateur est déjà utilisé"}, status=status.HTTP_400_BAD_REQUEST)
             if email and get_user_model().objects.filter(email__iexact=email).exists():
                 return Response({'email': 'Cet email est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
 
             first_name, last_name = _split_full_name(name)
             user = get_user_model().objects.create_user(
-                username=normalized_phone,
+                username=username,
                 password=temp_password,
                 first_name=first_name,
                 last_name=last_name,
@@ -1010,17 +907,16 @@ class PersonnelViewSet(viewsets.ModelViewSet):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         payload = request.data.copy()
+        username = str(payload.get('username') or '').strip()
+        payload.pop('username', None)
         payload['email'] = str(payload.get('email') or instance.email or '').strip().lower()
         payload['phone'] = str(payload.get('phone') or instance.phone or '').strip()
         payload['name'] = str(payload.get('name') or instance.name or '').strip()
 
         linked_user = getattr(instance, 'user', None)
         if linked_user is not None:
-            normalized_phone = _normalize_phone(payload.get('phone'))
-            if len(normalized_phone) < 8:
-                return Response({'phone': 'Numéro de téléphone invalide'}, status=status.HTTP_400_BAD_REQUEST)
-            if get_user_model().objects.filter(username=normalized_phone).exclude(id=linked_user.id).exists():
-                return Response({'phone': 'Ce numéro est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
+            if username and get_user_model().objects.filter(username=username).exclude(id=linked_user.id).exists():
+                return Response({'username': "Ce nom d'utilisateur est déjà utilisé"}, status=status.HTTP_400_BAD_REQUEST)
             if payload.get('email') and get_user_model().objects.filter(email__iexact=payload.get('email')).exclude(id=linked_user.id).exists():
                 return Response({'email': 'Cet email est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1028,8 +924,11 @@ class PersonnelViewSet(viewsets.ModelViewSet):
             linked_user.first_name = first_name
             linked_user.last_name = last_name
             linked_user.email = payload.get('email')
-            linked_user.username = normalized_phone
-            linked_user.save(update_fields=['first_name', 'last_name', 'email', 'username'])
+            if username:
+                linked_user.username = username
+                linked_user.save(update_fields=['first_name', 'last_name', 'email', 'username'])
+            else:
+                linked_user.save(update_fields=['first_name', 'last_name', 'email'])
 
         serializer = self.get_serializer(instance, data=payload, partial=partial)
         serializer.is_valid(raise_exception=True)
