@@ -322,6 +322,10 @@ def _can_manage_staff_accounts(user):
         return False
     return bool(user.is_superuser or (user.is_staff and getattr(user, 'personnel_record', None) is None))
 
+def _actor(request):
+    user = getattr(request, 'user', None)
+    return user if getattr(user, 'is_authenticated', False) else None
+
 class PhoneTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         username_field = self.username_field
@@ -433,8 +437,14 @@ class RegisterView(APIView):
         return Response({'id': user.id, 'username': user.username}, status=status.HTTP_201_CREATED)
 
 class HallViewSet(viewsets.ModelViewSet):
-    queryset = Hall.objects.all()
+    queryset = Hall.objects.all().order_by('-id')
     serializer_class = HallSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=_actor(self.request))
 
 class BookingViewSet(viewsets.ModelViewSet):
     queryset = Booking.objects.all()
@@ -444,11 +454,14 @@ class BookingViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_staff or user.is_superuser:
-            return Booking.objects.all()
-        return Booking.objects.filter(created_by=user)
+            return Booking.objects.all().order_by('-id')
+        return Booking.objects.filter(created_by=user).order_by('-id')
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        serializer.save(created_by=self.request.user, updated_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=_actor(self.request))
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny], url_path='guest')
     def guest(self, request):
@@ -653,7 +666,7 @@ class SetPasswordView(APIView):
         return Response({'message': 'Mot de passe défini avec succès', 'must_change_password': False}, status=status.HTTP_200_OK)
 
 class PersonnelViewSet(viewsets.ModelViewSet):
-    queryset = Personnel.objects.all()
+    queryset = Personnel.objects.all().order_by('-id')
     serializer_class = PersonnelSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -679,13 +692,11 @@ class PersonnelViewSet(viewsets.ModelViewSet):
             normalized_phone = _normalize_phone(phone)
             if len(normalized_phone) < 8:
                 return Response({'phone': 'Numéro de téléphone invalide'}, status=status.HTTP_400_BAD_REQUEST)
-            if not email:
-                return Response({'email': 'Email requis pour créer un compte'}, status=status.HTTP_400_BAD_REQUEST)
             if not temp_password:
                 return Response({'temporary_password': 'Mot de passe temporaire requis'}, status=status.HTTP_400_BAD_REQUEST)
             if get_user_model().objects.filter(username=normalized_phone).exists():
                 return Response({'phone': 'Ce numéro est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
-            if get_user_model().objects.filter(email__iexact=email).exists():
+            if email and get_user_model().objects.filter(email__iexact=email).exists():
                 return Response({'email': 'Cet email est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
 
             first_name, last_name = _split_full_name(name)
@@ -711,7 +722,7 @@ class PersonnelViewSet(viewsets.ModelViewSet):
             'user': getattr(user, 'id', None),
         })
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        serializer.save(created_by=_actor(request), updated_by=_actor(request))
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -746,7 +757,7 @@ class PersonnelViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(instance, data=payload, partial=partial)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        serializer.save(updated_by=_actor(request))
         return Response(serializer.data)
 
     def destroy(self, request, *args, **kwargs):
@@ -761,15 +772,27 @@ class PersonnelViewSet(viewsets.ModelViewSet):
         return response
 
 class MaterialViewSet(viewsets.ModelViewSet):
-    queryset = Material.objects.all()
+    queryset = Material.objects.all().order_by('-id')
     serializer_class = MaterialSerializer
 
+    def perform_create(self, serializer):
+        serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=_actor(self.request))
+
 class ExpenseViewSet(viewsets.ModelViewSet):
-    queryset = Expense.objects.all()
+    queryset = Expense.objects.all().order_by('-id')
     serializer_class = ExpenseSerializer
 
+    def perform_create(self, serializer):
+        serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=_actor(self.request))
+
 class PaymentViewSet(viewsets.ModelViewSet):
-    queryset = Payment.objects.all()
+    queryset = Payment.objects.all().order_by('-id')
     serializer_class = PaymentSerializer
 
     def _recalc_booking_paid(self, booking):
@@ -785,7 +808,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payment = serializer.save()
+        payment = serializer.save(created_by=_actor(request), updated_by=_actor(request))
 
         amount = payment.amount or Decimal('0.00')
         total = payment.booking.total_price or Decimal('0.00')
@@ -807,10 +830,17 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return Response(output.data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
-        response = super().update(request, *args, **kwargs)
+        kwargs['partial'] = kwargs.get('partial', False)
         instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=kwargs['partial'])
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        response = Response(serializer.data)
         self._recalc_booking_paid(instance.booking)
         return response
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=_actor(self.request))
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()

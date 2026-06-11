@@ -2,15 +2,32 @@ from rest_framework import serializers
 from decimal import Decimal
 from .models import Hall, Booking, Personnel, Material, Expense, Payment
 
+def _user_label(user):
+    if not user:
+        return ''
+    full = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+    return full or getattr(user, 'email', '') or getattr(user, 'username', '')
+
 class HallSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Hall
         fields = '__all__'
+
+    def get_created_by_name(self, obj):
+        return _user_label(getattr(obj, 'created_by', None))
+
+    def get_updated_by_name(self, obj):
+        return _user_label(getattr(obj, 'updated_by', None))
 
 class BookingSerializer(serializers.ModelSerializer):
     hall_name = serializers.ReadOnlyField(source='hall.name')
     remaining_amount = serializers.SerializerMethodField()
     created_by = serializers.ReadOnlyField(source='created_by_id')
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
     class Meta:
         model = Booking
         fields = '__all__'
@@ -23,10 +40,18 @@ class BookingSerializer(serializers.ModelSerializer):
             remaining = Decimal('0.00')
         return remaining
 
+    def get_created_by_name(self, obj):
+        return _user_label(getattr(obj, 'created_by', None))
+
+    def get_updated_by_name(self, obj):
+        return _user_label(getattr(obj, 'updated_by', None))
+
 class PersonnelSerializer(serializers.ModelSerializer):
     has_account = serializers.SerializerMethodField()
     account_username = serializers.SerializerMethodField()
     must_change_password = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Personnel
@@ -42,7 +67,16 @@ class PersonnelSerializer(serializers.ModelSerializer):
         security = getattr(getattr(obj, 'user', None), 'security_profile', None)
         return bool(getattr(security, 'must_change_password', False))
 
+    def get_created_by_name(self, obj):
+        return _user_label(getattr(obj, 'created_by', None))
+
+    def get_updated_by_name(self, obj):
+        return _user_label(getattr(obj, 'updated_by', None))
+
 class MaterialSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+
     def _normalize_and_recalc(self, attrs, instance=None):
         total = attrs.get('total_quantity', getattr(instance, 'total_quantity', 0))
         damaged = attrs.get('damaged_quantity', getattr(instance, 'damaged_quantity', 0))
@@ -95,10 +129,25 @@ class MaterialSerializer(serializers.ModelSerializer):
         model = Material
         fields = '__all__'
 
+    def get_created_by_name(self, obj):
+        return _user_label(getattr(obj, 'created_by', None))
+
+    def get_updated_by_name(self, obj):
+        return _user_label(getattr(obj, 'updated_by', None))
+
 class ExpenseSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Expense
         fields = '__all__'
+
+    def get_created_by_name(self, obj):
+        return _user_label(getattr(obj, 'created_by', None))
+
+    def get_updated_by_name(self, obj):
+        return _user_label(getattr(obj, 'updated_by', None))
 
 class PaymentSerializer(serializers.ModelSerializer):
     booking_customer_name = serializers.ReadOnlyField(source='booking.customer_name')
@@ -110,6 +159,8 @@ class PaymentSerializer(serializers.ModelSerializer):
     booking_total_price = serializers.ReadOnlyField(source='booking.total_price')
     booking_paid_amount = serializers.ReadOnlyField(source='booking.paid_amount')
     booking_remaining_amount = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
@@ -122,6 +173,12 @@ class PaymentSerializer(serializers.ModelSerializer):
         if remaining < 0:
             remaining = Decimal('0.00')
         return remaining
+
+    def get_created_by_name(self, obj):
+        return _user_label(getattr(obj, 'created_by', None))
+
+    def get_updated_by_name(self, obj):
+        return _user_label(getattr(obj, 'updated_by', None))
 
     def validate(self, attrs):
         booking = attrs.get('booking') or getattr(self.instance, 'booking', None)

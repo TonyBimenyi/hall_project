@@ -178,13 +178,13 @@
       <table v-else ref="tableRef" class="admin-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Date</th>
-            <th>Description</th>
-            <th>Catégorie</th>
-            <th>Montant</th>
-            <th>Payé par</th>
-            <th>Statut</th>
+            <th><button class="table-sort-btn" :class="{ active: isExpenseSortActive('id') }" @click="toggleExpenseSort('id')">ID <i :class="expenseSortIconClass('id')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isExpenseSortActive('date') }" @click="toggleExpenseSort('date')">Date <i :class="expenseSortIconClass('date')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isExpenseSortActive('description') }" @click="toggleExpenseSort('description')">Description <i :class="expenseSortIconClass('description')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isExpenseSortActive('category') }" @click="toggleExpenseSort('category')">Catégorie <i :class="expenseSortIconClass('category')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isExpenseSortActive('amount') }" @click="toggleExpenseSort('amount')">Montant <i :class="expenseSortIconClass('amount')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isExpenseSortActive('paid_by') }" @click="toggleExpenseSort('paid_by')">Payé par <i :class="expenseSortIconClass('paid_by')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isExpenseSortActive('status') }" @click="toggleExpenseSort('status')">Statut <i :class="expenseSortIconClass('status')"></i></button></th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -327,6 +327,14 @@
             {{ translateStatus(selectedExpense.status) }}
           </span>
         </div>
+        <div class="detail-item">
+          <span class="detail-label">Créé par</span>
+          <span class="detail-val">{{ selectedExpense.created_by_name || '-' }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Dernière action par</span>
+          <span class="detail-val">{{ selectedExpense.updated_by_name || selectedExpense.created_by_name || '-' }}</span>
+        </div>
       </div>
       <template #footer>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
@@ -352,6 +360,7 @@ import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useDisplayIds } from '~/composables/useDisplayIds'
+import { useTableSort } from '~/composables/useTableSort'
 
 definePageMeta({ layout: 'admin' })
 const { formatMoney, moneyInputModel } = useMoney()
@@ -426,7 +435,7 @@ const fetchExpenses = async () => {
   loadingExpenses.value = true
   try {
     const response = await api.get('expenses/')
-    expenses.value = response.data
+    expenses.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
     notify('Erreur lors du chargement des dépenses', 'danger')
   } finally {
@@ -517,6 +526,19 @@ const filteredExpenses = computed(() => {
   })
 })
 
+const {
+  sortedItems: sortedExpenses,
+  toggleSort: toggleExpenseSort,
+  isSortActive: isExpenseSortActive,
+  sortIconClass: expenseSortIconClass,
+} = useTableSort(filteredExpenses, {
+  initialKey: 'id',
+  initialDirection: 'desc',
+  accessors: {
+    amount: expense => Number(expense?.amount || 0),
+  },
+})
+
 const expenseDisplayIds = computed(() => buildHashSequenceMap(expenses.value))
 const getExpenseDisplayId = (expense) => expenseDisplayIds.value.get(expense?.id) || '#0001'
 
@@ -529,7 +551,7 @@ const {
   canNext: expensesCanNext,
   prevPage: expensesPrevPage,
   nextPage: expensesNextPage,
-} = usePagination(filteredExpenses, 50)
+} = usePagination(sortedExpenses, 50)
 
 const showFormModal = ref(false)
 const showViewModal = ref(false)

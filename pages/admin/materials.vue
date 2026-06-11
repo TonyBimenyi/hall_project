@@ -149,13 +149,13 @@
       <table v-else ref="tableRef" class="admin-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Nom</th>
-            <th>Catégorie</th>
-            <th>Quantité Totale</th>
-            <th>En Stock</th>
-            <th>Endommagé</th>
-            <th>Perdu</th>
+            <th><button class="table-sort-btn" :class="{ active: isMaterialSortActive('id') }" @click="toggleMaterialSort('id')">ID <i :class="materialSortIconClass('id')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isMaterialSortActive('name') }" @click="toggleMaterialSort('name')">Nom <i :class="materialSortIconClass('name')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isMaterialSortActive('category') }" @click="toggleMaterialSort('category')">Catégorie <i :class="materialSortIconClass('category')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isMaterialSortActive('total_quantity') }" @click="toggleMaterialSort('total_quantity')">Quantité Totale <i :class="materialSortIconClass('total_quantity')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isMaterialSortActive('available_quantity') }" @click="toggleMaterialSort('available_quantity')">En Stock <i :class="materialSortIconClass('available_quantity')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isMaterialSortActive('damaged_quantity') }" @click="toggleMaterialSort('damaged_quantity')">Endommagé <i :class="materialSortIconClass('damaged_quantity')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isMaterialSortActive('lost_quantity') }" @click="toggleMaterialSort('lost_quantity')">Perdu <i :class="materialSortIconClass('lost_quantity')"></i></button></th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -307,6 +307,14 @@
           <span class="detail-label">Perdu</span>
           <span class="detail-val">{{ selectedMaterial.lost_quantity || 0 }}</span>
         </div>
+        <div class="detail-item">
+          <span class="detail-label">Créé par</span>
+          <span class="detail-val">{{ selectedMaterial.created_by_name || '-' }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Dernière action par</span>
+          <span class="detail-val">{{ selectedMaterial.updated_by_name || selectedMaterial.created_by_name || '-' }}</span>
+        </div>
       </div>
       <template #footer>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
@@ -331,11 +339,27 @@ import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { usePagination } from '~/composables/usePagination'
 import { useDisplayIds } from '~/composables/useDisplayIds'
+import { useTableSort } from '~/composables/useTableSort'
 
 definePageMeta({ layout: 'admin' })
 
 const materials = ref([])
 const { buildHashSequenceMap } = useDisplayIds()
+const {
+  sortedItems: sortedMaterials,
+  toggleSort: toggleMaterialSort,
+  isSortActive: isMaterialSortActive,
+  sortIconClass: materialSortIconClass,
+} = useTableSort(computed(() => materials.value), {
+  initialKey: 'id',
+  initialDirection: 'desc',
+  accessors: {
+    total_quantity: item => Number(item?.total_quantity || 0),
+    available_quantity: item => Number(item?.available_quantity || 0),
+    damaged_quantity: item => Number(item?.damaged_quantity || 0),
+    lost_quantity: item => Number(item?.lost_quantity || 0),
+  },
+})
 const {
   paginatedItems: paginatedMaterials,
   totalItems: materialsTotalItems,
@@ -345,7 +369,7 @@ const {
   canNext: materialsCanNext,
   prevPage: materialsPrevPage,
   nextPage: materialsNextPage,
-} = usePagination(computed(() => materials.value), 50)
+} = usePagination(sortedMaterials, 50)
 const tableRef = ref(null)
 const exportingPdf = ref(false)
 const exportingXls = ref(false)
@@ -427,7 +451,7 @@ const fetchMaterials = async () => {
   loadingMaterials.value = true
   try {
     const response = await api.get('materials/')
-    materials.value = response.data
+    materials.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
     notify('Erreur lors du chargement du matériel', 'danger')
   } finally {

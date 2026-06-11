@@ -127,9 +127,9 @@
       <table v-else class="admin-table">
         <thead>
           <tr>
-            <th>Nom</th>
-            <th>Capacité</th>
-            <th>Prix / Jour</th>
+            <th><button class="table-sort-btn" :class="{ active: isHallSortActive('name') }" @click="toggleHallSort('name')">Nom <i :class="hallSortIconClass('name')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isHallSortActive('capacity') }" @click="toggleHallSort('capacity')">Capacité <i :class="hallSortIconClass('capacity')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isHallSortActive('price_per_day') }" @click="toggleHallSort('price_per_day')">Prix / Jour <i :class="hallSortIconClass('price_per_day')"></i></button></th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -213,6 +213,14 @@
           <span class="detail-label">Prix / Jour</span>
           <span class="detail-val">{{ formatMoney(selectedHall.price_per_day) }}</span>
         </div>
+        <div class="detail-item">
+          <span class="detail-label">Créé par</span>
+          <span class="detail-val">{{ selectedHall.created_by_name || '-' }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Dernière action par</span>
+          <span class="detail-val">{{ selectedHall.updated_by_name || selectedHall.created_by_name || '-' }}</span>
+        </div>
       </div>
       <template #footer>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
@@ -236,6 +244,7 @@ import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
+import { useTableSort } from '~/composables/useTableSort'
 
 definePageMeta({ layout: 'admin' })
 const { formatMoney, moneyInputModel } = useMoney()
@@ -260,6 +269,19 @@ const form = ref({
 })
 const pricePerDayInput = moneyInputModel(form, 'price_per_day')
 const {
+  sortedItems: sortedHalls,
+  toggleSort: toggleHallSort,
+  isSortActive: isHallSortActive,
+  sortIconClass: hallSortIconClass,
+} = useTableSort(computed(() => halls.value), {
+  initialKey: 'id',
+  initialDirection: 'desc',
+  accessors: {
+    capacity: hall => Number(hall?.capacity || 0),
+    price_per_day: hall => Number(hall?.price_per_day || 0),
+  },
+})
+const {
   paginatedItems: paginatedHalls,
   totalItems: hallsTotalItems,
   startIndex: hallsStartIndex,
@@ -268,7 +290,7 @@ const {
   canNext: hallsCanNext,
   prevPage: hallsPrevPage,
   nextPage: hallsNextPage,
-} = usePagination(computed(() => halls.value), 50)
+} = usePagination(sortedHalls, 50)
 
 const totalCapacity = computed(() => halls.value.reduce((sum, hall) => sum + Number(hall.capacity || 0), 0))
 const averageDailyPrice = computed(() => {
@@ -325,7 +347,7 @@ const fetchHalls = async () => {
   loadingHalls.value = true
   try {
     const response = await api.get('halls/')
-    halls.value = response.data
+    halls.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
     notify('Erreur lors du chargement des salles', 'danger')
   } finally {

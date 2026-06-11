@@ -191,13 +191,13 @@
         <table ref="tableRef" class="bookings-table admin-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Client</th>
-              <th>Salle</th>
-              <th>Événement</th>
-              <th>Dates</th>
-              <th>Montant</th>
-              <th>Statut</th>
+              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('id') }" @click="toggleBookingSort('id')">ID <i :class="bookingSortIconClass('id')"></i></button></th>
+              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('customer_name') }" @click="toggleBookingSort('customer_name')">Client <i :class="bookingSortIconClass('customer_name')"></i></button></th>
+              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('hall_name') }" @click="toggleBookingSort('hall_name')">Salle <i :class="bookingSortIconClass('hall_name')"></i></button></th>
+              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('event_type') }" @click="toggleBookingSort('event_type')">Événement <i :class="bookingSortIconClass('event_type')"></i></button></th>
+              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('start_date') }" @click="toggleBookingSort('start_date')">Dates <i :class="bookingSortIconClass('start_date')"></i></button></th>
+              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('total_price') }" @click="toggleBookingSort('total_price')">Montant <i :class="bookingSortIconClass('total_price')"></i></button></th>
+              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('status') }" @click="toggleBookingSort('status')">Statut <i :class="bookingSortIconClass('status')"></i></button></th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -282,7 +282,7 @@
           </div>
           <div class="form-group full">
             <label class="form-label">Email</label>
-            <input v-model="form.customer_email" type="email" class="form-input" placeholder="email@exemple.com" required />
+            <input v-model="form.customer_email" type="email" class="form-input" placeholder="email@exemple.com" />
           </div>
           <div class="form-group">
             <label class="form-label">Salle</label>
@@ -358,6 +358,14 @@
             {{ getStatusTranslation(selectedBooking.status) }}
           </span>
         </div>
+        <div class="detail-item">
+          <span class="detail-label">Créé par</span>
+          <span class="detail-val">{{ selectedBooking.created_by_name || '-' }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Dernière action par</span>
+          <span class="detail-val">{{ selectedBooking.updated_by_name || selectedBooking.created_by_name || '-' }}</span>
+        </div>
       </div>
       <template #footer>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
@@ -382,6 +390,7 @@ import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useDateFormat } from '~/composables/useDateFormat'
 import { useDisplayIds } from '~/composables/useDisplayIds'
+import { useTableSort } from '~/composables/useTableSort'
 
 definePageMeta({ layout: 'admin' })
 const { formatMoney, formatNumberSpaces, moneyInputModel, parseMoney } = useMoney()
@@ -564,9 +573,9 @@ const filteredBookings = computed(() => {
   return bookings.value.filter(b => {
     const q = search.value.toLowerCase().trim()
     const matchesSearch = q === '' ||
-      b.customer_name.toLowerCase().includes(q) ||
-      b.customer_email.toLowerCase().includes(q) ||
-      b.hall_name.toLowerCase().includes(q)
+      String(b.customer_name || '').toLowerCase().includes(q) ||
+      String(b.customer_email || '').toLowerCase().includes(q) ||
+      String(b.hall_name || '').toLowerCase().includes(q)
     const matchesStatus = statusFilter.value === '' || b.status === statusFilter.value
     const matchesHall = hallFilter.value === '' || String(b.hall) === String(hallFilter.value) || String(b.hall_id) === String(hallFilter.value)
     const matchesEventType = eventTypeFilter.value === '' || b.event_type === eventTypeFilter.value
@@ -583,6 +592,19 @@ const filteredBookings = computed(() => {
   })
 })
 
+const {
+  sortedItems: sortedBookings,
+  toggleSort: toggleBookingSort,
+  isSortActive: isBookingSortActive,
+  sortIconClass: bookingSortIconClass,
+} = useTableSort(filteredBookings, {
+  initialKey: 'id',
+  initialDirection: 'desc',
+  accessors: {
+    total_price: booking => Number(booking?.total_price || 0),
+  },
+})
+
 const bookingDisplayIds = computed(() => buildMonthlySequenceMap(bookings.value, 'LBR', booking => booking.start_date))
 const getBookingDisplayId = (booking) => bookingDisplayIds.value.get(booking?.id) || 'LBR00000001'
 
@@ -595,7 +617,7 @@ const {
   canNext: bookingsCanNext,
   prevPage: bookingsPrevPage,
   nextPage: bookingsNextPage,
-} = usePagination(filteredBookings, 50)
+} = usePagination(sortedBookings, 50)
 
 const saveBooking = async () => {
   savingBooking.value = true

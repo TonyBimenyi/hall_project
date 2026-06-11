@@ -156,6 +156,31 @@ label.field:has(input[required], select[required], textarea[required]) > span::a
   border-bottom: 2px solid var(--gray-100);
 }
 
+.table-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
+.table-sort-btn i {
+  font-size: 0.78rem;
+  opacity: 0.55;
+  transition: var(--transition-fast);
+}
+
+.table-sort-btn.active {
+  color: var(--primary);
+}
+
+.table-sort-btn.active i,
+.table-sort-btn:hover i {
+  opacity: 1;
+}
+
 .admin-table td {
   padding: 1.25rem 1.5rem;
   vertical-align: middle;

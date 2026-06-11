@@ -162,13 +162,13 @@
       <table v-else class="admin-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Client</th>
-            <th>Salle</th>
-            <th>Période</th>
-            <th>Total</th>
-            <th>Déjà payé</th>
-            <th>Reste</th>
+            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('id') }" @click="toggleUnpaidSort('id')">ID <i :class="unpaidSortIconClass('id')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('customer_name') }" @click="toggleUnpaidSort('customer_name')">Client <i :class="unpaidSortIconClass('customer_name')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('hall_name') }" @click="toggleUnpaidSort('hall_name')">Salle <i :class="unpaidSortIconClass('hall_name')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('start_date') }" @click="toggleUnpaidSort('start_date')">Période <i :class="unpaidSortIconClass('start_date')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('total_price') }" @click="toggleUnpaidSort('total_price')">Total <i :class="unpaidSortIconClass('total_price')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('paid_amount') }" @click="toggleUnpaidSort('paid_amount')">Déjà payé <i :class="unpaidSortIconClass('paid_amount')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('remaining_amount') }" @click="toggleUnpaidSort('remaining_amount')">Reste <i :class="unpaidSortIconClass('remaining_amount')"></i></button></th>
             <th>Action</th>
           </tr>
         </thead>
@@ -300,14 +300,14 @@
       <table v-else class="admin-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Date</th>
-            <th>Client</th>
-            <th>Référence</th>
-            <th>Type</th>
-            <th>Montant</th>
-            <th>Méthode</th>
-            <th>Statut</th>
+            <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('id') }" @click="togglePaymentSort('id')">ID <i :class="paymentSortIconClass('id')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('date') }" @click="togglePaymentSort('date')">Date <i :class="paymentSortIconClass('date')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('booking_customer_name') }" @click="togglePaymentSort('booking_customer_name')">Client <i :class="paymentSortIconClass('booking_customer_name')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('reference') }" @click="togglePaymentSort('reference')">Référence <i :class="paymentSortIconClass('reference')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('kind') }" @click="togglePaymentSort('kind')">Type <i :class="paymentSortIconClass('kind')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('amount') }" @click="togglePaymentSort('amount')">Montant <i :class="paymentSortIconClass('amount')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('method') }" @click="togglePaymentSort('method')">Méthode <i :class="paymentSortIconClass('method')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPaymentSortActive('status') }" @click="togglePaymentSort('status')">Statut <i :class="paymentSortIconClass('status')"></i></button></th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -429,6 +429,8 @@
         <div class="detail-item"><span class="detail-label">Type</span><span class="detail-val">{{ selectedPayment.kind === 'full' ? 'Paiement total' : 'Avance' }}</span></div>
         <div class="detail-item"><span class="detail-label">Montant</span><span class="detail-val">{{ formatMoney(selectedPayment.amount) }}</span></div>
         <div class="detail-item"><span class="detail-label">Reste après paiement</span><span class="detail-val">{{ formatMoney(selectedPayment.booking_remaining_amount) }}</span></div>
+        <div class="detail-item"><span class="detail-label">Créé par</span><span class="detail-val">{{ selectedPayment.created_by_name || '-' }}</span></div>
+        <div class="detail-item"><span class="detail-label">Dernière action par</span><span class="detail-val">{{ selectedPayment.updated_by_name || selectedPayment.created_by_name || '-' }}</span></div>
       </div>
       <template #footer>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
@@ -454,6 +456,7 @@ import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useDateFormat } from '~/composables/useDateFormat'
 import { useDisplayIds } from '~/composables/useDisplayIds'
+import { useTableSort } from '~/composables/useTableSort'
 
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
@@ -558,6 +561,21 @@ const filteredUnpaidBookings = computed(() => {
   })
 })
 
+const {
+  sortedItems: sortedUnpaidBookings,
+  toggleSort: toggleUnpaidSort,
+  isSortActive: isUnpaidSortActive,
+  sortIconClass: unpaidSortIconClass,
+} = useTableSort(filteredUnpaidBookings, {
+  initialKey: 'id',
+  initialDirection: 'desc',
+  accessors: {
+    total_price: booking => toNumber(booking?.total_price),
+    paid_amount: booking => toNumber(booking?.paid_amount),
+    remaining_amount: booking => toNumber(booking?.remaining_amount),
+  },
+})
+
 const bookingDisplayIds = computed(() => buildMonthlySequenceMap(bookings.value, 'LBR', booking => booking.start_date))
 const getBookingDisplayId = (booking) => bookingDisplayIds.value.get(booking?.id) || 'LBR00000001'
 
@@ -570,7 +588,7 @@ const {
   canNext: unpaidCanNext,
   prevPage: unpaidPrevPage,
   nextPage: unpaidNextPage,
-} = usePagination(filteredUnpaidBookings, 50)
+} = usePagination(sortedUnpaidBookings, 50)
 
 const selectedBookingForForm = computed(() => unpaidBookings.value.find(b => b.id === form.value.booking) || null)
 const totalRevenue = computed(() => payments.value.filter(p => p.status === 'paid').reduce((a, p) => a + toNumber(p.amount), 0))
@@ -632,6 +650,19 @@ const filteredPayments = computed(() => {
   })
 })
 
+const {
+  sortedItems: sortedPayments,
+  toggleSort: togglePaymentSort,
+  isSortActive: isPaymentSortActive,
+  sortIconClass: paymentSortIconClass,
+} = useTableSort(filteredPayments, {
+  initialKey: 'id',
+  initialDirection: 'desc',
+  accessors: {
+    amount: payment => toNumber(payment?.amount),
+  },
+})
+
 const paymentDisplayIds = computed(() => buildMonthlySequenceMap(payments.value, 'LBP', payment => payment.date))
 const getPaymentDisplayId = (payment) => paymentDisplayIds.value.get(payment?.id) || 'LBP00000001'
 
@@ -644,13 +675,13 @@ const {
   canNext: paymentsCanNext,
   prevPage: paymentsPrevPage,
   nextPage: paymentsNextPage,
-} = usePagination(filteredPayments, 50)
+} = usePagination(sortedPayments, 50)
 
 const fetchPayments = async () => {
   loadingPayments.value = true
   try {
     const { data } = await api.get('payments/')
-    payments.value = data
+    payments.value = Array.isArray(data) ? data : []
   } catch {
     notify('Erreur lors du chargement des paiements', 'danger')
   } finally {
@@ -662,7 +693,7 @@ const fetchBookings = async () => {
   loadingBookingsData.value = true
   try {
     const { data } = await api.get('bookings/')
-    bookings.value = data
+    bookings.value = Array.isArray(data) ? data : []
   } catch {
     notify('Erreur lors du chargement des réservations', 'danger')
   } finally {

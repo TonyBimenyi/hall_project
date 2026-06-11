@@ -141,12 +141,12 @@
       <table v-else ref="tableRef" class="admin-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Employé</th>
-            <th>Rôle</th>
-            <th>Contact</th>
-            <th>Compte</th>
-            <th>Disponibilité</th>
+            <th><button class="table-sort-btn" :class="{ active: isPersonnelSortActive('id') }" @click="togglePersonnelSort('id')">ID <i :class="personnelSortIconClass('id')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPersonnelSortActive('name') }" @click="togglePersonnelSort('name')">Employé <i :class="personnelSortIconClass('name')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPersonnelSortActive('role') }" @click="togglePersonnelSort('role')">Rôle <i :class="personnelSortIconClass('role')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPersonnelSortActive('phone') }" @click="togglePersonnelSort('phone')">Contact <i :class="personnelSortIconClass('phone')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPersonnelSortActive('has_account') }" @click="togglePersonnelSort('has_account')">Compte <i :class="personnelSortIconClass('has_account')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isPersonnelSortActive('status') }" @click="togglePersonnelSort('status')">Disponibilité <i :class="personnelSortIconClass('status')"></i></button></th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -239,7 +239,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Email</label>
-          <input v-model="form.email" type="email" class="form-input" :required="form.create_account" placeholder="email@exemple.com" />
+          <input v-model="form.email" type="email" class="form-input" placeholder="email@exemple.com" />
         </div>
         <div class="form-group">
           <label class="form-label">Statut</label>
@@ -310,6 +310,14 @@
             {{ translateStatus(selectedStaff.status) }}
           </span>
         </div>
+        <div class="detail-item">
+          <span class="detail-label">Créé par</span>
+          <span class="detail-val">{{ selectedStaff.created_by_name || '-' }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Dernière action par</span>
+          <span class="detail-val">{{ selectedStaff.updated_by_name || selectedStaff.created_by_name || '-' }}</span>
+        </div>
       </div>
       <template #footer>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
@@ -334,11 +342,24 @@ import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { usePagination } from '~/composables/usePagination'
 import { useDisplayIds } from '~/composables/useDisplayIds'
+import { useTableSort } from '~/composables/useTableSort'
 
 definePageMeta({ layout: 'admin' })
 
 const personnel = ref([])
 const { buildPersonnelSequenceMap } = useDisplayIds()
+const {
+  sortedItems: sortedPersonnel,
+  toggleSort: togglePersonnelSort,
+  isSortActive: isPersonnelSortActive,
+  sortIconClass: personnelSortIconClass,
+} = useTableSort(computed(() => personnel.value), {
+  initialKey: 'id',
+  initialDirection: 'desc',
+  accessors: {
+    has_account: staff => (staff?.has_account ? 1 : 0),
+  },
+})
 const {
   paginatedItems: paginatedPersonnel,
   totalItems: personnelTotalItems,
@@ -348,7 +369,7 @@ const {
   canNext: personnelCanNext,
   prevPage: personnelPrevPage,
   nextPage: personnelNextPage,
-} = usePagination(computed(() => personnel.value), 50)
+} = usePagination(sortedPersonnel, 50)
 const tableRef = ref(null)
 const exportingPdf = ref(false)
 const exportingXls = ref(false)
@@ -425,7 +446,7 @@ const fetchPersonnel = async () => {
   loadingPersonnel.value = true
   try {
     const response = await api.get('personnel/')
-    personnel.value = response.data
+    personnel.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
     notify('Erreur lors du chargement du personnel', 'danger')
   } finally {
