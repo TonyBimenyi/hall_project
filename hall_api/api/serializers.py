@@ -24,9 +24,23 @@ class BookingSerializer(serializers.ModelSerializer):
         return remaining
 
 class PersonnelSerializer(serializers.ModelSerializer):
+    has_account = serializers.SerializerMethodField()
+    account_username = serializers.SerializerMethodField()
+    must_change_password = serializers.SerializerMethodField()
+
     class Meta:
         model = Personnel
         fields = '__all__'
+
+    def get_has_account(self, obj):
+        return bool(getattr(obj, 'user_id', None))
+
+    def get_account_username(self, obj):
+        return getattr(getattr(obj, 'user', None), 'username', '')
+
+    def get_must_change_password(self, obj):
+        security = getattr(getattr(obj, 'user', None), 'security_profile', None)
+        return bool(getattr(security, 'must_change_password', False))
 
 class MaterialSerializer(serializers.ModelSerializer):
     def _normalize_and_recalc(self, attrs, instance=None):

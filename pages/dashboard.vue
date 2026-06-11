@@ -255,9 +255,11 @@ const setPassword = async () => {
 
   passwordLoading.value = true
   try {
-    await api.post('auth/set-password/', { password: newPassword.value })
+    await api.post('auth/set-password/', { password: newPassword.value, confirm_password: confirmPassword.value })
     newPassword.value = ''
     confirmPassword.value = ''
+    currentUser.value = { ...currentUser.value, must_change_password: false }
+    localStorage.setItem('user', JSON.stringify(currentUser.value))
     notify(t('dashboard.notify.passwordSetSuccess'), 'success')
   } catch (e) {
     const msg = e?.response?.data?.password || e?.response?.data?.detail || t('dashboard.notify.passwordSetFail')
@@ -276,6 +278,10 @@ onMounted(() => {
   }
 
   isLoggedIn.value = !!localStorage.getItem('access_token')
+  if (currentUser.value?.must_change_password) {
+    navigateTo('/force-password-change')
+    return
+  }
   if (isLoggedIn.value) fetchBookings()
 })
 </script>

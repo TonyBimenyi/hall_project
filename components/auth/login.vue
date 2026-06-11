@@ -85,6 +85,23 @@ const fieldErrors = ref({})
 const loading = ref(false)
 const magicLoading = ref(false)
 
+const persistSession = (tokens, user) => {
+  localStorage.setItem('access_token', tokens.access)
+  localStorage.setItem('refresh_token', tokens.refresh)
+  localStorage.setItem('user', JSON.stringify(user))
+}
+
+const redirectAfterLogin = async (user, fallback = '/dashboard') => {
+  if (user?.must_change_password) {
+    await router.replace(localePath('/force-password-change'))
+    return
+  }
+
+  const redirectTo = user?.is_staff ? localePath('/admin') : localePath(fallback)
+  await router.push(redirectTo)
+  window.location.reload()
+}
+
 const login = async () => {
   fieldErrors.value = {}
   if (!username.value) fieldErrors.value.username = t('auth.login.validation.usernameRequired')
@@ -101,21 +118,14 @@ const login = async () => {
       password: password.value
     })
 
-    localStorage.setItem('access_token', response.data.access)
-    localStorage.setItem('refresh_token', response.data.refresh)
-
     const me = await axios.get(`${getApiOrigin()}/api/me/`, {
       headers: { Authorization: `Bearer ${response.data.access}` }
     })
-    localStorage.setItem('user', JSON.stringify(me.data))
+    persistSession(response.data, me.data)
 
     notify(t('auth.login.notify.success'), 'success')
-
-    const redirectTo = me.data?.is_staff ? localePath('/admin') : localePath('/dashboard')
     setTimeout(() => {
-      router.push(redirectTo).then(() => {
-        window.location.reload()
-      })
+      redirectAfterLogin(me.data, '/dashboard')
     }, 500)
   } catch (error) {
     if (error.response && error.response.data) {
@@ -156,22 +166,15 @@ const verifyMagicToken = async (token) => {
   try {
     const response = await axios.post(`${getApiOrigin()}/api/auth/magic-link/verify/`, { token })
 
-    localStorage.setItem('access_token', response.data.access)
-    localStorage.setItem('refresh_token', response.data.refresh)
-
     const me = await axios.get(`${getApiOrigin()}/api/me/`, {
       headers: { Authorization: `Bearer ${response.data.access}` }
     })
-    localStorage.setItem('user', JSON.stringify(me.data))
+    persistSession(response.data, me.data)
 
     notify(t('auth.login.notify.success'), 'success')
-
-    const redirectTo = me.data?.is_staff ? localePath('/admin') : localePath(response.data.redirect_to || '/dashboard')
     router.replace(localePath('/login'))
     setTimeout(() => {
-      router.push(redirectTo).then(() => {
-        window.location.reload()
-      })
+      redirectAfterLogin(me.data, response.data.redirect_to || '/dashboard')
     }, 300)
   } catch (error) {
     notify(error?.response?.data?.detail || t('auth.login.notify.magicInvalid'), 'danger')

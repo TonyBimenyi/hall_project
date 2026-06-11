@@ -95,6 +95,19 @@
   letter-spacing: 0.05em;
 }
 
+.required {
+  color: var(--danger);
+}
+
+.form-group:has(.form-input[required], .form-select[required], .form-textarea[required], input[required], select[required], textarea[required]) > .form-label::after,
+.form-group:has(.form-input[required], .form-select[required], .form-textarea[required], input[required], select[required], textarea[required]) > label:not(.checkbox-row):not(.field)::after,
+label:not(.checkbox-row):not(.field):has(+ input[required], + select[required], + textarea[required])::after,
+label.field:has(input[required], select[required], textarea[required]) > span::after {
+  content: ' *';
+  color: var(--danger);
+  font-weight: 800;
+}
+
 .form-input,
 .form-select,
 .form-textarea {

@@ -1,6 +1,6 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
-from .models import Hall, Booking, Personnel, Material, Expense, Payment, MagicLoginToken
+from .models import Hall, Booking, Personnel, Material, Expense, Payment, MagicLoginToken, AccountSecurityProfile
 from .serializers import (
     HallSerializer, BookingSerializer, PersonnelSerializer,
     MaterialSerializer, ExpenseSerializer, PaymentSerializer
@@ -22,6 +22,8 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
 from django.conf import settings
 from django.core.mail import send_mail
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.contrib.auth.password_validation import validate_password
 from datetime import timedelta, date
 import hashlib
 import secrets
@@ -285,6 +287,41 @@ def _phone_username_candidates(raw_username):
 
     return candidates
 
+def _normalize_phone(raw_phone):
+    return ''.join(ch for ch in str(raw_phone or '') if ch.isdigit())
+
+def _get_security_profile(user):
+    if not user or not getattr(user, 'pk', None):
+        return None
+    profile, _ = AccountSecurityProfile.objects.get_or_create(user=user)
+    return profile
+
+def _user_payload(user):
+    security = _get_security_profile(user)
+    personnel = getattr(user, 'personnel_record', None)
+    phone = getattr(personnel, 'phone', '') or user.get_username()
+    full_name = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+    return {
+        'id': user.id,
+        'username': user.get_username(),
+        'email': getattr(user, 'email', ''),
+        'first_name': getattr(user, 'first_name', ''),
+        'last_name': getattr(user, 'last_name', ''),
+        'full_name': full_name,
+        'phone': phone,
+        'is_staff': user.is_staff,
+        'is_superuser': user.is_superuser,
+        'must_change_password': bool(getattr(security, 'must_change_password', False)),
+        'personnel_id': getattr(personnel, 'id', None),
+        'personnel_role': getattr(personnel, 'role', ''),
+        'can_manage_staff_accounts': _can_manage_staff_accounts(user),
+    }
+
+def _can_manage_staff_accounts(user):
+    if not user or not user.is_authenticated:
+        return False
+    return bool(user.is_superuser or (user.is_staff and getattr(user, 'personnel_record', None) is None))
+
 class PhoneTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         username_field = self.username_field
@@ -307,7 +344,12 @@ class PhoneTokenObtainPairSerializer(TokenObtainPairSerializer):
             )
 
         refresh = self.get_token(user)
-        data = {'refresh': str(refresh), 'access': str(refresh.access_token)}
+        security = _get_security_profile(user)
+        data = {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'must_change_password': bool(getattr(security, 'must_change_password', False)),
+        }
 
         if api_settings.UPDATE_LAST_LOGIN:
             update_last_login(None, user)
@@ -321,16 +363,39 @@ class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        return Response(_user_payload(request.user))
+
+    def patch(self, request):
         user = request.user
-        return Response({
-            'id': user.id,
-            'username': user.get_username(),
-            'email': getattr(user, 'email', ''),
-            'first_name': getattr(user, 'first_name', ''),
-            'last_name': getattr(user, 'last_name', ''),
-            'is_staff': user.is_staff,
-            'is_superuser': user.is_superuser,
-        })
+        payload = request.data or {}
+        first_name = str(payload.get('first_name') or user.first_name or '').strip()
+        last_name = str(payload.get('last_name') or user.last_name or '').strip()
+        email = str(payload.get('email') or user.email or '').strip()
+        phone = str(payload.get('phone') or '').strip()
+
+        user.first_name = first_name
+        user.last_name = last_name
+        user.email = email
+        update_fields = ['first_name', 'last_name', 'email']
+
+        personnel = getattr(user, 'personnel_record', None)
+        if personnel is not None:
+            if phone:
+                normalized_phone = _normalize_phone(phone)
+                if len(normalized_phone) < 8:
+                    return Response({'phone': 'Numéro de téléphone invalide'}, status=status.HTTP_400_BAD_REQUEST)
+                existing_user = get_user_model().objects.filter(username=normalized_phone).exclude(id=user.id).exists()
+                if existing_user:
+                    return Response({'phone': 'Ce numéro est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
+                personnel.phone = phone
+                user.username = normalized_phone
+                update_fields.append('username')
+            personnel.name = f"{first_name} {last_name}".strip() or personnel.name
+            personnel.email = email
+            personnel.save(update_fields=['name', 'email', 'phone'])
+
+        user.save(update_fields=update_fields)
+        return Response(_user_payload(user), status=status.HTTP_200_OK)
 
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -567,17 +632,133 @@ class SetPasswordView(APIView):
     def post(self, request):
         payload = request.data or {}
         password = payload.get('password') or ''
-        if not password or len(password) < 6:
-            return Response({'password': 'Mot de passe (min 6 caractères) requis'}, status=status.HTTP_400_BAD_REQUEST)
+        confirm_password = payload.get('confirm_password') or ''
+        if not password:
+            return Response({'password': 'Mot de passe requis'}, status=status.HTTP_400_BAD_REQUEST)
+        if password != confirm_password:
+            return Response({'confirm_password': 'Les mots de passe ne correspondent pas'}, status=status.HTTP_400_BAD_REQUEST)
 
         user = request.user
+        try:
+            validate_password(password, user=user)
+        except DjangoValidationError as exc:
+            return Response({'password': exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
+
         user.set_password(password)
         user.save(update_fields=['password'])
-        return Response({'message': 'Mot de passe défini avec succès'}, status=status.HTTP_200_OK)
+        security = _get_security_profile(user)
+        if security is not None and security.must_change_password:
+            security.must_change_password = False
+            security.save(update_fields=['must_change_password'])
+        return Response({'message': 'Mot de passe défini avec succès', 'must_change_password': False}, status=status.HTTP_200_OK)
 
 class PersonnelViewSet(viewsets.ModelViewSet):
     queryset = Personnel.objects.all()
     serializer_class = PersonnelSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _require_staff_manager(self, request):
+        if not _can_manage_staff_accounts(request.user):
+            return Response({'detail': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+        return None
+
+    def create(self, request, *args, **kwargs):
+        denial = self._require_staff_manager(request)
+        if denial is not None:
+            return denial
+
+        payload = request.data.copy()
+        create_account = str(payload.get('create_account') or '').lower() in ('1', 'true', 'yes', 'on')
+        temp_password = payload.get('temporary_password') or ''
+        email = str(payload.get('email') or '').strip().lower()
+        phone = str(payload.get('phone') or '').strip()
+        name = str(payload.get('name') or '').strip()
+
+        user = None
+        if create_account:
+            normalized_phone = _normalize_phone(phone)
+            if len(normalized_phone) < 8:
+                return Response({'phone': 'Numéro de téléphone invalide'}, status=status.HTTP_400_BAD_REQUEST)
+            if not email:
+                return Response({'email': 'Email requis pour créer un compte'}, status=status.HTTP_400_BAD_REQUEST)
+            if not temp_password:
+                return Response({'temporary_password': 'Mot de passe temporaire requis'}, status=status.HTTP_400_BAD_REQUEST)
+            if get_user_model().objects.filter(username=normalized_phone).exists():
+                return Response({'phone': 'Ce numéro est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
+            if get_user_model().objects.filter(email__iexact=email).exists():
+                return Response({'email': 'Cet email est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
+
+            first_name, last_name = _split_full_name(name)
+            user = get_user_model().objects.create_user(
+                username=normalized_phone,
+                password=temp_password,
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                is_active=True,
+                is_staff=True,
+            )
+            security = _get_security_profile(user)
+            security.must_change_password = True
+            security.save(update_fields=['must_change_password'])
+
+        serializer = self.get_serializer(data={
+            'name': name,
+            'role': payload.get('role'),
+            'email': email,
+            'phone': phone,
+            'status': payload.get('status'),
+            'user': getattr(user, 'id', None),
+        })
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        denial = self._require_staff_manager(request)
+        if denial is not None:
+            return denial
+
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        payload = request.data.copy()
+        payload['email'] = str(payload.get('email') or instance.email or '').strip().lower()
+        payload['phone'] = str(payload.get('phone') or instance.phone or '').strip()
+        payload['name'] = str(payload.get('name') or instance.name or '').strip()
+
+        linked_user = getattr(instance, 'user', None)
+        if linked_user is not None:
+            normalized_phone = _normalize_phone(payload.get('phone'))
+            if len(normalized_phone) < 8:
+                return Response({'phone': 'Numéro de téléphone invalide'}, status=status.HTTP_400_BAD_REQUEST)
+            if get_user_model().objects.filter(username=normalized_phone).exclude(id=linked_user.id).exists():
+                return Response({'phone': 'Ce numéro est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
+            if payload.get('email') and get_user_model().objects.filter(email__iexact=payload.get('email')).exclude(id=linked_user.id).exists():
+                return Response({'email': 'Cet email est déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
+
+            first_name, last_name = _split_full_name(payload.get('name'))
+            linked_user.first_name = first_name
+            linked_user.last_name = last_name
+            linked_user.email = payload.get('email')
+            linked_user.username = normalized_phone
+            linked_user.save(update_fields=['first_name', 'last_name', 'email', 'username'])
+
+        serializer = self.get_serializer(instance, data=payload, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        denial = self._require_staff_manager(request)
+        if denial is not None:
+            return denial
+        instance = self.get_object()
+        linked_user = getattr(instance, 'user', None)
+        response = super().destroy(request, *args, **kwargs)
+        if linked_user is not None:
+            linked_user.delete()
+        return response
 
 class MaterialViewSet(viewsets.ModelViewSet):
     queryset = Material.objects.all()

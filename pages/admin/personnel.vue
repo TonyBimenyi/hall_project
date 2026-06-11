@@ -13,7 +13,7 @@
         <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
           <i class="fas fa-file-excel"></i> Export XLS
         </button>
-        <button class="btn btn-primary btn-sm" @click="openAddModal">
+        <button v-if="canManagePersonnelAccounts" class="btn btn-primary btn-sm" @click="openAddModal">
           <i class="fas fa-user-plus"></i> Ajouter un employé
         </button>
       </div>
@@ -107,10 +107,10 @@
                   <button class="actions-item" @click="viewStaff(staff)">
                     <i class="fas fa-eye"></i> Voir
                   </button>
-                  <button class="actions-item" @click="editStaff(staff)">
+                  <button v-if="canManagePersonnelAccounts" class="actions-item" @click="editStaff(staff)">
                     <i class="fas fa-edit"></i> Modifier
                   </button>
-                  <button class="actions-item danger" @click="confirmDelete(staff)">
+                  <button v-if="canManagePersonnelAccounts" class="actions-item danger" @click="confirmDelete(staff)">
                     <i class="fas fa-trash-alt"></i> Supprimer
                   </button>
                 </div>
@@ -128,6 +128,10 @@
                   <span :class="['badge', getBadgeClass(staff.status)]">{{ translateStatus(staff.status) }}</span>
                 </span>
               </div>
+              <div class="admin-kv">
+                <span class="k">Compte</span>
+                <span class="v">{{ accountStatusText(staff) }}</span>
+              </div>
             </div>
           </div>
         </template>
@@ -141,6 +145,7 @@
             <th>Employé</th>
             <th>Rôle</th>
             <th>Contact</th>
+            <th>Compte</th>
             <th>Disponibilité</th>
             <th>Actions</th>
           </tr>
@@ -157,6 +162,7 @@
               </td>
               <td><div class="skeleton-line skeleton-w-50"></div></td>
               <td><div class="skeleton-line skeleton-w-50"></div></td>
+              <td><div class="skeleton-line skeleton-w-40"></div></td>
               <td><div class="skeleton-line skeleton-w-30"></div></td>
               <td><div class="skeleton-line skeleton-w-60"></div></td>
             </tr>
@@ -171,7 +177,15 @@
               </div>
             </td>
             <td>{{ staff.role }}</td>
-            <td>{{ staff.phone }}</td>
+            <td>
+              <div>{{ staff.phone }}</div>
+              <div v-if="staff.email" class="muted-line">{{ staff.email }}</div>
+            </td>
+            <td>
+              <span class="badge" :class="staff.has_account ? (staff.must_change_password ? 'badge-warning' : 'badge-success') : 'badge-info'">
+                {{ accountStatusText(staff) }}
+              </span>
+            </td>
             <td>
               <span :class="['badge', getBadgeClass(staff.status)]">
                 {{ translateStatus(staff.status) }}
@@ -186,10 +200,10 @@
                   <button class="actions-item" @click="viewStaff(staff)">
                     <i class="fas fa-eye"></i> Voir
                   </button>
-                  <button class="actions-item" @click="editStaff(staff)">
+                  <button v-if="canManagePersonnelAccounts" class="actions-item" @click="editStaff(staff)">
                     <i class="fas fa-edit"></i> Modifier
                   </button>
-                  <button class="actions-item danger" @click="confirmDelete(staff)">
+                  <button v-if="canManagePersonnelAccounts" class="actions-item danger" @click="confirmDelete(staff)">
                     <i class="fas fa-trash-alt"></i> Supprimer
                   </button>
                 </div>
@@ -210,6 +224,7 @@
         <div class="form-group">
           <label class="form-label">Rôle</label>
           <select v-model="form.role" class="form-select" required>
+            <option value="Manager">Manager</option>
             <option value="Réceptionniste">Réceptionniste</option>
             <option value="Sécurité">Sécurité</option>
             <option value="Chef Cuisine">Chef Cuisine</option>
@@ -223,6 +238,10 @@
           <input v-model="form.phone" type="text" class="form-input" required placeholder="+225 07..." />
         </div>
         <div class="form-group">
+          <label class="form-label">Email</label>
+          <input v-model="form.email" type="email" class="form-input" :required="form.create_account" placeholder="email@exemple.com" />
+        </div>
+        <div class="form-group">
           <label class="form-label">Statut</label>
           <select v-model="form.status" class="form-select" required>
             <option value="available">Disponible</option>
@@ -230,10 +249,25 @@
             <option value="off_duty">En congé</option>
           </select>
         </div>
+        <div v-if="!isEditing && canManagePersonnelAccounts" class="form-group inline-check">
+          <label class="checkbox-row">
+            <input v-model="form.create_account" type="checkbox" />
+            <span>Créer un accès au tableau de bord avec mot de passe temporaire</span>
+          </label>
+        </div>
+        <div v-if="!isEditing && form.create_account" class="form-group">
+          <label class="form-label">Mot de passe temporaire</label>
+          <input v-model="form.temporary_password" type="text" class="form-input" :required="form.create_account" minlength="8" placeholder="Ex: Temp@2026" />
+          <small class="helper-text">L'employé devra changer ce mot de passe à sa première connexion.</small>
+        </div>
+        <div v-if="isEditing && form.has_account" class="account-note">
+          <i class="fas fa-key"></i>
+          <span>Ce personnel a déjà un compte de connexion.</span>
+        </div>
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showFormModal = false">Annuler</button>
-        <button class="btn btn-primary" :class="{ 'is-loading': savingStaff }" :disabled="savingStaff" @click="saveStaff">
+        <button class="btn btn-primary" :class="{ 'is-loading': savingStaff }" :disabled="savingStaff || !canManagePersonnelAccounts" @click="saveStaff">
           {{ isEditing ? 'Mettre à jour' : 'Ajouter' }}
         </button>
       </template>
@@ -257,6 +291,18 @@
         <div class="detail-item">
           <span class="detail-label">Contact</span>
           <span class="detail-val">{{ selectedStaff.phone }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Email</span>
+          <span class="detail-val">{{ selectedStaff.email || '-' }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Compte</span>
+          <span class="detail-val">{{ accountStatusText(selectedStaff) }}</span>
+        </div>
+        <div v-if="selectedStaff.account_username" class="detail-item">
+          <span class="detail-label">Identifiant</span>
+          <span class="detail-val">{{ selectedStaff.account_username }}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Statut</span>
@@ -311,6 +357,7 @@ const openActionsId = ref(null)
 const isMobile = ref(false)
 const savingStaff = ref(false)
 const deletingStaff = ref(false)
+const currentUser = ref({})
 
 const toggleActions = (id) => {
   openActionsId.value = openActionsId.value === id ? null : id
@@ -387,6 +434,11 @@ const fetchPersonnel = async () => {
 }
 
 onMounted(() => {
+  try {
+    currentUser.value = JSON.parse(localStorage.getItem('user') || '{}')
+  } catch {
+    currentUser.value = {}
+  }
   fetchPersonnel()
   if (process.client) {
     const update = () => { isMobile.value = window.innerWidth <= 992 }
@@ -405,6 +457,7 @@ const availableCount = computed(() => personnel.value.filter(p => p.status === '
 const offDutyCount = computed(() => personnel.value.filter(p => p.status === 'off_duty').length)
 const staffDisplayIds = computed(() => buildPersonnelSequenceMap(personnel.value))
 const getStaffDisplayId = (staff) => staffDisplayIds.value.get(staff?.id) || 'EMP-0001'
+const canManagePersonnelAccounts = computed(() => !!currentUser.value?.can_manage_staff_accounts || (!!currentUser.value?.is_superuser || (!!currentUser.value?.is_staff && !currentUser.value?.personnel_id)))
 
 const displayPersonnelCount = ref(0)
 const displayOnDutyCount = ref(0)
@@ -451,8 +504,12 @@ const resetForm = () => {
     id: null,
     name: '',
     role: 'Serveur',
+    email: '',
     phone: '',
-    status: 'available'
+    status: 'available',
+    create_account: true,
+    temporary_password: '',
+    has_account: false,
   }
 }
 
@@ -471,7 +528,7 @@ const viewStaff = (staff) => {
 const editStaff = (staff) => {
   closeActions()
   isEditing.value = true
-  form.value = { ...staff }
+  form.value = { ...staff, create_account: !!staff.has_account, temporary_password: '' }
   showFormModal.value = true
 }
 
@@ -495,7 +552,9 @@ const saveStaff = async () => {
     showFormModal.value = false
     fetchPersonnel()
   } catch (error) {
-    notify('Erreur lors de l\'enregistrement', 'danger')
+    const data = error?.response?.data || {}
+    const msg = data.detail || data.phone || data.email || data.temporary_password || 'Erreur lors de l\'enregistrement'
+    notify(msg, 'danger')
   } finally {
     savingStaff.value = false
   }
@@ -533,6 +592,11 @@ const getBadgeClass = (status) => {
   }
   return map[status] || ''
 }
+
+const accountStatusText = (staff) => {
+  if (!staff?.has_account) return 'Sans compte'
+  return staff.must_change_password ? 'Mot de passe temporaire' : 'Compte actif'
+}
 </script>
 
 <style scoped>
@@ -558,6 +622,47 @@ const getBadgeClass = (status) => {
   color: #64748b;
   font-size: 0.9rem;
   font-weight: 500;
+}
+
+.muted-line {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  margin-top: 0.15rem;
+}
+
+.inline-check {
+  margin-top: 0.25rem;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.checkbox-row input {
+  width: 16px;
+  height: 16px;
+}
+
+.helper-text {
+  display: block;
+  margin-top: 0.4rem;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.account-note {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  color: #334155;
 }
 
 .stats-grid {

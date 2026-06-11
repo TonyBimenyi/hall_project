@@ -51,10 +51,15 @@
               {{ currentUserName }}
               <i class="fas fa-chevron-down"></i>
             </span>
+            <span class="user-role">{{ currentUserRole }}</span>
           </div>
 
           <!-- Dropdown -->
           <div v-if="showProfileMenu" class="profile-dropdown">
+            <button class="dropdown-item" @click="goToProfile">
+              <i class="fas fa-user-circle"></i>
+              Mon profil
+            </button>
             <button class="dropdown-item logout" @click="logout">
               <i class="fas fa-sign-out-alt"></i>
               Déconnexion
@@ -124,6 +129,13 @@ export default {
       return full || this.currentUser.email || 'Utilisateur'
     },
 
+    currentUserRole() {
+      if (this.currentUser?.is_superuser) return 'Super Admin'
+      if (this.currentUser?.personnel_role) return this.currentUser.personnel_role
+      if (this.currentUser?.is_staff) return 'Admin'
+      return 'Utilisateur'
+    },
+
     userInitials() {
       const first = this.currentUser?.first_name?.[0] || ''
       const last = this.currentUser?.last_name?.[0] || ''
@@ -158,6 +170,9 @@ export default {
       try {
         const res = await api.get('me/')
         this.currentUser = res.data
+        if (process.client) {
+          localStorage.setItem('user', JSON.stringify(res.data))
+        }
       } catch {
         this.currentUser = {}
       }
@@ -210,8 +225,15 @@ export default {
       }
     },
 
+    goToProfile() {
+      this.$router.push('/admin/profile')
+      this.showProfileMenu = false
+    },
+
     logout() {
       localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('user')
       this.$router.push('/login')
       this.showProfileMenu = false
     }
@@ -401,6 +423,13 @@ export default {
   font-weight: 600;
   font-size: 0.85rem;
   color: #475569;
+}
+
+.user-role {
+  display: block;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-top: 0.15rem;
 }
 
 .profile-dropdown {

@@ -26,6 +26,13 @@ onMounted(() => {
 
   const isAdmin = !!user.is_staff || !!user.is_superuser
   const isLoggedIn = !!localStorage.getItem('access_token') || !!user.id
+  const mustChangePassword = !!user.must_change_password
+
+  if (mustChangePassword) {
+    router.replace('/force-password-change')
+    allowed.value = false
+    return
+  }
 
   if (!isAdmin) {
     router.replace(isLoggedIn ? '/dashboard' : '/login')

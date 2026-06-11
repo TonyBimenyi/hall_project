@@ -78,7 +78,7 @@
 import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
 
-const { formatMoney } = useMoney()
+const money = useMoney()
 
 export default {
   data() {
@@ -129,6 +129,9 @@ export default {
   },
 
   methods: {
+    formatMoney(value) {
+      return money.formatMoney(value)
+    },
     animateTo(key, toValue) {
       const from = Number(this[key] || 0)
       const to = Number(toValue || 0)

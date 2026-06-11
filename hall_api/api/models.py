@@ -39,13 +39,34 @@ class Personnel(models.Model):
         ('on_duty', 'En service'),
         ('off_duty', 'En congé'),
     ]
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='personnel_record',
+    )
     name = models.CharField(max_length=100)
     role = models.CharField(max_length=100)
+    email = models.EmailField(blank=True, default='')
     phone = models.CharField(max_length=20)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
 
     def __str__(self):
         return self.name
+
+class AccountSecurityProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='security_profile',
+    )
+    must_change_password = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"SecurityProfile(user_id={self.user_id}, must_change={self.must_change_password})"
 
 class Material(models.Model):
     STATUS_CHOICES = [
