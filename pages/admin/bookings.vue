@@ -63,6 +63,7 @@
             <option value="Gala">Gala</option>
             <option value="Anniversaire">Anniversaire</option>
             <option value="Réunion">Réunion</option>
+            <option value="Autres">Autres</option>
           </select>
         </div>
         <div class="filter-wrapper">
@@ -293,12 +294,18 @@
           <div class="form-group">
             <label class="form-label">Type d'événement</label>
             <select v-model="form.event_type" class="form-select" required>
-              <option value="Mariage">Mariage</option>
-              <option value="Séminaire">Séminaire</option>
-              <option value="Gala">Gala</option>
-              <option value="Anniversaire">Anniversaire</option>
-              <option value="Réunion">Réunion</option>
+              <option v-for="eventOption in eventTypeOptions" :key="eventOption" :value="eventOption">{{ eventOption }}</option>
             </select>
+          </div>
+          <div v-if="isOtherEventType" class="form-group full">
+            <label class="form-label">Détails de l'événement</label>
+            <textarea
+              v-model="form.event_type_other"
+              class="form-textarea"
+              rows="3"
+              required
+              placeholder="Précisez le type d'événement"
+            ></textarea>
           </div>
           <div class="form-group">
             <label class="form-label">Date Début</label>
@@ -396,6 +403,7 @@ definePageMeta({ layout: 'admin' })
 const { formatMoney, formatNumberSpaces, moneyInputModel, parseMoney } = useMoney()
 const { formatDateRange, formatDisplayDate } = useDateFormat()
 const { buildMonthlySequenceMap } = useDisplayIds()
+const eventTypeOptions = ['Mariage', 'Séminaire', 'Gala', 'Anniversaire', 'Réunion', 'Autres']
 
 const search = ref('')
 const statusFilter = ref('')
@@ -470,11 +478,13 @@ const form = ref({
   customer_email: '',
   hall: '',
   event_type: 'Mariage',
+  event_type_other: '',
   start_date: '',
   end_date: '',
   total_price: 0,
   status: 'pending'
 })
+const isOtherEventType = computed(() => form.value.event_type === 'Autres')
 const totalPriceInput = moneyInputModel(form, 'total_price')
 const minAmountInput = computed({
   get: () => (minAmount.value === null || minAmount.value === '' ? '' : formatNumberSpaces(minAmount.value)),
@@ -578,7 +588,9 @@ const filteredBookings = computed(() => {
       String(b.hall_name || '').toLowerCase().includes(q)
     const matchesStatus = statusFilter.value === '' || b.status === statusFilter.value
     const matchesHall = hallFilter.value === '' || String(b.hall) === String(hallFilter.value) || String(b.hall_id) === String(hallFilter.value)
-    const matchesEventType = eventTypeFilter.value === '' || b.event_type === eventTypeFilter.value
+    const matchesEventType = eventTypeFilter.value === '' || (eventTypeFilter.value === 'Autres'
+      ? String(b.event_type || '').startsWith('Autres: ')
+      : b.event_type === eventTypeFilter.value)
 
     const start = b.start_date ? new Date(b.start_date) : null
     const fromOk = !dateFrom.value || (start && start >= new Date(dateFrom.value))
@@ -622,11 +634,12 @@ const {
 const saveBooking = async () => {
   savingBooking.value = true
   try {
+    const payload = buildBookingPayload()
     if (isEditing.value) {
-      await api.put(`bookings/${form.value.id}/`, form.value)
+      await api.put(`bookings/${form.value.id}/`, payload)
       notify('Réservation mise à jour avec succès', 'success')
     } else {
-      await api.post('bookings/', form.value)
+      await api.post('bookings/', payload)
       notify('Nouvelle réservation créée', 'success')
     }
     showFormModal.value = false
@@ -709,7 +722,7 @@ const getBadgeClass = (status) => {
 
 const openAddModal = () => {
   isEditing.value = false
-  form.value = { id: null, customer_name: '', customer_email: '', hall: halls.value[0]?.id || '', event_type: 'Mariage', start_date: '', end_date: '', total_price: 0, status: 'pending' }
+  form.value = { id: null, customer_name: '', customer_email: '', hall: halls.value[0]?.id || '', event_type: 'Mariage', event_type_other: '', start_date: '', end_date: '', total_price: 0, status: 'pending' }
   daysCount.value = 0
   showFormModal.value = true
 }
@@ -717,7 +730,7 @@ const openAddModal = () => {
 const editBooking = (booking) => {
   closeActions()
   isEditing.value = true
-  form.value = { ...booking }
+  form.value = mapBookingToForm(booking)
   calculatePrice()
   showFormModal.value = true
 }
@@ -733,6 +746,32 @@ const confirmDelete = (booking) => {
   selectedBooking.value = booking
   showDeleteModal.value = true
 }
+
+const normalizeEventType = (eventType, eventTypeOther = '') => {
+  if (eventType !== 'Autres') return eventType
+  const details = String(eventTypeOther || '').trim()
+  return details ? `Autres: ${details}` : 'Autres'
+}
+
+const mapBookingToForm = (booking) => {
+  const rawEventType = String(booking?.event_type || '')
+  const isKnown = eventTypeOptions.includes(rawEventType)
+  if (isKnown) {
+    return { ...booking, event_type_other: '' }
+  }
+
+  const otherPrefix = 'Autres: '
+  return {
+    ...booking,
+    event_type: 'Autres',
+    event_type_other: rawEventType.startsWith(otherPrefix) ? rawEventType.slice(otherPrefix.length) : rawEventType,
+  }
+}
+
+const buildBookingPayload = () => ({
+  ...form.value,
+  event_type: normalizeEventType(form.value.event_type, form.value.event_type_other),
+})
 </script>
 
 <style scoped>
