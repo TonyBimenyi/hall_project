@@ -10,15 +10,21 @@
         <div class="dropdown-header">
           <span class="header-title">Notifications</span>
           <button v-if="unreadCount > 0" class="mark-all-btn" @click="handleMarkAllAsRead">
-            Mark all as read
+            Tout marquer comme lu
           </button>
         </div>
 
         <div class="notifications-list">
-          <template v-if="recentNotifications.length === 0">
+          <template v-if="loadingNotifications">
+            <div class="empty-state">
+              <i class="fas fa-spinner fa-spin"></i>
+              <span>Chargement des notifications...</span>
+            </div>
+          </template>
+          <template v-else-if="recentNotifications.length === 0">
             <div class="empty-state">
               <i class="fas fa-inbox"></i>
-              <span>No notifications</span>
+              <span>Aucune notification</span>
             </div>
           </template>
           <template v-else>
@@ -27,7 +33,7 @@
               :key="notification.id"
               class="notification-item"
               :class="{ unread: !notification.read }"
-              @click="handleMarkAsRead(notification.id)"
+              @click="openNotificationDetails(notification)"
             >
               <div class="notification-icon" :class="notification.type">
                 <i :class="getIconForType(notification.type)"></i>
@@ -44,7 +50,7 @@
 
         <div class="dropdown-footer">
           <NuxtLink to="/admin/notifications" class="view-all-btn">
-            View All Notifications
+            Voir toutes les notifications
           </NuxtLink>
         </div>
       </div>
@@ -58,6 +64,8 @@ import {
   showNotificationsDropdown,
   unreadCount,
   recentNotifications,
+  loadingNotifications,
+  fetchNotifications,
   formatTimeAgo,
   markAsRead,
   markAllAsRead,
@@ -66,17 +74,46 @@ import {
 
 const showDropdown = ref(false)
 
-const toggleDropdown = () => {
+const toggleDropdown = async () => {
   showDropdown.value = !showDropdown.value
   showNotificationsDropdown.value = showDropdown.value
+  if (showDropdown.value) {
+    await fetchNotifications({ force: true }).catch(() => {})
+  }
 }
 
-const handleMarkAsRead = (id) => {
-  markAsRead(id)
+const handleMarkAsRead = async (id) => {
+  await markAsRead(id).catch(() => {})
 }
 
-const handleMarkAllAsRead = () => {
-  markAllAsRead()
+const handleMarkAllAsRead = async () => {
+  await markAllAsRead().catch(() => {})
+}
+
+const getNotificationTarget = (notification) => {
+  const focus = String(Date.now())
+  if (notification?.payment) {
+    return { path: '/admin/payments', query: { view: String(notification.payment), focus } }
+  }
+  if (notification?.booking) {
+    return { path: '/admin/bookings', query: { view: String(notification.booking), focus } }
+  }
+  if (notification?.material) {
+    return { path: '/admin/materials', query: { view: String(notification.material), focus } }
+  }
+  return null
+}
+
+const openNotificationDetails = async (notification) => {
+  if (!notification) return
+  if (!notification.read) {
+    await markAsRead(notification.id).catch(() => {})
+  }
+  showDropdown.value = false
+  showNotificationsDropdown.value = false
+  const target = getNotificationTarget(notification)
+  if (!target) return
+  await navigateTo(target)
 }
 
 const getIconForType = (type) => {
@@ -103,6 +140,7 @@ const handleOutsideClick = (e) => {
 
 onMounted(() => {
   document.addEventListener('click', handleOutsideClick)
+  fetchNotifications().catch(() => {})
 })
 
 onBeforeUnmount(() => {

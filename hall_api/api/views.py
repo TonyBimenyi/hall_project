@@ -1,9 +1,9 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
-from .models import Hall, Booking, Personnel, Material, Expense, Payment, MagicLoginToken, AccountSecurityProfile
+from .models import Hall, Booking, Personnel, Material, Expense, Payment, Notification, MagicLoginToken, AccountSecurityProfile
 from .serializers import (
     HallSerializer, BookingSerializer, PersonnelSerializer,
-    MaterialSerializer, ExpenseSerializer, PaymentSerializer
+    MaterialSerializer, ExpenseSerializer, PaymentSerializer, NotificationSerializer
 )
 
 from rest_framework.views import APIView
@@ -27,6 +27,7 @@ from django.contrib.auth.password_validation import validate_password
 from datetime import timedelta, date
 import hashlib
 import secrets
+import unicodedata
 
 class SummaryView(APIView):
     def get(self, request):
@@ -412,11 +413,150 @@ def _user_payload(user):
 def _can_manage_staff_accounts(user):
     if not user or not user.is_authenticated:
         return False
-    return bool(user.is_superuser or (user.is_staff and getattr(user, 'personnel_record', None) is None))
+    return bool(_staff_role_key(user) in {'super_admin', 'proprietaire', 'gestionnaire'})
 
 def _actor(request):
     user = getattr(request, 'user', None)
     return user if getattr(user, 'is_authenticated', False) else None
+
+def _normalize_role_label(value):
+    text = str(value or '').strip().lower()
+    if not text:
+        return ''
+    return unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
+
+def _staff_role_key(user):
+    if not user or not user.is_active:
+        return ''
+    if user.is_superuser:
+        return 'super_admin'
+
+    personnel = getattr(user, 'personnel_record', None)
+    role = _normalize_role_label(getattr(personnel, 'role', ''))
+    if role in {'admin', 'proprietaire'}:
+        return 'proprietaire'
+    if role in {'manager', 'gestionnaire'}:
+        return 'gestionnaire'
+    if role == 'gerant':
+        return 'gerant'
+    if role in {'receptionniste', 'receptionist', 'reception'}:
+        return 'receptionniste'
+    if user.is_staff:
+        return 'proprietaire'
+    return role
+
+def _is_admin_user(user):
+    return _staff_role_key(user) in {'super_admin', 'proprietaire', 'gestionnaire', 'gerant'}
+
+def _can_delete_booking(user):
+    role = _staff_role_key(user)
+    return role in {'super_admin', 'proprietaire', 'gestionnaire', 'receptionniste'}
+
+def _notification_recipients(_category):
+    recipients = []
+    for user in get_user_model().objects.filter(is_active=True).distinct():
+        if _is_admin_user(user):
+            recipients.append(user)
+    return recipients
+
+def _create_notification_for_user(*, user, title, message, category, type, event_key=None, booking=None, payment=None, material=None):
+    if event_key:
+        notification, created = Notification.objects.get_or_create(
+            user=user,
+            event_key=event_key,
+            defaults={
+                'title': title,
+                'message': message,
+                'category': category,
+                'type': type,
+                'booking': booking,
+                'payment': payment,
+                'material': material,
+            },
+        )
+        if not created:
+            changed = False
+            if notification.title != title:
+                notification.title = title
+                changed = True
+            if notification.message != message:
+                notification.message = message
+                changed = True
+            if notification.type != type:
+                notification.type = type
+                changed = True
+            if notification.category != category:
+                notification.category = category
+                changed = True
+            if notification.booking_id != getattr(booking, 'id', None):
+                notification.booking = booking
+                changed = True
+            if notification.payment_id != getattr(payment, 'id', None):
+                notification.payment = payment
+                changed = True
+            if notification.material_id != getattr(material, 'id', None):
+                notification.material = material
+                changed = True
+            if changed:
+                notification.save(update_fields=['title', 'message', 'type', 'category', 'booking', 'payment', 'material', 'updated_at'])
+        return notification
+    return Notification.objects.create(
+        user=user,
+        title=title,
+        message=message,
+        category=category,
+        type=type,
+        booking=booking,
+        payment=payment,
+        material=material,
+    )
+
+def _create_role_notifications(*, title, message, category, type, event_key=None, booking=None, payment=None, material=None):
+    for user in _notification_recipients(category):
+        _create_notification_for_user(
+            user=user,
+            title=title,
+            message=message,
+            category=category,
+            type=type,
+            event_key=event_key,
+            booking=booking,
+            payment=payment,
+            material=material,
+        )
+
+def _sync_overdue_notifications():
+    today = timezone.localdate()
+    overdue_bookings = Booking.objects.filter(
+        end_date__lt=today,
+        status__in=['pending', 'confirmed'],
+    ).exclude(total_price__lte=0)
+
+    active_keys = set()
+    for booking in overdue_bookings:
+        total = booking.total_price or Decimal('0.00')
+        paid = booking.paid_amount or Decimal('0.00')
+        remaining = total - paid
+        if remaining <= 0:
+            continue
+
+        event_key = f"payment-overdue-booking-{booking.id}"
+        active_keys.add(event_key)
+        booking_code = booking.code or f"LBR{booking.id}"
+        message = f"Paiement en retard pour la reservation {booking_code}."
+        _create_role_notifications(
+            title='Paiement en retard',
+            message=message,
+            category='payment_overdue',
+            type='danger',
+            event_key=event_key,
+            booking=booking,
+        )
+
+    resolved = Notification.objects.filter(category='payment_overdue', is_read=False)
+    if active_keys:
+        resolved = resolved.exclude(event_key__in=active_keys)
+    resolved.update(is_read=True, read_at=timezone.now())
 
 class PhoneTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
@@ -527,6 +667,50 @@ class RegisterView(APIView):
 
         return Response({'id': user.id, 'username': user.username}, status=status.HTTP_201_CREATED)
 
+class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        _sync_overdue_notifications()
+        return Notification.objects.filter(user=self.request.user).order_by('-created_at', '-id')
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        status_filter = str(request.query_params.get('status') or '').strip().lower()
+        limit = str(request.query_params.get('limit') or '').strip()
+
+        if status_filter == 'unread':
+            queryset = queryset.filter(is_read=False)
+        elif status_filter == 'read':
+            queryset = queryset.filter(is_read=True)
+
+        if limit.isdigit():
+            queryset = queryset[:max(0, int(limit))]
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='unread-count')
+    def unread_count(self, request):
+        count = self.get_queryset().filter(is_read=False).count()
+        return Response({'unread_count': count})
+
+    @action(detail=True, methods=['post'], url_path='mark-read')
+    def mark_read(self, request, pk=None):
+        notification = self.get_object()
+        if not notification.is_read:
+            notification.is_read = True
+            notification.read_at = timezone.now()
+            notification.save(update_fields=['is_read', 'read_at', 'updated_at'])
+        return Response(self.get_serializer(notification).data)
+
+    @action(detail=False, methods=['post'], url_path='mark-all-read')
+    def mark_all_read(self, request):
+        now = timezone.now()
+        self.get_queryset().filter(is_read=False).update(is_read=True, read_at=now)
+        return Response({'message': 'All notifications marked as read'})
+
 class HallViewSet(viewsets.ModelViewSet):
     queryset = Hall.objects.all().order_by('-id')
     serializer_class = HallSerializer
@@ -547,6 +731,11 @@ class BookingViewSet(viewsets.ModelViewSet):
         if user.is_staff or user.is_superuser:
             return Booking.objects.all().order_by('-id')
         return Booking.objects.filter(created_by=user).order_by('-id')
+
+    def destroy(self, request, *args, **kwargs):
+        if (request.user.is_staff or request.user.is_superuser) and not _can_delete_booking(request.user):
+            return Response({'detail': 'Suppression de réservation non autorisée pour ce rôle'}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         hall = serializer.validated_data.get('hall')
@@ -950,11 +1139,38 @@ class MaterialViewSet(viewsets.ModelViewSet):
     queryset = Material.objects.all().order_by('-id')
     serializer_class = MaterialSerializer
 
+    def _emit_stock_notifications(self, material, previous_available=None):
+        available = int(material.available_quantity or 0)
+        minimum = int(material.minimum_quantity or 0)
+        previous = None if previous_available is None else int(previous_available)
+
+        if available <= 0 and (previous is None or previous > 0):
+            _create_role_notifications(
+                title='Rupture de stock',
+                message=f"Rupture de stock : {material.name}.",
+                category='out_of_stock',
+                type='danger',
+                material=material,
+            )
+            return
+
+        if available <= minimum and available > 0 and (previous is None or previous > minimum or previous <= 0):
+            _create_role_notifications(
+                title='Alerte stock faible',
+                message=f"Alerte stock faible : il reste {available} pour {material.name}.",
+                category='low_inventory',
+                type='warning',
+                material=material,
+            )
+
     def perform_create(self, serializer):
-        serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))
+        material = serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))
+        self._emit_stock_notifications(material)
 
     def perform_update(self, serializer):
-        serializer.save(updated_by=_actor(self.request))
+        previous_available = getattr(serializer.instance, 'available_quantity', 0)
+        material = serializer.save(updated_by=_actor(self.request))
+        self._emit_stock_notifications(material, previous_available=previous_available)
 
 class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = Expense.objects.all().order_by('-id')
@@ -980,6 +1196,21 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 booking.status = 'confirmed'
         booking.save(update_fields=['paid_amount', 'status'])
 
+    def _emit_payment_received_notification(self, payment):
+        if payment.status != 'paid':
+            return
+        booking = getattr(payment, 'booking', None)
+        booking_code = getattr(booking, 'code', '') or f"LBR{getattr(booking, 'id', '')}"
+        _create_role_notifications(
+            title='Paiement recu',
+            message=f"Paiement recu pour la reservation {booking_code}.",
+            category='payment_received',
+            type='success',
+            event_key=f"payment-received-{payment.id}",
+            booking=booking,
+            payment=payment,
+        )
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1000,6 +1231,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
             payment.save(update_fields=['kind'])
 
         self._recalc_booking_paid(payment.booking)
+        self._emit_payment_received_notification(payment)
+        _sync_overdue_notifications()
 
         output = self.get_serializer(payment)
         return Response(output.data, status=status.HTTP_201_CREATED)
@@ -1007,11 +1240,16 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         kwargs['partial'] = kwargs.get('partial', False)
         instance = self.get_object()
+        was_paid = instance.status == 'paid'
         serializer = self.get_serializer(instance, data=request.data, partial=kwargs['partial'])
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
+        payment = serializer.instance
         response = Response(serializer.data)
-        self._recalc_booking_paid(instance.booking)
+        self._recalc_booking_paid(payment.booking)
+        if not was_paid and payment.status == 'paid':
+            self._emit_payment_received_notification(payment)
+        _sync_overdue_notifications()
         return response
 
     def perform_update(self, serializer):
@@ -1022,4 +1260,5 @@ class PaymentViewSet(viewsets.ModelViewSet):
         booking = instance.booking
         response = super().destroy(request, *args, **kwargs)
         self._recalc_booking_paid(booking)
+        _sync_overdue_notifications()
         return response

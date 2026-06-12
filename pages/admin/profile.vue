@@ -13,7 +13,7 @@
           <div class="identity-avatar">{{ initials }}</div>
           <div>
             <h2>{{ fullName || 'Utilisateur' }}</h2>
-            <p>{{ profile.personnel_role || roleLabel }}</p>
+            <p>{{ roleLabel }}</p>
           </div>
         </div>
 
@@ -105,6 +105,7 @@
 <script setup>
 import { api } from '~/composables/useApi'
 import { notify } from '~/composables/useNotification'
+import { getRoleLabel } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
 
@@ -128,12 +129,7 @@ const security = ref({
 const fullName = computed(() => `${form.value.first_name} ${form.value.last_name}`.trim())
 const initials = computed(() => `${form.value.first_name?.[0] || ''}${form.value.last_name?.[0] || ''}`.toUpperCase() || 'U')
 const canEditPhone = computed(() => !!profile.value?.personnel_id)
-const roleLabel = computed(() => {
-  if (profile.value?.is_superuser) return 'Super Admin'
-  if (profile.value?.personnel_role) return profile.value.personnel_role
-  if (profile.value?.is_staff) return 'Admin'
-  return 'Utilisateur'
-})
+const roleLabel = computed(() => getRoleLabel(profile.value))
 
 const applyProfile = (data) => {
   profile.value = data || {}

@@ -71,6 +71,7 @@
         </div>
         <div class="filter-wrapper">
           <select v-model="preset" class="filter-select-clean">
+            <option value="all">Toutes les dates</option>
             <option value="7d">7 jours</option>
             <option value="28d">28 jours</option>
             <option value="90d">90 jours</option>
@@ -176,7 +177,7 @@
                   <button class="actions-item" @click="editBooking(booking)">
                     <i class="fas fa-edit"></i> Modifier
                   </button>
-                  <button class="actions-item danger" @click="confirmDelete(booking)">
+                  <button v-if="canDeleteBookings" class="actions-item danger" @click="confirmDelete(booking)">
                     <i class="fas fa-trash-alt"></i> Supprimer
                   </button>
                 </div>
@@ -285,7 +286,7 @@
                     <button class="actions-item" @click="editBooking(booking)">
                       <i class="fas fa-edit"></i> Modifier
                     </button>
-                    <button class="actions-item danger" @click="confirmDelete(booking)">
+                    <button v-if="canDeleteBookings" class="actions-item danger" @click="confirmDelete(booking)">
                       <i class="fas fa-trash-alt"></i> Supprimer
                     </button>
                   </div>
@@ -544,8 +545,10 @@ import { usePagination } from '~/composables/usePagination'
 import { useDateFormat } from '~/composables/useDateFormat'
 import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
+import { canDeleteBookings as canDeleteBookingsByRole, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
+const route = useRoute()
 const { formatMoney, formatNumberSpaces, moneyInputModel, parseMoney } = useMoney()
 const { formatDateRange, formatDisplayDate } = useDateFormat()
 const { buildMonthlySequenceMap } = useDisplayIds()
@@ -568,6 +571,8 @@ const customStart = ref('')
 const customEnd = ref('')
 const minAmount = ref(null)
 const maxAmount = ref(null)
+const currentUser = ref({})
+const canDeleteBookings = computed(() => canDeleteBookingsByRole(currentUser.value))
 
 const toYmd = (date) => {
   const d = (date instanceof Date) ? date : new Date(date)
@@ -586,6 +591,7 @@ const addDays = (ymd, days) => {
 
 const resolvePreset = (value) => {
   const todayYmd = toYmd(new Date())
+  if (value === 'all') return { start: '', end: '' }
   if (value === '7d') return { start: addDays(todayYmd, -6), end: todayYmd }
   if (value === '28d') return { start: addDays(todayYmd, -27), end: todayYmd }
   if (value === '90d') return { start: addDays(todayYmd, -89), end: todayYmd }
@@ -623,7 +629,8 @@ const rangeEndYmd = computed(() => activeRange.value.end)
 const dateOverlapsRange = (start, end, rangeStart, rangeEnd) => {
   const s = String(start || '').slice(0, 10)
   const e = String(end || '').slice(0, 10)
-  if (!s || !e || !rangeStart || !rangeEnd) return false
+  if (!rangeStart || !rangeEnd) return true
+  if (!s || !e) return false
   return s <= rangeEnd && e >= rangeStart
 }
 const showFormModal = ref(false)
@@ -874,9 +881,23 @@ const closeActionsOnDocumentClick = () => {
   openActionsId.value = null
 }
 
-onMounted(() => {
-  fetchBookings()
-  fetchHalls()
+const openBookingFromQuery = () => {
+  const viewId = Number(route.query.view)
+  if (!viewId) return
+  const booking = bookings.value.find(item => Number(item?.id) === viewId)
+  if (!booking) return
+  selectedBooking.value = booking
+  showViewModal.value = true
+}
+
+watch(() => `${route.query.view || ''}:${route.query.focus || ''}:${bookings.value.length}`, () => {
+  openBookingFromQuery()
+})
+
+onMounted(async () => {
+  currentUser.value = getStoredUser()
+  await Promise.all([fetchBookings(), fetchHalls()])
+  openBookingFromQuery()
   if (process.client) {
     updateResponsiveState()
     window.addEventListener('resize', updateResponsiveState)
@@ -1110,6 +1131,11 @@ const saveBooking = async () => {
 
 const deleteBooking = async () => {
   if (!selectedBooking.value?.id) return
+  if (!canDeleteBookings.value) {
+    notify('Ce role ne peut pas supprimer une reservation', 'warning')
+    showDeleteModal.value = false
+    return
+  }
   deletingBooking.value = true
   try {
     await api.delete(`bookings/${selectedBooking.value.id}/`)
@@ -1239,6 +1265,10 @@ const viewBooking = (booking) => {
 
 const confirmDelete = (booking) => {
   closeActions()
+  if (!canDeleteBookings.value) {
+    notify('Ce role ne peut pas supprimer une reservation', 'warning')
+    return
+  }
   selectedBooking.value = booking
   showDeleteModal.value = true
 }

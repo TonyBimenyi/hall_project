@@ -23,7 +23,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div v-if="showFinancialCards" class="card">
         <div class="card_info">
           <div class="p">Revenu total</div>
           <div class="number">{{ formatMoney(displayTotalRevenue) }}</div>
@@ -34,7 +34,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div v-if="showFinancialCards" class="card">
         <div class="card_info">
           <div class="p">Dépenses du mois</div>
           <div class="number">{{ formatMoney(displayMonthlyExpenses) }}</div>
@@ -77,6 +77,7 @@
 <script>
 import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
+import { canSeeSyntheticRevenue, getStoredUser } from '~/composables/useRoleAccess'
 
 const money = useMoney()
 
@@ -89,6 +90,7 @@ export default {
       pendingPayments: 0,
       monthlyExpenses: 0,
       materialLosses: 0,
+      currentUser: {},
 
       displayTotalBookings: 0,
       displayActiveHalls: 0,
@@ -101,6 +103,12 @@ export default {
     }
   },
 
+  computed: {
+    showFinancialCards() {
+      return canSeeSyntheticRevenue(this.currentUser)
+    }
+  },
+
   beforeUnmount() {
     for (const id of Object.values(this.rafIds || {})) {
       cancelAnimationFrame(id)
@@ -108,6 +116,7 @@ export default {
   },
 
   async mounted() {
+    this.currentUser = getStoredUser()
     try {
       const response = await api.get('summary/')
       this.totalBookings = response.data.total_bookings

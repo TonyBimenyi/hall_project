@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal
-from .models import Hall, Booking, Personnel, Material, Expense, Payment
+from .models import Hall, Booking, Personnel, Material, Expense, Payment, Notification
 
 def _user_label(user):
     if not user:
@@ -252,6 +252,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
         return _user_label(getattr(obj, 'updated_by', None))
 
 class PaymentSerializer(serializers.ModelSerializer):
+    booking_code = serializers.ReadOnlyField(source='booking.code')
     booking_customer_name = serializers.ReadOnlyField(source='booking.customer_name')
     booking_customer_email = serializers.ReadOnlyField(source='booking.customer_email')
     booking_hall_name = serializers.ReadOnlyField(source='booking.hall.name')
@@ -306,3 +307,12 @@ class PaymentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'amount': 'Le montant dépasse le reste à payer'})
 
         return attrs
+
+class NotificationSerializer(serializers.ModelSerializer):
+    booking_code = serializers.ReadOnlyField(source='booking.code')
+    payment_code = serializers.ReadOnlyField(source='payment.code')
+    material_name = serializers.ReadOnlyField(source='material.name')
+
+    class Meta:
+        model = Notification
+        fields = '__all__'

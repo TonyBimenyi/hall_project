@@ -11,35 +11,45 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from '#imports'
+import { canAccessAdmin, canAccessAdminRoute, getDefaultAdminRoute, getStoredUser } from '~/composables/useRoleAccess'
 
 const allowed = ref(false)
 const router = useRouter()
+const route = useRoute()
 
-onMounted(() => {
-  let user = {}
-  try {
-    user = JSON.parse(localStorage.getItem('user') || '{}') || {}
-  } catch {
-    user = {}
-  }
-
-  const isAdmin = !!user.is_staff || !!user.is_superuser
+const guardAdminRoute = async () => {
+  const user = getStoredUser()
   const isLoggedIn = !!localStorage.getItem('access_token') || !!user.id
   const mustChangePassword = !!user.must_change_password
 
   if (mustChangePassword) {
-    router.replace('/force-password-change')
+    await router.replace('/force-password-change')
     allowed.value = false
     return
   }
 
-  if (!isAdmin) {
-    router.replace(isLoggedIn ? '/dashboard' : '/login')
+  if (!canAccessAdmin(user)) {
+    await router.replace(isLoggedIn ? '/dashboard' : '/login')
+    allowed.value = false
+    return
+  }
+
+  if (!canAccessAdminRoute(user, route.path)) {
+    await router.replace(getDefaultAdminRoute(user))
     allowed.value = false
     return
   }
 
   allowed.value = true
+}
+
+onMounted(() => {
+  guardAdminRoute()
+})
+
+watch(() => route.path, () => {
+  guardAdminRoute()
 })
 </script>

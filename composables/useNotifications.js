@@ -1,148 +1,118 @@
 import { ref, computed } from 'vue'
+import { api } from '~/composables/useApi'
 
-// Notification type definitions
 const NOTIFICATION_TYPES = {
   SUCCESS: 'success',
   WARNING: 'warning',
   DANGER: 'danger',
-  INFO: 'info'
+  INFO: 'info',
 }
 
-// Role definitions
-const ROLES = {
-  SUPER_ADMIN: 'super_admin',
-  ADMIN: 'admin',
-  RECEPTIONIST: 'receptionist',
-  INVENTORY_MANAGER: 'inventory_manager',
-  STOREKEEPER: 'storekeeper'
-}
-
-// Global notifications state
-const notifications = ref([
-  {
-    id: 1,
-    title: 'Payment Received',
-    message: 'Payment received for reservation LBR26060025.',
-    type: NOTIFICATION_TYPES.SUCCESS,
-    timestamp: Date.now() - 5 * 60 * 1000, // 5 minutes ago
-    read: false,
-    roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.RECEPTIONIST]
-  },
-  {
-    id: 2,
-    title: 'Payment Overdue',
-    message: 'Payment overdue for reservation LBR26060020.',
-    type: NOTIFICATION_TYPES.DANGER,
-    timestamp: Date.now() - 60 * 60 * 1000, // 1 hour ago
-    read: false,
-    roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.RECEPTIONIST]
-  },
-  {
-    id: 3,
-    title: 'Low Stock Warning',
-    message: 'Low stock warning: Towels remaining: 5.',
-    type: NOTIFICATION_TYPES.WARNING,
-    timestamp: Date.now() - 2 * 60 * 60 * 1000, // 2 hours ago
-    read: true,
-    roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.INVENTORY_MANAGER, ROLES.STOREKEEPER]
-  },
-  {
-    id: 4,
-    title: 'Out of Stock',
-    message: 'Out of stock: Bath Towels.',
-    type: NOTIFICATION_TYPES.DANGER,
-    timestamp: Date.now() - 24 * 60 * 60 * 1000, // 1 day ago
-    read: true,
-    roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.INVENTORY_MANAGER, ROLES.STOREKEEPER]
-  }
-])
-
+const notifications = ref([])
+const loadingNotifications = ref(false)
+const notificationsLoaded = ref(false)
 const showNotificationsDropdown = ref(false)
 
-// Current user role (from local storage or useUser composable)
-const currentUserRole = ref(() => {
-  if (process.client) {
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
-      if (user?.is_superuser) return ROLES.SUPER_ADMIN
-      if (user?.personnel_role?.toLowerCase() === 'receptionist') return ROLES.RECEPTIONIST
-      if (user?.personnel_role?.toLowerCase() === 'inventory manager' || user?.personnel_role?.toLowerCase() === 'storekeeper') return ROLES.INVENTORY_MANAGER
-      if (user?.is_staff) return ROLES.ADMIN
-    } catch {
-      return ROLES.ADMIN
-    }
-  }
-  return ROLES.ADMIN
+const normalizeNotification = (item) => ({
+  ...item,
+  read: !!item?.is_read,
+  timestamp: item?.created_at || null,
 })
 
-// Computed properties
-const filteredNotifications = computed(() => {
-  const role = currentUserRole.value()
-  return notifications.value.filter(n => n.roles.includes(role))
-})
-
-const unreadNotifications = computed(() => {
-  return filteredNotifications.value.filter(n => !n.read)
-})
-
+const filteredNotifications = computed(() => notifications.value)
+const unreadNotifications = computed(() => filteredNotifications.value.filter((item) => !item.read))
 const unreadCount = computed(() => unreadNotifications.value.length)
+const recentNotifications = computed(() => filteredNotifications.value.slice(0, 5))
 
-const recentNotifications = computed(() => {
-  return filteredNotifications.value.slice(0, 5)
-})
+const fetchNotifications = async ({ force = false } = {}) => {
+  if (loadingNotifications.value) return notifications.value
+  if (notificationsLoaded.value && !force) return notifications.value
 
-// Helper function to format time ago
+  loadingNotifications.value = true
+  try {
+    const response = await api.get('notifications/')
+    const items = Array.isArray(response?.data) ? response.data : []
+    notifications.value = items.map(normalizeNotification)
+    notificationsLoaded.value = true
+  } catch (error) {
+    if (force) {
+      notifications.value = []
+    }
+    throw error
+  } finally {
+    loadingNotifications.value = false
+  }
+
+  return notifications.value
+}
+
+const refreshNotifications = async () => fetchNotifications({ force: true })
+
+const markAsRead = async (notificationId) => {
+  const notification = notifications.value.find((item) => item.id === notificationId)
+  if (!notification || notification.read) return notification
+
+  notification.read = true
+  notification.is_read = true
+  try {
+    const response = await api.post(`notifications/${notificationId}/mark-read/`)
+    const updated = normalizeNotification(response?.data || notification)
+    const index = notifications.value.findIndex((item) => item.id === notificationId)
+    if (index >= 0) notifications.value[index] = updated
+    return updated
+  } catch (error) {
+    notification.read = false
+    notification.is_read = false
+    throw error
+  }
+}
+
+const markAllAsRead = async () => {
+  const previous = notifications.value.map((item) => ({ id: item.id, read: item.read, is_read: item.is_read }))
+  notifications.value = notifications.value.map((item) => ({
+    ...item,
+    read: true,
+    is_read: true,
+  }))
+
+  try {
+    await api.post('notifications/mark-all-read/')
+  } catch (error) {
+    notifications.value = notifications.value.map((item) => {
+      const old = previous.find((entry) => entry.id === item.id)
+      return old ? { ...item, read: old.read, is_read: old.is_read } : item
+    })
+    throw error
+  }
+}
+
 const formatTimeAgo = (timestamp) => {
-  const now = Date.now()
-  const diff = now - timestamp
-  const seconds = Math.floor(diff / 1000)
+  const value = timestamp ? new Date(timestamp) : null
+  if (!value || Number.isNaN(value.getTime())) return ''
+
+  const seconds = Math.max(0, Math.floor((Date.now() - value.getTime()) / 1000))
   const minutes = Math.floor(seconds / 60)
   const hours = Math.floor(minutes / 60)
   const days = Math.floor(hours / 24)
 
-  if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`
-  if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`
-  if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`
-  return 'Just now'
+  if (days > 0) return `il y a ${days} jour${days > 1 ? 's' : ''}`
+  if (hours > 0) return `il y a ${hours} heure${hours > 1 ? 's' : ''}`
+  if (minutes > 0) return `il y a ${minutes} minute${minutes > 1 ? 's' : ''}`
+  return "A l'instant"
 }
 
-// Functions
-const markAsRead = (notificationId) => {
-  const notification = notifications.value.find(n => n.id === notificationId)
-  if (notification) {
-    notification.read = true
-  }
-}
-
-const markAllAsRead = () => {
-  notifications.value.forEach(n => {
-    if (n.roles.includes(currentUserRole.value())) {
-      n.read = true
-    }
-  })
-}
-
-const addNotification = (notification) => {
-  notifications.value.unshift({
-    id: Date.now(),
-    read: false,
-    timestamp: Date.now(),
-    ...notification
-  })
-}
-
-// Exports
 export {
   notifications,
+  loadingNotifications,
   showNotificationsDropdown,
   filteredNotifications,
   unreadNotifications,
   unreadCount,
   recentNotifications,
   NOTIFICATION_TYPES,
-  ROLES,
+  fetchNotifications,
+  refreshNotifications,
   formatTimeAgo,
   markAsRead,
   markAllAsRead,
-  addNotification
 }

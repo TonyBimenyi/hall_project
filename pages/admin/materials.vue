@@ -342,6 +342,7 @@ import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
 
 definePageMeta({ layout: 'admin' })
+const route = useRoute()
 
 const materials = ref([])
 const { buildHashSequenceMap } = useDisplayIds()
@@ -459,8 +460,22 @@ const fetchMaterials = async () => {
   }
 }
 
-onMounted(() => {
-  fetchMaterials()
+const openMaterialFromQuery = () => {
+  const viewId = Number(route.query.view)
+  if (!viewId) return
+  const material = materials.value.find(item => Number(item?.id) === viewId)
+  if (!material) return
+  selectedMaterial.value = material
+  showViewModal.value = true
+}
+
+watch(() => `${route.query.view || ''}:${route.query.focus || ''}:${materials.value.length}`, () => {
+  openMaterialFromQuery()
+})
+
+onMounted(async () => {
+  await fetchMaterials()
+  openMaterialFromQuery()
   if (process.client) {
     const update = () => { isMobile.value = window.innerWidth <= 992 }
     update()

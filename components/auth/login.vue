@@ -68,9 +68,11 @@
 
 <script setup>
 import axios from 'axios'
+import { useLocalePath, useRoute, useRouter } from '#imports'
 import Notification from '~/components/Notification.vue'
 import { notify } from '~/composables/useNotification'
 import { getApiOrigin } from '~/composables/useApi'
+import { getDefaultAdminRoute } from '~/composables/useRoleAccess'
 
 const { t } = useI18n()
 const localePath = useLocalePath()
@@ -97,7 +99,9 @@ const redirectAfterLogin = async (user, fallback = '/dashboard') => {
     return
   }
 
-  const redirectTo = user?.is_staff ? localePath('/admin') : localePath(fallback)
+  const redirectTo = user?.is_staff || user?.is_superuser
+    ? localePath(getDefaultAdminRoute(user))
+    : localePath(fallback)
   await router.push(redirectTo)
   window.location.reload()
 }

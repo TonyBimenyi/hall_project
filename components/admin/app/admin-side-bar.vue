@@ -13,7 +13,7 @@
 
       <nav class="menu">
         <NuxtLink
-          v-for="item in navigation"
+          v-for="item in filteredNavigation"
           :key="item.title"
           :to="item.url"
           class="menu-item"
@@ -88,6 +88,7 @@
 <script>
 import { api } from '~/composables/useApi'
 import NotificationBell from '~/components/admin/NotificationBell.vue'
+import { filterNavigationByRole, getRoleLabel } from '~/composables/useRoleAccess'
 
 export default {
   components: {
@@ -118,8 +119,13 @@ export default {
   },
 
   computed: {
+    filteredNavigation() {
+      return filterNavigationByRole(this.navigation, this.currentUser)
+    },
+
     currentPageTitle() {
-      const item = this.navigation.find(i =>
+      if (this.$route.path === '/admin/profile') return 'Mon profil'
+      const item = this.filteredNavigation.find(i =>
         this.$route.path === i.url ||
         this.$route.path.startsWith(i.url + '/')
       )
@@ -138,10 +144,7 @@ export default {
     },
 
     currentUserRole() {
-      if (this.currentUser?.is_superuser) return 'Super Admin'
-      if (this.currentUser?.personnel_role) return this.currentUser.personnel_role
-      if (this.currentUser?.is_staff) return 'Admin'
-      return 'Utilisateur'
+      return getRoleLabel(this.currentUser)
     },
 
     userInitials() {

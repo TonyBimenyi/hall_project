@@ -3,7 +3,7 @@ try:
     from unfold.admin import ModelAdmin
 except Exception:
     ModelAdmin = admin.ModelAdmin
-from .models import Hall, Booking, Personnel, Material, Expense, Payment, MagicLoginToken
+from .models import Hall, Booking, Personnel, Material, Expense, Payment, Notification, MagicLoginToken
 
 admin.site.site_header = 'Hall Management'
 admin.site.site_title = 'Hall Management'
@@ -71,6 +71,14 @@ class PaymentAdmin(ModelAdmin):
     search_fields = ('reference', 'method', 'booking__customer_name', 'booking__customer_email')
     date_hierarchy = 'date'
     ordering = ('-date', '-id')
+
+
+@admin.register(Notification)
+class NotificationAdmin(ModelAdmin):
+    list_display = ('id', 'user', 'title', 'category', 'type', 'is_read', 'created_at')
+    list_filter = ('category', 'type', 'is_read', 'created_at')
+    search_fields = ('title', 'message', 'user__username', 'user__email')
+    ordering = ('-created_at', '-id')
 
 
 @admin.register(MagicLoginToken)

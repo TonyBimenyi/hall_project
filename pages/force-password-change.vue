@@ -38,8 +38,10 @@
 </template>
 
 <script setup>
+import { useRouter } from '#imports'
 import { api } from '~/composables/useApi'
 import { notify } from '~/composables/useNotification'
+import { getDefaultAdminRoute } from '~/composables/useRoleAccess'
 
 const router = useRouter()
 const password = ref('')
@@ -47,7 +49,7 @@ const confirmPassword = ref('')
 const errorMessage = ref('')
 const loading = ref(false)
 
-const resolveRedirect = (user) => (user?.is_staff || user?.is_superuser ? '/admin' : '/dashboard')
+const resolveRedirect = (user) => (user?.is_staff || user?.is_superuser ? getDefaultAdminRoute(user) : '/dashboard')
 
 onMounted(() => {
   if (!process.client) return

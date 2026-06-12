@@ -48,6 +48,7 @@
           <option v-for="m in methods" :key="m" :value="m">{{ m }}</option>
         </select>
         <select v-model="preset" class="filter-select-clean">
+          <option value="all">Toutes les dates</option>
           <option value="7d">7 jours</option>
           <option value="28d">28 jours</option>
           <option value="90d">90 jours</option>
@@ -274,6 +275,9 @@
                   <button class="actions-item" @click="viewPayment(payment)">
                     <i class="fas fa-eye"></i> Voir
                   </button>
+                  <button class="actions-item" @click="printPaymentInvoice(payment)">
+                    <i class="fas fa-print"></i> Imprimer la facture
+                  </button>
                   <button class="actions-item danger" @click="confirmDelete(payment)">
                     <i class="fas fa-trash-alt"></i> Supprimer
                   </button>
@@ -355,6 +359,9 @@
                   <div v-if="openActionsId === payment.id" class="actions-menu" @click.stop>
                     <button class="actions-item" @click="viewPayment(payment)">
                       <i class="fas fa-eye"></i> Voir
+                    </button>
+                    <button class="actions-item" @click="printPaymentInvoice(payment)">
+                      <i class="fas fa-print"></i> Imprimer la facture
                     </button>
                     <button class="actions-item danger" @click="confirmDelete(payment)">
                       <i class="fas fa-trash-alt"></i> Supprimer
@@ -445,6 +452,7 @@
         <div class="detail-item"><span class="detail-label">Dernière action par</span><span class="detail-val">{{ selectedPayment.updated_by_name || selectedPayment.created_by_name || '-' }}</span></div>
       </div>
       <template #footer>
+        <button class="btn btn-outline" @click="printPaymentInvoice(selectedPayment)">Imprimer la facture</button>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
       </template>
     </AdminAppModal>
@@ -472,6 +480,7 @@ import { useTableSort } from '~/composables/useTableSort'
 
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
+const invoiceLogoUrl = new URL('../../labertha-logo.png', import.meta.url).href
 const { formatMoney, moneyInputModel } = useMoney()
 const { formatDateRange, formatDisplayDate } = useDateFormat()
 const { buildMonthlySequenceMap } = useDisplayIds()
@@ -529,6 +538,7 @@ const addDays = (ymd, days) => {
 
 const resolvePreset = (value) => {
   const todayYmd = toYmd(new Date())
+  if (value === 'all') return { start: '', end: '' }
   if (value === '7d') return { start: addDays(todayYmd, -6), end: todayYmd }
   if (value === '28d') return { start: addDays(todayYmd, -27), end: todayYmd }
   if (value === '90d') return { start: addDays(todayYmd, -89), end: todayYmd }
@@ -565,14 +575,16 @@ const rangeEndYmd = computed(() => activeRange.value.end)
 
 const inRangeYmd = (ymd, rangeStart, rangeEnd) => {
   const v = String(ymd || '').slice(0, 10)
-  if (!v || !rangeStart || !rangeEnd) return false
+  if (!rangeStart || !rangeEnd) return true
+  if (!v) return false
   return v >= rangeStart && v <= rangeEnd
 }
 
 const dateOverlapsRange = (start, end, rangeStart, rangeEnd) => {
   const s = String(start || '').slice(0, 10)
   const e = String(end || '').slice(0, 10)
-  if (!s || !e || !rangeStart || !rangeEnd) return false
+  if (!rangeStart || !rangeEnd) return true
+  if (!s || !e) return false
   return s <= rangeEnd && e >= rangeStart
 }
 
@@ -618,6 +630,298 @@ const exportPdf = async () => {
     exportingPdf.value = false
   }, 350)
 }
+
+const invoiceBrand = {
+  name: 'Labertha Villa',
+  subtitle: 'Facture de paiement',
+  address: 'Karurama, Cibitoke, Bujumbura, Burundi',
+  contacts: ['+257 66 47 66 43', '+257 76 65 39 31', 'info@labertha-villa.com']
+}
+
+const escapeHtml = (value) => String(value ?? '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;')
+
+const buildInvoiceHtml = (payment) => {
+  const typeLabel = payment?.kind === 'full' ? 'Paiement total' : 'Avance'
+  const reservationCode = String(payment?.booking_code || '').trim() || `Reservation #${payment?.booking || '-'}`
+  const paymentCode = getPaymentDisplayId(payment)
+
+  return `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Facture ${escapeHtml(paymentCode)}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper-width: 80mm;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #d1d5db;
+      --soft: #f9fafb;
+      --brand: #111827;
+    }
+    @page {
+      size: 80mm auto;
+      margin: 4mm;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 12px;
+      font-family: Inter, Arial, sans-serif;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text);
+      background: #eef2f7;
+    }
+    .receipt {
+      width: 100%;
+      max-width: var(--paper-width);
+      margin: 0 auto;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px 12px 16px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    .center {
+      text-align: center;
+    }
+    .brand-logo {
+      width: 52px;
+      height: 52px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto 8px;
+    }
+    .brand-name {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .brand-title {
+      margin: 6px 0 0;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .brand-subtitle {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .divider {
+      margin: 12px 0;
+      border-top: 1px dashed var(--line);
+    }
+    .meta {
+      display: grid;
+      gap: 6px;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .meta-row strong:last-child,
+    .meta-row span:last-child {
+      text-align: right;
+      word-break: break-word;
+    }
+    .section-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--brand);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .block {
+      margin-bottom: 12px;
+    }
+    .soft {
+      padding: 10px;
+      border-radius: 10px;
+      background: var(--soft);
+      border: 1px solid #e5e7eb;
+    }
+    .muted {
+      color: var(--muted);
+    }
+    .totals {
+      display: block;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 0;
+    }
+    .total-row.grand-total {
+      margin-top: 6px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--line);
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .footer-note {
+      margin-top: 10px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .footer-contact {
+      margin-top: 10px;
+      text-align: center;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+    .footer-contact strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    @media print {
+      body {
+        padding: 0;
+        background: #ffffff;
+      }
+      .receipt {
+        width: 72mm;
+        max-width: 72mm;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="receipt">
+    <section class="center">
+      <img src="${escapeHtml(invoiceLogoUrl)}" alt="${escapeHtml(invoiceBrand.name)}" class="brand-logo" />
+      <div class="brand-name">${escapeHtml(invoiceBrand.name)}</div>
+      <div class="brand-title">${escapeHtml(invoiceBrand.subtitle)}</div>
+      <div class="brand-subtitle">Recu de paiement</div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section class="block meta">
+      <div class="meta-row">
+        <span class="muted">Paiement</span>
+        <strong>${escapeHtml(paymentCode)}</strong>
+      </div>
+      <div class="meta-row">
+        <span class="muted">Reservation</span>
+        <strong>${escapeHtml(reservationCode)}</strong>
+      </div>
+      <div class="meta-row">
+        <span class="muted">Date</span>
+        <strong>${escapeHtml(formatDisplayDate(payment?.date))}</strong>
+      </div>
+      <div class="meta-row">
+        <span class="muted">Edition</span>
+        <strong>${escapeHtml(formatDisplayDate(new Date().toISOString()))}</strong>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section class="block soft">
+      <span class="section-label">Client</span>
+      <div><strong>${escapeHtml(payment?.booking_customer_name || 'Client')}</strong></div>
+      <div class="muted">${escapeHtml(payment?.booking_customer_email || '-')}</div>
+      <div>${escapeHtml(payment?.booking_hall_name || '-')}</div>
+      <div class="muted">Periode: ${escapeHtml(formatDateRange(payment?.booking_start_date, payment?.booking_end_date))}</div>
+    </section>
+
+    <section class="block">
+      <span class="section-label">Details</span>
+      <div class="meta">
+        <div class="meta-row">
+          <span class="muted">Reference</span>
+          <strong>${escapeHtml(payment?.reference || '-')}</strong>
+        </div>
+        <div class="meta-row">
+          <span class="muted">Methode</span>
+          <strong>${escapeHtml(payment?.method || '-')}</strong>
+        </div>
+        <div class="meta-row">
+          <span class="muted">Type</span>
+          <strong>${escapeHtml(typeLabel)}</strong>
+        </div>
+        <div class="meta-row">
+          <span class="muted">Salle</span>
+          <strong>${escapeHtml(payment?.booking_hall_name || '-')}</strong>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section class="block totals">
+      <div class="total-row">
+        <span class="muted">Montant paye</span>
+        <strong>${escapeHtml(formatMoney(payment?.amount))}</strong>
+      </div>
+      <div class="total-row">
+        <span class="muted">Total reservation</span>
+        <strong>${escapeHtml(formatMoney(payment?.booking_total_price))}</strong>
+      </div>
+      <div class="total-row grand-total">
+        <span>Reste a payer</span>
+        <span>${escapeHtml(formatMoney(payment?.booking_remaining_amount))}</span>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section class="footer-contact">
+      <strong>Adresse et contact</strong>
+      <div>${escapeHtml(invoiceBrand.address)}</div>
+      <div>${escapeHtml(invoiceBrand.contacts.join(' • '))}</div>
+    </section>
+
+    <div class="footer-note">
+      Merci pour votre confiance.
+    </div>
+  </main>
+</body>
+</html>`
+}
+
+const printPaymentInvoice = async (payment) => {
+  if (!payment || !process.client) return
+  closeActions()
+  const html = buildInvoiceHtml(payment)
+  const win = window.open('', '_blank')
+  if (!win) {
+    notify('Impossible d\'ouvrir la fenetre d\'impression', 'warning')
+    return
+  }
+  win.document.write(html)
+  win.document.close()
+  win.focus()
+  setTimeout(() => {
+    win.print()
+  }, 250)
+}
+
 const showFormModal = ref(false)
 const showViewModal = ref(false)
 const showDeleteModal = ref(false)
@@ -840,10 +1144,13 @@ const savePayment = async () => {
   }
   savingPayment.value = true
   try {
-    await api.post('payments/', form.value)
+    const { data } = await api.post('payments/', form.value)
     notify('Paiement enregistré avec succès', 'success')
     showFormModal.value = false
     await Promise.all([fetchPayments(), fetchBookings()])
+    const createdPayment = payments.value.find(item => item.id === data?.id) || data
+    await nextTick()
+    printPaymentInvoice(createdPayment)
   } catch {
     notify('Erreur lors de l\'enregistrement du paiement', 'danger')
   } finally {
@@ -881,9 +1188,23 @@ const deletePayment = async () => {
 const translateStatus = (status) => ({ paid: 'Complété', pending: 'En attente', failed: 'Échoué' }[status] || status)
 const getBadgeClass = (status) => ({ paid: 'badge-success', pending: 'badge-warning', failed: 'badge-danger' }[status] || '')
 
+const openPaymentFromQuery = () => {
+  const viewId = Number(route.query.view)
+  if (!viewId) return
+  const payment = payments.value.find(item => Number(item?.id) === viewId)
+  if (!payment) return
+  selectedPayment.value = payment
+  showViewModal.value = true
+}
+
+watch(() => `${route.query.view || ''}:${route.query.focus || ''}:${payments.value.length}`, () => {
+  openPaymentFromQuery()
+})
+
 onMounted(async () => {
   await Promise.all([fetchPayments(), fetchBookings()])
   if (route.query.booking) openAddModal()
+  openPaymentFromQuery()
   if (process.client) {
     const update = () => {
       const nextIsMobile = window.innerWidth <= 992

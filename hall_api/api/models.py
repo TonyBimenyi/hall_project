@@ -4,6 +4,27 @@ from decimal import Decimal
 from django.utils import timezone
 
 
+def _next_monthly_code(model, prefix, created_at):
+    month_year = created_at.strftime('%m%y')
+    code_prefix = f"{prefix}{month_year}"
+    last_code = (
+        model.objects
+        .filter(code__startswith=code_prefix)
+        .order_by('-code')
+        .values_list('code', flat=True)
+        .first()
+    )
+
+    next_index = 1
+    if last_code:
+        try:
+            next_index = int(str(last_code)[-4:]) + 1
+        except (TypeError, ValueError):
+            next_index = 1
+
+    return f"{code_prefix}{next_index:04d}"
+
+
 
 
 class Hall(models.Model):
@@ -48,14 +69,7 @@ class Booking(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.code:
-            # Get month and year from created_at
-            month_year = self.created_at.strftime('%m%y')
-            # Count existing bookings in this month/year
-            count = Booking.objects.filter(
-                created_at__year=self.created_at.year,
-                created_at__month=self.created_at.month
-            ).count() + 1  # +1 because we're counting existing ones, then adding this one
-            self.code = f"LBR{month_year}{count:04d}"
+            self.code = _next_monthly_code(Booking, 'LBR', self.created_at)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -112,6 +126,7 @@ class Material(models.Model):
     damaged_quantity = models.IntegerField(default=0)
     lost_quantity = models.IntegerField(default=0)
     available_quantity = models.IntegerField(default=0)
+    minimum_quantity = models.IntegerField(default=5)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='good')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_materials')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_materials')
@@ -166,19 +181,45 @@ class Payment(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.code:
-            # Get month and year from date (or created_at if date is not available?)
-            # The user said "use the month of creation of the item", so let's use created_at
-            month_year = self.created_at.strftime('%m%y')
-            # Count existing payments in this month/year
-            count = Payment.objects.filter(
-                created_at__year=self.created_at.year,
-                created_at__month=self.created_at.month
-            ).count() + 1
-            self.code = f"LBP{month_year}{count:04d}"
+            self.code = _next_monthly_code(Payment, 'LBP', self.created_at)
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.reference
+
+class Notification(models.Model):
+    TYPE_CHOICES = [
+        ('success', 'Success'),
+        ('warning', 'Warning'),
+        ('danger', 'Danger'),
+        ('info', 'Info'),
+    ]
+    CATEGORY_CHOICES = [
+        ('payment_received', 'Payment Received'),
+        ('payment_overdue', 'Payment Overdue'),
+        ('low_inventory', 'Low Inventory Warning'),
+        ('out_of_stock', 'Out of Stock Warning'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='info')
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+    event_key = models.CharField(max_length=150, null=True, blank=True, db_index=True)
+    booking = models.ForeignKey(Booking, null=True, blank=True, on_delete=models.SET_NULL, related_name='notifications')
+    payment = models.ForeignKey(Payment, null=True, blank=True, on_delete=models.SET_NULL, related_name='notifications')
+    material = models.ForeignKey(Material, null=True, blank=True, on_delete=models.SET_NULL, related_name='notifications')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} -> user_id={self.user_id}"
 
 class MagicLoginToken(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='magic_login_tokens')

@@ -229,7 +229,9 @@
         <div class="form-group">
           <label class="form-label">Rôle</label>
           <select v-model="form.role" class="form-select" required>
-            <option value="Manager">Manager</option>
+            <option value="Proprietaire">Proprietaire</option>
+            <option value="Gestionnaire">Gestionnaire</option>
+            <option value="Gerant">Gerant</option>
             <option value="Réceptionniste">Réceptionniste</option>
             <option value="Sécurité">Sécurité</option>
             <option value="Chef Cuisine">Chef Cuisine</option>
@@ -352,6 +354,7 @@ import { api } from '~/composables/useApi'
 import { usePagination } from '~/composables/usePagination'
 import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
+import { canManageStaffAccounts as canManageStaffAccountsByRole } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
 
@@ -490,7 +493,7 @@ const availableCount = computed(() => personnel.value.filter(p => p.status === '
 const offDutyCount = computed(() => personnel.value.filter(p => p.status === 'off_duty').length)
 const staffDisplayIds = computed(() => buildPersonnelSequenceMap(personnel.value))
 const getStaffDisplayId = (staff) => staffDisplayIds.value.get(staff?.id) || 'EMP-0001'
-const canManagePersonnelAccounts = computed(() => !!currentUser.value?.can_manage_staff_accounts || (!!currentUser.value?.is_superuser || (!!currentUser.value?.is_staff && !currentUser.value?.personnel_id)))
+const canManagePersonnelAccounts = computed(() => !!currentUser.value?.can_manage_staff_accounts || canManageStaffAccountsByRole(currentUser.value))
 
 const displayPersonnelCount = ref(0)
 const displayOnDutyCount = ref(0)
