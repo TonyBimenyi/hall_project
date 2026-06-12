@@ -922,17 +922,18 @@ const deleteHall = async () => {
   font-weight: 800;
   letter-spacing: 0.01em;
   border: 1px solid transparent;
+
 }
 
 .service-state-pill.is-yes {
   color: #166534;
-  background: #dcfce7;
+  color: var(--gray-700);
   border-color: #bbf7d0;
 }
 
 .service-state-pill.is-no {
   color: #b91c1c;
-  background: #fef2f2;
+  color: var(--gray-700);
   border-color: #fecaca;
 }
 
