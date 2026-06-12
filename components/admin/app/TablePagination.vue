@@ -49,9 +49,9 @@ const rangeLabel = computed(() => {
   gap: 0.75rem;
   margin-left: auto;
   padding: 0.55rem 0.75rem;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--gray-200);
   border-radius: 999px;
-  background: #f8fafc;
+  background: var(--gray-50);
 }
 
 .table-pagination.is-disabled {
@@ -61,7 +61,7 @@ const rangeLabel = computed(() => {
 .table-pagination__range {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #475569;
+  color: var(--gray-600);
   white-space: nowrap;
 }
 
@@ -76,22 +76,32 @@ const rangeLabel = computed(() => {
   height: 2rem;
   border: 0;
   border-radius: 999px;
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--white);
+  color: var(--gray-900);
+  border: 1px solid var(--gray-200);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
   transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease;
 }
 
 .table-pagination__btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--gray-200);
+  color: var(--gray-900);
 }
 
 .table-pagination__btn:disabled {
   cursor: not-allowed;
   opacity: 0.45;
   box-shadow: none;
+}
+
+html[data-admin-theme="dark"] .table-pagination__btn {
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+}
+
+html[data-admin-theme="dark"] .table-pagination {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(30, 41, 59, 0.95);
 }
 
 @media (max-width: 768px) {

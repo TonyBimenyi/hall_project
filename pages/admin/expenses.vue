@@ -3,14 +3,17 @@
     <div class="header-actions">
       <h1>Suivi des Dépenses Internes</h1>
       <div class="header-buttons">
-        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
-          <i class="fas fa-file-pdf"></i> Export PDF
+        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
+          <i class="fas fa-file-pdf"></i>
+          <span class="btn-label">Export PDF</span>
         </button>
-        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
-          <i class="fas fa-file-excel"></i> Export XLS
+        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
+          <i class="fas fa-file-excel"></i>
+          <span class="btn-label">Export XLS</span>
         </button>
-        <button class="btn btn-primary btn-sm" @click="openAddModal">
-          <i class="fas fa-plus"></i> Enregistrer une dépense
+        <button class="btn btn-primary btn-sm admin-head-btn" @click="openAddModal">
+          <i class="fas fa-plus"></i>
+          <span class="btn-label">Enregistrer une dépense</span>
         </button>
       </div>
     </div>
@@ -303,49 +306,42 @@
     </AdminAppModal>
 
     <!-- View Modal -->
-    <AdminAppModal v-model="showViewModal" title="Détails de la dépense" width="400px">
-      <div v-if="selectedExpense" class="view-details">
-        <div class="detail-item">
-          <span class="detail-label">ID</span>
-          <span class="detail-val">{{ getExpenseDisplayId(selectedExpense) }}</span>
+    <AdminAppModal v-model="showViewModal" title="Détails de la dépense" width="580px">
+      <div v-if="selectedExpense" class="entity-view-modal">
+        <div class="entity-view-hero">
+          <div class="entity-view-avatar">{{ String(getExpenseDisplayId(selectedExpense) || 'DE').slice(0, 2).toUpperCase() }}</div>
+          <div class="entity-view-main">
+            <div class="entity-view-code">{{ getExpenseDisplayId(selectedExpense) }}</div>
+            <h3>{{ selectedExpense.description }}</h3>
+            <p>{{ selectedExpense.category }}</p>
+          </div>
+          <div class="entity-view-badges">
+            <span :class="['badge', selectedExpense.status === 'paid' ? 'badge-success' : 'badge-warning']">{{ translateStatus(selectedExpense.status) }}</span>
+            <span class="badge badge-info">{{ formatMoney(selectedExpense.amount) }}</span>
+          </div>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">Description</span>
-          <span class="detail-val">{{ selectedExpense.description }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Catégorie</span>
-          <span class="detail-val">{{ selectedExpense.category }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Montant</span>
-          <span class="detail-val">{{ formatMoney(selectedExpense.amount) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Date</span>
-          <span class="detail-val">{{ selectedExpense.date }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Bénéficiaire</span>
-          <span class="detail-val">{{ selectedExpense.paid_to }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Payé par</span>
-          <span class="detail-val">{{ selectedExpense.paid_by }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Statut</span>
-          <span :class="['badge', selectedExpense.status === 'paid' ? 'badge-success' : 'badge-warning']">
-            {{ translateStatus(selectedExpense.status) }}
-          </span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Créé par</span>
-          <span class="detail-val">{{ selectedExpense.created_by_name || '-' }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Dernière action par</span>
-          <span class="detail-val">{{ selectedExpense.updated_by_name || selectedExpense.created_by_name || '-' }}</span>
+
+        <div class="entity-view-grid">
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Dépense</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Catégorie</span><span class="entity-view-value">{{ selectedExpense.category }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Date</span><span class="entity-view-value">{{ selectedExpense.date }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Bénéficiaire</span><span class="entity-view-value">{{ selectedExpense.paid_to }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Payé par</span><span class="entity-view-value">{{ selectedExpense.paid_by }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Montant</span><span class="entity-view-value">{{ formatMoney(selectedExpense.amount) }}</span></div>
+            </div>
+          </section>
+
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Suivi administratif</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Référence</span><span class="entity-view-value">{{ getExpenseDisplayId(selectedExpense) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ translateStatus(selectedExpense.status) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedExpense.created_by_name || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedExpense.updated_by_name || selectedExpense.created_by_name || '-' }}</span></div>
+            </div>
+          </section>
         </div>
       </div>
       <template #footer>
@@ -373,10 +369,12 @@ import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
+import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
 
 definePageMeta({ layout: 'admin' })
 const { formatMoney, moneyInputModel } = useMoney()
 const { buildHashSequenceMap } = useDisplayIds()
+const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
 
 const expenses = ref([])
 const tableRef = ref(null)
@@ -473,14 +471,8 @@ const exportXls = async () => {
   if (!tableRef.value) return
   exportingXls.value = true
   await nextTick()
-  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableRef.value.outerHTML}</body></html>`
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'expenses.xls'
-  a.click()
-  URL.revokeObjectURL(url)
+  const contentHtml = getSanitizedExportHtml(tableRef.value, { htmlMode: 'outer', removeActionsColumn: true })
+  downloadHtmlAsXls({ type: 'expenses', contentHtml })
   setTimeout(() => {
     exportingXls.value = false
   }, 350)
@@ -490,21 +482,21 @@ const exportPdf = async () => {
   if (!tableRef.value) return
   exportingPdf.value = true
   await nextTick()
-  const win = window.open('', '_blank')
-  if (!win) {
+  const contentHtml = getSanitizedExportHtml(tableRef.value, { htmlMode: 'outer', removeActionsColumn: true })
+  const html = buildPdfDocumentHtml({
+    title: 'Dépenses',
+    documentTitle: buildExportFileName('expenses', 'pdf').replace(/\.pdf$/, ''),
+    subtitle: 'Liste des dépenses filtrées exportée depuis l’administration.',
+    typeLabel: 'Dépenses PDF',
+    tableTitle: 'Liste des dépenses',
+    periodLabel: rangeStartYmd.value && rangeEndYmd.value ? `${rangeStartYmd.value} -> ${rangeEndYmd.value}` : 'Toutes les dates',
+    contentHtml,
+  })
+  const ok = await downloadPdfHtml({ html, fileName: buildExportFileName('expenses', 'pdf') })
+  if (!ok) {
     exportingPdf.value = false
     return
   }
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Dépenses</title><style>
-  body{font-family:Arial, sans-serif; padding:20px}
-  table{width:100%; border-collapse:collapse}
-  th,td{border:1px solid #e2e8f0; padding:8px; text-align:left; font-size:12px}
-  th{background:#f8fafc}
-  </style></head><body><h2>Dépenses</h2>${tableRef.value.outerHTML}</body></html>`)
-  win.document.close()
-  win.focus()
-  win.print()
-  win.close()
   setTimeout(() => {
     exportingPdf.value = false
   }, 350)
@@ -910,6 +902,22 @@ const translateStatus = (status) => {
   margin-bottom: 0;
 }
 
+.entity-view-modal { display: grid; gap: 18px; }
+.entity-view-hero { display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 20px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; }
+.entity-view-avatar { width: 64px; height: 64px; border-radius: 18px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 800; letter-spacing: .08em; flex-shrink: 0; }
+.entity-view-main { min-width: 0; flex: 1; }
+.entity-view-code { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.14); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.entity-view-main h3 { margin: 6px 0 4px; font-size: 1.15rem; font-weight: 800; color: #ffffff; }
+.entity-view-main p { margin: 0; color: rgba(255,255,255,.78); font-size: .92rem; }
+.entity-view-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.entity-view-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.entity-view-card { border: 1px solid #e2e8f0; border-radius: 18px; background: #ffffff; padding: 16px; }
+.entity-view-card-title { margin-bottom: 14px; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #64748b; }
+.entity-view-list { display: grid; gap: 10px; }
+.entity-view-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.entity-view-label { color: #64748b; font-size: .82rem; font-weight: 700; }
+.entity-view-value { color: #0f172a; font-size: .9rem; font-weight: 700; text-align: right; word-break: break-word; }
+
 @media (max-width: 992px) {
   .filters-toggle {
     display: inline-flex;
@@ -920,6 +928,14 @@ const translateStatus = (status) => {
   .filters-panel {
     gap: var(--space-3);
   }
+}
+
+@media (max-width: 640px) {
+  .entity-view-hero { flex-direction: column; align-items: flex-start; }
+  .entity-view-badges { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+  .entity-view-grid { grid-template-columns: 1fr; }
+  .entity-view-item { flex-direction: column; }
+  .entity-view-value { text-align: left; }
 }
 
 .stats-grid {

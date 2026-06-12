@@ -70,11 +70,13 @@
             </div>
           </div>
         </Transition>
-        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
-          <i class="fas fa-file-pdf"></i> Export PDF
+        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
+          <i class="fas fa-file-pdf"></i>
+          <span class="btn-label">Export PDF</span>
         </button>
-        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
-          <i class="fas fa-file-excel"></i> Export XLS
+        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
+          <i class="fas fa-file-excel"></i>
+          <span class="btn-label">Export XLS</span>
         </button>
       </div>
     </div>
@@ -329,8 +331,12 @@
 
 <script setup>
 import { api } from '~/composables/useApi'
+import { useDocumentBranding } from '~/composables/useDocumentBranding'
+import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
 
 definePageMeta({ layout: 'admin' })
+const { documentBranding, documentLogoUrl, escapeHtml } = useDocumentBranding()
+const { buildExportFileName, downloadHtmlAsXls, downloadPdfHtml, getPrintedByLabel } = useAdminExportDocuments()
 
 const stats = ref({
   total_revenue: 0,
@@ -361,6 +367,7 @@ const loadingMaterials = ref(false)
 const isMobile = ref(false)
 const filtersOpen = ref(false)
 const chartsReady = ref(false)
+const adminThemeMode = ref('light')
 
 const preset = ref('28d')
 const customStart = ref('')
@@ -396,6 +403,8 @@ const addDays = (ymd, days) => {
 }
 
 const formatMoney = (v) => `${String(Math.round(Number(v || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} Fbu`
+
+const isDarkAdminTheme = () => process.client && document.documentElement.getAttribute('data-admin-theme') === 'dark'
 
 const resolvePreset = (value) => {
   const todayYmd = toYmd(new Date())
@@ -560,7 +569,9 @@ const occupationRate = computed(() => {
 })
 
 const occupationLegend = computed(() => {
-  const colors = ['#0f172a', '#22c55e', '#f59e0b', '#0ea5e9', '#ef4444', '#6366f1']
+  const colors = adminThemeMode.value === 'dark'
+    ? ['#38bdf8', '#22c55e', '#f59e0b', '#a78bfa', '#ef4444', '#f472b6']
+    : ['#0f172a', '#22c55e', '#f59e0b', '#0ea5e9', '#ef4444', '#6366f1']
   const source = stats.value.occupation_data_in_range?.length ? stats.value.occupation_data_in_range : (stats.value.occupation_data || [])
   const items = (source || [])
     .map((i) => ({ type: i.type, percentage: Number(i.percentage || 0) }))
@@ -598,7 +609,9 @@ const bookingsByTypeLegend = computed(() => {
   }
   const rows = Array.from(map.entries()).map(([label, count]) => ({ label, count }))
     .sort((a, b) => b.count - a.count)
-  const colors = ['#0f172a', '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#6366f1']
+  const colors = adminThemeMode.value === 'dark'
+    ? ['#38bdf8', '#22c55e', '#f59e0b', '#a78bfa', '#ef4444', '#f472b6']
+    : ['#0f172a', '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#6366f1']
   return rows.map((r, idx) => ({ ...r, color: colors[idx % colors.length] }))
 })
 
@@ -691,24 +704,6 @@ const evolutionSeries = computed(() => {
   }
 })
 
-const bookingsEvolutionSeries = computed(() => {
-  const buckets = buildBuckets(rangeStartYmd.value, rangeEndYmd.value, rangeGrouping.value)
-  const counts = []
-  for (const b of buckets) {
-    let c = 0
-    for (const booking of filteredBookings.value || []) {
-      const d = String(booking.start_date || '').slice(0, 10)
-      if (!d) continue
-      if (d >= b.start && d <= b.end) c += 1
-    }
-    counts.push(c)
-  }
-  return {
-    labels: buckets.map(b => b.start),
-    counts
-  }
-})
-
 const bookingsEvolutionByTypeSeries = computed(() => {
   const buckets = buildBuckets(rangeStartYmd.value, rangeEndYmd.value, rangeGrouping.value)
   const types = bookingEvolutionTypes.value || []
@@ -775,14 +770,7 @@ const exportXls = async () => {
     '</table>'
   ].join('')
 
-  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${table}</body></html>`
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'reports.xls'
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadHtmlAsXls({ type: 'statistics', contentHtml: table })
   setTimeout(() => {
     exportingXls.value = false
   }, 350)
@@ -791,45 +779,348 @@ const exportXls = async () => {
 const exportPdf = async () => {
   exportingPdf.value = true
   await nextTick()
+  const printedBy = getPrintedByLabel()
   const rows = [
-    ['Période', rangeLabel.value],
-    ['Revenu Total', formatMoney(stats.value.total_revenue || 0)],
-    ['Revenu (période)', formatMoney(revenueInRange.value || 0)],
-    ['Dépenses (période)', formatMoney(expensesInRange.value || 0)],
-    ['Marge (période)', `${profitMarginInRange.value || 0}%`],
-    ['Occupation (période)', `${occupationRate.value || 0}%`],
-    ['Réservations (période - Total)', String(bookingCounts.value.total)],
-    ['En attente', String(bookingCounts.value.pending)],
-    ['Confirmées', String(bookingCounts.value.confirmed)],
-    ['Payées', String(bookingCounts.value.paid)],
-    ['Annulées', String(bookingCounts.value.cancelled)],
-    ['Paiements (période - Total)', String(filteredPayments.value.length)],
+    ['Période analysée', rangeLabel.value || '-'],
+    ["Date d'edition", new Date().toLocaleString('fr-FR')],
+    ['Revenu total', formatMoney(stats.value.total_revenue || 0)],
+    ['Revenu de la période', formatMoney(revenueInRange.value || 0)],
+    ['Dépenses de la période', formatMoney(expensesInRange.value || 0)],
+    ['Marge de la période', `${Number(profitMarginInRange.value || 0).toFixed(1)}%`],
+    ['Occupation de la période', `${Number(occupationRate.value || 0).toFixed(1)}%`],
+    ['Réservations de la période', String(bookingCounts.value.total || 0)],
+    ['Réservations en attente', String(bookingCounts.value.pending || 0)],
+    ['Réservations confirmées', String(bookingCounts.value.confirmed || 0)],
+    ['Réservations payées', String(bookingCounts.value.paid || 0)],
+    ['Réservations annulées', String(bookingCounts.value.cancelled || 0)],
+    ['Paiements filtrés', String(filteredPayments.value.length || 0)],
+    ['Dépenses filtrées', String(filteredExpenses.value.length || 0)],
+    ['Matériels suivis', String(materials.value.length || 0)],
   ]
 
-  const table = [
-    '<table>',
-    '<thead><tr><th>Indicateur</th><th>Valeur</th></tr></thead>',
-    '<tbody>',
-    ...rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`),
-    '</tbody>',
-    '</table>'
-  ].join('')
+  const summaryCards = [
+    { label: 'Revenu période', value: formatMoney(revenueInRange.value || 0), tone: 'success' },
+    { label: 'Dépenses période', value: formatMoney(expensesInRange.value || 0), tone: 'danger' },
+    { label: 'Marge', value: `${Number(profitMarginInRange.value || 0).toFixed(1)}%`, tone: 'warning' },
+    { label: 'Occupation', value: `${Number(occupationRate.value || 0).toFixed(1)}%`, tone: 'primary' },
+  ]
 
-  const win = window.open('', '_blank')
-  if (!win) {
+  const summaryHtml = summaryCards.map(card => `
+    <div class="summary-card ${escapeHtml(card.tone)}">
+      <span>${escapeHtml(card.label)}</span>
+      <strong>${escapeHtml(card.value)}</strong>
+    </div>
+  `).join('')
+
+  const tableRows = rows.map(([label, value]) => `
+    <tr>
+      <td>${escapeHtml(label)}</td>
+      <td>${escapeHtml(value)}</td>
+    </tr>
+  `).join('')
+
+  const html = `<!doctype html>
+  <html lang="fr">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>${escapeHtml(buildExportFileName('statistics', 'pdf').replace(/\.pdf$/, ''))}</title>
+      <style>
+        :root {
+          color-scheme: light;
+          --ink: #0f172a;
+          --muted: #64748b;
+          --line: #dbe3ee;
+          --paper: #f8fafc;
+          --brand: #0f172a;
+          --accent: #d4af37;
+          --success: #166534;
+          --danger: #b91c1c;
+          --warning: #92400e;
+          --primary: #1d4ed8;
+        }
+        * { box-sizing: border-box; }
+        body {
+          margin: 0;
+          padding: 28px;
+          font-family: Arial, sans-serif;
+          background: #eef2f7;
+          color: var(--ink);
+        }
+        .sheet {
+          max-width: 960px;
+          margin: 0 auto;
+          background: #ffffff;
+          border: 1px solid var(--line);
+          border-radius: 28px;
+          overflow: hidden;
+          box-shadow: 0 24px 50px rgba(15, 23, 42, 0.12);
+        }
+        .head {
+          padding: 28px 30px 24px;
+          background: linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #8b6b12 100%);
+          color: #ffffff;
+        }
+        .brand {
+          display: flex;
+          justify-content: space-between;
+          gap: 20px;
+          align-items: flex-start;
+        }
+        .brand-main {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+        .logo-wrap {
+          width: 78px;
+          height: 78px;
+          border-radius: 22px;
+          background: rgba(255,255,255,0.14);
+          border: 1px solid rgba(255,255,255,0.22);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .logo-wrap img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .brand-copy small {
+          display: block;
+          margin-bottom: 8px;
+          text-transform: uppercase;
+          letter-spacing: 0.28em;
+          font-size: 11px;
+          color: rgba(255,255,255,0.74);
+        }
+        .brand-copy h1 {
+          margin: 0;
+          font-size: 30px;
+          line-height: 1.08;
+        }
+        .brand-copy p {
+          margin: 8px 0 0;
+          color: rgba(255,255,255,0.84);
+          max-width: 520px;
+        }
+        .chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 10px 14px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.14);
+          border: 1px solid rgba(255,255,255,0.22);
+          font-size: 12px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+        }
+        .body {
+          padding: 28px 30px 24px;
+        }
+        .meta {
+          display: grid;
+          grid-template-columns: 1.2fr .8fr;
+          gap: 16px;
+          margin-bottom: 18px;
+        }
+        .meta-card,
+        .section-card {
+          border: 1px solid var(--line);
+          border-radius: 18px;
+          background: var(--paper);
+          padding: 16px 18px;
+        }
+        .meta-card strong {
+          display: block;
+          font-size: 1.05rem;
+          margin-bottom: 4px;
+        }
+        .meta-card span,
+        .section-card p {
+          color: var(--muted);
+          line-height: 1.6;
+          margin: 0;
+        }
+        .summary-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+          margin-bottom: 18px;
+        }
+        .summary-card {
+          border-radius: 18px;
+          padding: 14px 16px;
+          color: #ffffff;
+        }
+        .summary-card span {
+          display: block;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          opacity: 0.85;
+          margin-bottom: 8px;
+        }
+        .summary-card strong {
+          font-size: 1.15rem;
+        }
+        .summary-card.success { background: linear-gradient(135deg, #166534, #22c55e); }
+        .summary-card.danger { background: linear-gradient(135deg, #991b1b, #ef4444); }
+        .summary-card.warning { background: linear-gradient(135deg, #92400e, #f59e0b); }
+        .summary-card.primary { background: linear-gradient(135deg, #1d4ed8, #60a5fa); }
+        .section-title {
+          margin: 0 0 12px;
+          font-size: 0.82rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--muted);
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        th, td {
+          border-bottom: 1px solid var(--line);
+          padding: 12px 10px;
+          text-align: left;
+          font-size: 13px;
+          vertical-align: top;
+        }
+        th {
+          background: #f8fafc;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          font-size: 11px;
+        }
+        td:last-child {
+          font-weight: 700;
+          color: var(--ink);
+        }
+        .footer {
+          margin-top: 18px;
+          padding-top: 18px;
+          border-top: 1px solid var(--line);
+          display: grid;
+          grid-template-columns: 1.1fr .9fr;
+          gap: 16px;
+        }
+        .footer-card {
+          border: 1px solid var(--line);
+          border-radius: 18px;
+          background: var(--paper);
+          padding: 16px 18px;
+        }
+        .footer-card strong {
+          display: block;
+          margin-bottom: 8px;
+        }
+        .footer-card p,
+        .footer-card li {
+          color: #334155;
+          line-height: 1.6;
+          margin: 0;
+        }
+        .footer-card ul {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+        @media (max-width: 780px) {
+          .brand, .meta, .summary-grid, .footer { grid-template-columns: 1fr; display: grid; }
+          .brand-main { align-items: flex-start; }
+        }
+        @media print {
+          body {
+            background: #ffffff;
+            padding: 0;
+          }
+          .sheet {
+            border: none;
+            box-shadow: none;
+            border-radius: 0;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="sheet">
+        <div class="head">
+          <div class="brand">
+            <div class="brand-main">
+              <div class="logo-wrap">
+                <img src="${escapeHtml(documentLogoUrl)}" alt="${escapeHtml(documentBranding.name)}" />
+              </div>
+              <div class="brand-copy">
+                <small>${escapeHtml(documentBranding.tagline)}</small>
+                <h1>${escapeHtml(documentBranding.name)}</h1>
+                <p>${escapeHtml(documentBranding.documents?.reportsTitle || 'Rapport et statistiques')} pour la période ${escapeHtml(rangeLabel.value || '-')}.</p>
+              </div>
+            </div>
+            <div class="chip">Rapport PDF</div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="meta">
+            <div class="meta-card">
+              <strong>Période sélectionnée</strong>
+              <span>${escapeHtml(rangeLabel.value || '-')}</span>
+            </div>
+            <div class="meta-card">
+              <strong>Exporté par</strong>
+              <span>${escapeHtml(printedBy)}</span>
+            </div>
+            <div class="meta-card">
+              <strong>Date d'édition</strong>
+              <span>${escapeHtml(new Date().toLocaleString('fr-FR'))}</span>
+            </div>
+          </div>
+
+          <div class="summary-grid">
+            ${summaryHtml}
+          </div>
+
+          <div class="section-card">
+            <div class="section-title">Indicateurs clés</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Indicateur</th>
+                  <th>Valeur</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="footer">
+            <div class="footer-card">
+              <strong>Adresse</strong>
+              <p>${escapeHtml(documentBranding.address)}</p>
+            </div>
+            <div class="footer-card">
+              <strong>Contacts</strong>
+              <ul>
+                ${documentBranding.contacts.map(contact => `<li>${escapeHtml(contact)}</li>`).join('')}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </body>
+  </html>`
+  const ok = await downloadPdfHtml({ html, fileName: buildExportFileName('statistics', 'pdf') })
+  if (!ok) {
     exportingPdf.value = false
     return
   }
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Rapports</title><style>
-  body{font-family:Arial, sans-serif; padding:20px}
-  table{width:100%; border-collapse:collapse}
-  th,td{border:1px solid #e2e8f0; padding:8px; text-align:left; font-size:12px}
-  th{background:#f8fafc}
-  </style></head><body><h2>Rapports et Statistiques</h2>${table}</body></html>`)
-  win.document.close()
-  win.focus()
-  win.print()
-  win.close()
   setTimeout(() => {
     exportingPdf.value = false
   }, 350)
@@ -897,6 +1188,7 @@ const fetchMaterials = async () => {
 
 const chartLib = shallowRef(null)
 const chartInstances = new Map()
+let themeObserver = null
 
 const loadChartJs = async () => {
   if (chartLib.value) return chartLib.value
@@ -934,9 +1226,49 @@ const scheduleRender = () => {
   })
 }
 
+const getChartTheme = () => {
+  if (!process.client) {
+    return {
+      isDark: false,
+      text: '#0f172a',
+      muted: '#64748b',
+      grid: 'rgba(148,163,184,0.22)',
+      tooltipBg: '#ffffff',
+      tooltipBorder: 'rgba(226,232,240,0.95)',
+    }
+  }
+  const root = document.documentElement
+  const styles = getComputedStyle(root)
+  const isDark = root.getAttribute('data-admin-theme') === 'dark'
+  const text = (styles.getPropertyValue('--gray-900') || '').trim() || (isDark ? '#f8fafc' : '#0f172a')
+  const muted = (styles.getPropertyValue('--gray-500') || '').trim() || (isDark ? '#cbd5e1' : '#64748b')
+  return {
+    isDark,
+    text,
+    muted,
+    grid: isDark ? 'rgba(148,163,184,0.16)' : 'rgba(148,163,184,0.22)',
+    tooltipBg: isDark ? 'rgba(15,23,42,0.92)' : '#ffffff',
+    tooltipBorder: isDark ? 'rgba(30,41,59,0.95)' : 'rgba(226,232,240,0.95)',
+  }
+}
+
 const renderCharts = async () => {
   if (!process.client) return
   if (isLoading.value) return
+
+  const theme = getChartTheme()
+  const Chart = await loadChartJs()
+  Chart.defaults.color = theme.muted
+  if (Chart.defaults?.plugins?.legend?.labels) {
+    Chart.defaults.plugins.legend.labels.color = theme.muted
+  }
+  if (Chart.defaults?.plugins?.tooltip) {
+    Chart.defaults.plugins.tooltip.backgroundColor = theme.tooltipBg
+    Chart.defaults.plugins.tooltip.borderColor = theme.tooltipBorder
+    Chart.defaults.plugins.tooltip.borderWidth = 1
+    Chart.defaults.plugins.tooltip.titleColor = theme.text
+    Chart.defaults.plugins.tooltip.bodyColor = theme.text
+  }
 
   const revenue = Number(revenueInRange.value || 0)
   const expensesV = Number(expensesInRange.value || 0)
@@ -963,8 +1295,8 @@ const renderCharts = async () => {
         tooltip: { callbacks: { label: (ctx) => formatMoney(ctx.parsed.y) } }
       },
       scales: {
-        y: { ticks: { callback: (v) => formatMoney(v) }, grid: { color: 'rgba(148,163,184,0.22)' } },
-        x: { grid: { display: false } }
+        y: { ticks: { color: theme.muted, callback: (v) => formatMoney(v) }, grid: { color: theme.grid } },
+        x: { ticks: { color: theme.muted }, grid: { display: false } }
       }
     }
   })
@@ -1025,8 +1357,8 @@ const renderCharts = async () => {
         legend: { display: false }
       },
       scales: {
-        x: { ticks: { precision: 0 }, grid: { color: 'rgba(148,163,184,0.22)' } },
-        y: { grid: { display: false } }
+        x: { ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
+        y: { ticks: { color: theme.muted }, grid: { display: false } }
       }
     }
   })
@@ -1058,8 +1390,8 @@ const renderCharts = async () => {
         legend: { display: false }
       },
       scales: {
-        x: { ticks: { precision: 0 }, grid: { color: 'rgba(148,163,184,0.22)' } },
-        y: { grid: { display: false } }
+        x: { ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
+        y: { ticks: { color: theme.muted }, grid: { display: false } }
       }
     }
   })
@@ -1092,17 +1424,16 @@ const renderCharts = async () => {
       maintainAspectRatio: false,
       animation: { duration: 900, easing: 'easeOutQuart' },
       plugins: {
-        legend: { position: 'bottom' },
+        legend: { position: 'bottom', labels: { color: theme.muted } },
         tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y)}` } }
       },
       scales: {
-        y: { ticks: { callback: (v) => formatMoney(v) }, grid: { color: 'rgba(148,163,184,0.22)' } },
-        x: { grid: { display: false } }
+        y: { ticks: { color: theme.muted, callback: (v) => formatMoney(v) }, grid: { color: theme.grid } },
+        x: { ticks: { color: theme.muted }, grid: { display: false } }
       }
     }
   })
 
-  const be = bookingsEvolutionSeries.value
   const beType = bookingsEvolutionByTypeSeries.value
   const beHasAny = (beType.labels || []).length > 0
   await upsertChart('bookingsEvolution', bookingsEvolutionEl.value, {
@@ -1116,14 +1447,14 @@ const renderCharts = async () => {
       maintainAspectRatio: false,
       animation: { duration: 900, easing: 'easeOutQuart' },
       plugins: {
-        legend: { position: 'bottom' }
+        legend: { position: 'bottom', labels: { color: theme.muted } }
       },
       scales: {
-        y: { stacked: true, ticks: { precision: 0 }, grid: { color: 'rgba(148,163,184,0.22)' } },
+        y: { stacked: true, ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
         x: {
           stacked: true,
           grid: { display: false },
-          ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
+          ticks: { color: theme.muted, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
         }
       }
     }
@@ -1177,7 +1508,7 @@ const renderCharts = async () => {
       indexAxis: 'y',
       animation: { duration: 900, easing: 'easeOutQuart' },
       plugins: {
-        legend: { position: 'bottom' },
+        legend: { position: 'bottom', labels: { color: theme.muted } },
         tooltip: {
           callbacks: {
             label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.x || 0)}`
@@ -1185,8 +1516,8 @@ const renderCharts = async () => {
         }
       },
       scales: {
-        x: { stacked: true, ticks: { precision: 0 }, grid: { color: 'rgba(148,163,184,0.22)' } },
-        y: { stacked: true, grid: { display: false } }
+        x: { stacked: true, ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
+        y: { stacked: true, ticks: { color: theme.muted }, grid: { display: false } }
       }
     }
   })
@@ -1243,6 +1574,7 @@ onMounted(() => {
   nextTick(() => { chartsReady.value = true })
   nextTick(() => { scheduleRender() })
   if (process.client) {
+    adminThemeMode.value = isDarkAdminTheme() ? 'dark' : 'light'
     const update = () => {
       const nextIsMobile = window.innerWidth <= 992
       if (nextIsMobile !== isMobile.value) {
@@ -1255,6 +1587,12 @@ onMounted(() => {
     update()
     window.addEventListener('resize', update)
     onBeforeUnmount(() => window.removeEventListener('resize', update))
+
+    themeObserver = new MutationObserver(() => {
+      adminThemeMode.value = isDarkAdminTheme() ? 'dark' : 'light'
+      scheduleRender()
+    })
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-admin-theme'] })
   }
 })
 
@@ -1312,6 +1650,7 @@ onBeforeUnmount(() => {
   for (const chart of chartInstances.values()) chart.destroy()
   chartInstances.clear()
   if (statsTimer) clearTimeout(statsTimer)
+  if (themeObserver) themeObserver.disconnect()
 })
 </script>
 
@@ -1332,12 +1671,12 @@ onBeforeUnmount(() => {
 .header-actions h1 {
   font-size: 1.75rem;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--gray-900);
   margin-bottom: 0.25rem;
 }
 
 .subtitle {
-  color: #64748b;
+  color: var(--gray-500);
   font-size: 0.9rem;
   font-weight: 500;
 }
@@ -1347,7 +1686,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--gray-900);
 }
 
 .filters-group {
@@ -1362,9 +1701,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   padding: 10px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gray-200);
   border-radius: var(--rounded-lg);
-  background: #ffffff;
+  background: var(--white);
 }
 
 .filters-row {
@@ -1382,18 +1721,18 @@ onBeforeUnmount(() => {
 .field-label {
   font-size: 0.7rem;
   font-weight: 800;
-  color: #94a3b8;
+  color: var(--gray-400);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .filter-input-clean {
   padding: 0.5rem 1rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gray-200);
   border-radius: var(--rounded-md);
   font-size: 0.85rem;
-  background: white;
-  color: #475569;
+  background: var(--white);
+  color: var(--gray-600);
   font-weight: 700;
 }
 
@@ -1410,11 +1749,11 @@ onBeforeUnmount(() => {
 
 .filter-select-clean {
   padding: 0.5rem 2rem 0.5rem 1rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gray-200);
   border-radius: var(--rounded-md);
   font-size: 0.85rem;
-  background: white;
-  color: #475569;
+  background: var(--white);
+  color: var(--gray-600);
   font-weight: 600;
   cursor: pointer;
 }
@@ -1423,15 +1762,31 @@ onBeforeUnmount(() => {
   display: none;
   width: 42px;
   height: 42px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #475569;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  color: var(--gray-600);
 }
 
 .filters-toggle.active {
   background: rgba(212, 175, 55, .18);
   border-color: rgba(212, 175, 55, .35);
-  color: #0f172a;
+  color: var(--gray-900);
+}
+
+:global(html[data-admin-theme="dark"]) .filters-panel {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(30, 41, 59, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .filter-input-clean,
+:global(html[data-admin-theme="dark"]) .filter-select-clean {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(30, 41, 59, 0.95);
+  color: var(--gray-700);
+}
+
+:global(html[data-admin-theme="dark"]) .filters-toggle {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 @media (max-width: 992px) {
@@ -1537,6 +1892,7 @@ onBeforeUnmount(() => {
   padding: 0;
   margin-bottom: var(--space-10);
   font-size: 1.1rem;
+  color: var(--gray-900);
 }
 
 .chart-content-clean {
@@ -1578,7 +1934,7 @@ onBeforeUnmount(() => {
 .doughnut-center-main {
   font-size: 1.35rem;
   font-weight: 900;
-  color: #0f172a;
+  color: var(--gray-900);
   line-height: 1.1;
 }
 
@@ -1586,7 +1942,7 @@ onBeforeUnmount(() => {
   margin-top: 4px;
   font-size: 0.7rem;
   font-weight: 900;
-  color: #94a3b8;
+  color: var(--gray-400);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -1647,17 +2003,17 @@ onBeforeUnmount(() => {
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--gray-500);
 }
 
 .legend-val {
   font-size: 1rem;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--gray-900);
 }
 
 .empty-hbar {
-  color: #94a3b8;
+  color: var(--gray-400);
   font-weight: 700;
   text-align: center;
   padding: 12px 0;
@@ -1666,6 +2022,6 @@ onBeforeUnmount(() => {
 .range-note {
   margin-top: var(--space-2);
   font-weight: 900;
-  color: #0f172a;
+  color: var(--gray-900);
 }
 </style>

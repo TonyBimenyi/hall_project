@@ -1,12 +1,12 @@
 <template>
-  <div class="notification-bell">
-    <button class="bell-btn" @click="toggleDropdown" :class="{ active: showDropdown }">
+  <div ref="bellRootRef" class="notification-bell">
+    <button ref="bellButtonRef" class="bell-btn" @click="toggleDropdown" :class="{ active: showDropdown }">
       <i class="fas fa-bell"></i>
       <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
     </button>
 
     <Transition name="dropdown">
-      <div v-if="showDropdown" class="notification-dropdown">
+      <div v-if="showDropdown" class="notification-dropdown" :style="dropdownStyle">
         <div class="dropdown-header">
           <span class="header-title">Notifications</span>
           <button v-if="unreadCount > 0" class="mark-all-btn" @click="handleMarkAllAsRead">
@@ -59,7 +59,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import {
   showNotificationsDropdown,
   unreadCount,
@@ -73,17 +73,46 @@ import {
 } from '~/composables/useNotifications'
 
 const showDropdown = ref(false)
+const bellRootRef = ref(null)
+const bellButtonRef = ref(null)
+const dropdownStyle = ref({})
+
+const isMobileViewport = () => process.client && window.innerWidth <= 992
+
+const updateDropdownPosition = () => {
+  if (!process.client || !showDropdown.value) return
+
+  if (!isMobileViewport()) {
+    dropdownStyle.value = {}
+    return
+  }
+
+  const button = bellButtonRef.value
+  if (!button) return
+
+  const rect = button.getBoundingClientRect()
+  const gutter = 16
+  dropdownStyle.value = {
+    position: 'fixed',
+    top: `${Math.round(rect.bottom + 10)}px`,
+    left: `${gutter}px`,
+    right: `${gutter}px`,
+    width: 'auto',
+    maxWidth: `calc(100vw - ${gutter * 2}px)`,
+    maxHeight: `calc(100vh - ${Math.round(rect.bottom + 10 + gutter)}px)`,
+  }
+}
 
 const toggleDropdown = async () => {
   showDropdown.value = !showDropdown.value
   showNotificationsDropdown.value = showDropdown.value
   if (showDropdown.value) {
+    await nextTick()
+    updateDropdownPosition()
     await fetchNotifications({ force: true }).catch(() => {})
+  } else {
+    dropdownStyle.value = {}
   }
-}
-
-const handleMarkAsRead = async (id) => {
-  await markAsRead(id).catch(() => {})
 }
 
 const handleMarkAllAsRead = async () => {
@@ -132,19 +161,28 @@ const getIconForType = (type) => {
 }
 
 const handleOutsideClick = (e) => {
-  const bellEl = document.querySelector('.notification-bell')
+  const bellEl = bellRootRef.value
   if (bellEl && !bellEl.contains(e.target)) {
     showDropdown.value = false
+    showNotificationsDropdown.value = false
+    dropdownStyle.value = {}
   }
+}
+
+const handleViewportChange = () => {
+  if (!showDropdown.value) return
+  updateDropdownPosition()
 }
 
 onMounted(() => {
   document.addEventListener('click', handleOutsideClick)
+  window.addEventListener('resize', handleViewportChange)
   fetchNotifications().catch(() => {})
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleOutsideClick)
+  window.removeEventListener('resize', handleViewportChange)
 })
 </script>
 
@@ -162,9 +200,9 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #64748b;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  color: var(--gray-500);
   font-size: 1.1rem;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -189,7 +227,7 @@ onBeforeUnmount(() => {
   min-width: 18px;
   height: 18px;
   background: #ef4444;
-  color: white;
+  color: var(--white);
   font-size: 0.7rem;
   font-weight: 800;
   border-radius: 999px;
@@ -197,7 +235,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 0 4px;
-  border: 2px solid white;
+  border: 2px solid var(--white);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
@@ -207,10 +245,10 @@ onBeforeUnmount(() => {
   top: calc(100% + 10px);
   right: 0;
   width: 360px;
-  background: white;
+  background: var(--white);
   border-radius: 16px;
   box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gray-200);
   z-index: 1000;
   overflow: hidden;
 }
@@ -230,13 +268,13 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--gray-100);
 }
 
 .header-title {
   font-weight: 800;
   font-size: 1rem;
-  color: #1e293b;
+  color: var(--gray-800);
 }
 
 .mark-all-btn {
@@ -264,11 +302,11 @@ onBeforeUnmount(() => {
   gap: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
-  border-bottom: 1px solid #f8fafc;
+  border-bottom: 1px solid var(--gray-50);
 }
 
 .notification-item:hover {
-  background: #f8fafc;
+  background: var(--gray-50);
 }
 
 .notification-item.unread {
@@ -318,7 +356,7 @@ onBeforeUnmount(() => {
 .notification-title {
   font-weight: 700;
   font-size: 0.9rem;
-  color: #1e293b;
+  color: var(--gray-900);
   margin-bottom: 4px;
 }
 
@@ -332,6 +370,18 @@ onBeforeUnmount(() => {
 .notification-time {
   font-size: 0.75rem;
   color: #94a3b8;
+}
+
+:global(html[data-admin-theme="dark"]) .notification-dropdown .notification-title {
+  color: #f8fafc !important;
+}
+
+:global(html[data-admin-theme="dark"]) .notification-dropdown .notification-message {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+:global(html[data-admin-theme="dark"]) .notification-dropdown .notification-time {
+  color: rgba(203, 213, 225, 0.74);
 }
 
 .unread-dot {
@@ -377,8 +427,7 @@ onBeforeUnmount(() => {
 /* Mobile styles */
 @media (max-width: 992px) {
   .notification-dropdown {
-    width: calc(100vw - 32px);
-    right: 0;
+    width: min(360px, calc(100vw - 32px));
   }
 }
 </style>

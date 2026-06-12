@@ -29,6 +29,8 @@ import hashlib
 import secrets
 import unicodedata
 
+from .payment_email import send_payment_invoice_email
+
 class SummaryView(APIView):
     def get(self, request):
         now = timezone.now()
@@ -1215,6 +1217,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         payment = serializer.save(created_by=_actor(request), updated_by=_actor(request))
+        invoice_email_sent = False
 
         amount = payment.amount or Decimal('0.00')
         total = payment.booking.total_price or Decimal('0.00')
@@ -1232,10 +1235,16 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
         self._recalc_booking_paid(payment.booking)
         self._emit_payment_received_notification(payment)
+        try:
+            invoice_email_sent = send_payment_invoice_email(payment)
+        except Exception:
+            invoice_email_sent = False
         _sync_overdue_notifications()
 
         output = self.get_serializer(payment)
-        return Response(output.data, status=status.HTTP_201_CREATED)
+        response_data = dict(output.data)
+        response_data['invoice_email_sent'] = invoice_email_sent
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
         kwargs['partial'] = kwargs.get('partial', False)
@@ -1249,6 +1258,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
         self._recalc_booking_paid(payment.booking)
         if not was_paid and payment.status == 'paid':
             self._emit_payment_received_notification(payment)
+            try:
+                send_payment_invoice_email(payment)
+            except Exception:
+                pass
         _sync_overdue_notifications()
         return response
 

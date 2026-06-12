@@ -1,0 +1,18 @@
+{
+  "name": "Labertha Villa",
+  "tagline": "Reception & Evenementiel",
+  "website": "labertha-villa.com",
+  "email": "info@labertha-villa.com",
+  "address": "Karurama, Cibitoke, Bujumbura, Burundi",
+  "contacts": [
+    "+257 66 47 66 43",
+    "+257 76 65 39 31",
+    "info@labertha-villa.com",
+    "labertha-villa.com"
+  ],
+  "documents": {
+    "invoiceTitle": "Recu de paiement",
+    "bookingTitle": "Jeton officiel de reservation",
+    "reportsTitle": "Rapport et statistiques"
+  }
+}

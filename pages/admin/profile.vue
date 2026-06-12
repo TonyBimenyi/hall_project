@@ -201,6 +201,9 @@ onMounted(fetchProfile)
 <style scoped>
 .profile-page {
   padding: 0;
+  --profile-meta-bg: var(--gray-100);
+  --profile-meta-border: var(--gray-200);
+  --profile-meta-shadow: none;
 }
 
 .page-header {
@@ -211,12 +214,12 @@ onMounted(fetchProfile)
   margin: 0;
   font-size: 1.75rem;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--gray-900);
 }
 
 .page-header p {
   margin-top: 0.35rem;
-  color: #64748b;
+  color: var(--gray-500);
 }
 
 .profile-grid {
@@ -227,14 +230,14 @@ onMounted(fetchProfile)
 
 .profile-card {
   padding: 1.5rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gray-200);
   box-shadow: none;
 }
 
 .identity-card {
   background:
     radial-gradient(circle at top right, rgba(212, 175, 55, 0.16), transparent 30%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    linear-gradient(180deg, var(--white) 0%, var(--gray-50) 100%);
 }
 
 .identity-top {
@@ -247,23 +250,36 @@ onMounted(fetchProfile)
 .identity-avatar {
   width: 64px;
   height: 64px;
-  border-radius: 20px;
-  background: #0f172a;
-  color: #fff;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
   display: grid;
   place-items: center;
   font-weight: 800;
   font-size: 1.15rem;
+  letter-spacing: 0.06em;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
+  position: relative;
+  overflow: hidden;
+}
+
+.identity-avatar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 55%);
+  pointer-events: none;
 }
 
 .identity-top h2 {
   margin: 0;
-  color: #0f172a;
+  color: var(--gray-900);
 }
 
 .identity-top p {
   margin: 0.3rem 0 0;
-  color: #64748b;
+  color: var(--gray-500);
 }
 
 .meta-grid {
@@ -274,15 +290,20 @@ onMounted(fetchProfile)
 .meta-item {
   padding: 0.95rem 1rem;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #e2e8f0;
+  background: var(--profile-meta-bg);
+  border: 1px solid var(--profile-meta-border);
+  box-shadow: var(--profile-meta-shadow);
 }
 
 .meta-label {
   display: block;
-  color: #64748b;
+  color: var(--gray-500);
   font-size: 0.82rem;
   margin-bottom: 0.35rem;
+}
+
+.meta-item strong {
+  color: var(--gray-900);
 }
 
 .section-head {
@@ -292,12 +313,12 @@ onMounted(fetchProfile)
 .section-head h3 {
   margin: 0;
   font-size: 1.15rem;
-  color: #0f172a;
+  color: var(--gray-900);
 }
 
 .section-head p {
   margin: 0.35rem 0 0;
-  color: #64748b;
+  color: var(--gray-500);
 }
 
 .form-grid {
@@ -314,7 +335,7 @@ onMounted(fetchProfile)
 .field span {
   font-size: 0.8rem;
   font-weight: 800;
-  color: #334155;
+  color: var(--gray-600);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -323,9 +344,10 @@ onMounted(fetchProfile)
   width: 100%;
   min-height: 50px;
   border-radius: 14px;
-  border: 1px solid #dbe4f0;
+  border: 1px solid var(--gray-200);
   padding: 0 0.95rem;
-  background: #fff;
+  background: var(--white);
+  color: var(--gray-900);
 }
 
 .field input:focus {
@@ -335,14 +357,89 @@ onMounted(fetchProfile)
 }
 
 .field input:disabled {
-  background: #f8fafc;
-  color: #94a3b8;
+  background: var(--gray-50);
+  color: var(--gray-400);
 }
 
 .hint-text {
   margin: 0.85rem 0 0;
-  color: #64748b;
+  color: var(--gray-500);
   font-size: 0.88rem;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .profile-card {
+  border-color: rgba(30, 41, 59, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page {
+  --profile-meta-bg: rgba(15, 23, 42, 0.88);
+  --profile-meta-border: rgba(30, 41, 59, 0.95);
+  --profile-meta-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .identity-card {
+  background:
+    radial-gradient(circle at top right, rgba(212, 175, 55, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(11, 18, 32, 0.96) 100%) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .meta-item {
+  background: var(--profile-meta-bg) !important;
+  border-color: rgba(30, 41, 59, 0.95) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 24px rgba(0, 0, 0, 0.16) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .meta-label {
+  color: rgba(203, 213, 225, 0.78) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .meta-grid .meta-item,
+:global(html[data-admin-theme="dark"]) .profile-page .identity-card .meta-item {
+  background: var(--profile-meta-bg) !important;
+  border: 1px solid rgba(30, 41, 59, 0.95) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .meta-grid .meta-item strong,
+:global(html[data-admin-theme="dark"]) .profile-page .identity-card .meta-item strong {
+  color: rgba(248, 250, 252, 0.96) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .meta-grid .meta-item .meta-label,
+:global(html[data-admin-theme="dark"]) .profile-page .identity-card .meta-item .meta-label {
+  color: rgba(203, 213, 225, 0.78) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .meta-item strong,
+:global(html[data-admin-theme="dark"]) .profile-page .identity-top h2,
+:global(html[data-admin-theme="dark"]) .profile-page .section-head h3 {
+  color: rgba(248, 250, 252, 0.96) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .identity-top p,
+:global(html[data-admin-theme="dark"]) .profile-page .page-header p,
+:global(html[data-admin-theme="dark"]) .profile-page .section-head p,
+:global(html[data-admin-theme="dark"]) .profile-page .hint-text {
+  color: rgba(203, 213, 225, 0.78) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .identity-avatar {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 34%),
+    linear-gradient(135deg, rgba(212, 175, 55, 0.96) 0%, rgba(192, 143, 17, 0.96) 52%, rgba(15, 23, 42, 0.96) 100%) !important;
+  color: #ffffff !important;
+  border-color: rgba(212, 175, 55, 0.34) !important;
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .field input {
+  background: rgba(15, 23, 42, 0.88) !important;
+  border-color: rgba(30, 41, 59, 0.95) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .profile-page .field input:disabled {
+  background: rgba(255, 255, 255, 0.04) !important;
 }
 
 .section-actions {

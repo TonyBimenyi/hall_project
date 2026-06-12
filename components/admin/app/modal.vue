@@ -49,18 +49,19 @@ defineEmits(['update:modelValue'])
 }
 
 .modal-content {
-  background: white;
+  background: var(--white);
   width: 100%;
   border-radius: var(--rounded-2xl);
   box-shadow: var(--shadow-xl);
   display: flex;
   flex-direction: column;
   max-height: 90vh;
+  border: 1px solid var(--gray-200);
 }
 
 .modal-header {
   padding: var(--space-6) var(--space-8);
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--gray-100);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -69,7 +70,7 @@ defineEmits(['update:modelValue'])
 .modal-header h3 {
   margin: 0;
   font-size: 1.25rem;
-  color: #0f172a;
+  color: var(--gray-900);
 }
 
 .close-btn {
@@ -79,12 +80,12 @@ defineEmits(['update:modelValue'])
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #94a3b8;
+  color: var(--gray-400);
   transition: var(--transition-fast);
 }
 
 .close-btn:hover {
-  background: #f1f5f9;
+  background: var(--gray-100);
   color: var(--danger);
 }
 
@@ -95,7 +96,7 @@ defineEmits(['update:modelValue'])
 
 .modal-footer {
   padding: var(--space-6) var(--space-8);
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--gray-100);
   display: flex;
   justify-content: flex-end;
   gap: var(--space-4);

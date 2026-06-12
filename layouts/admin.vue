@@ -11,13 +11,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from '#imports'
 import { canAccessAdmin, canAccessAdminRoute, getDefaultAdminRoute, getStoredUser } from '~/composables/useRoleAccess'
+import { initAdminTheme, clearAdminTheme } from '~/composables/useAdminTheme'
 
 const allowed = ref(false)
 const router = useRouter()
 const route = useRoute()
+
+if (process.client) {
+  initAdminTheme()
+}
 
 const guardAdminRoute = async () => {
   const user = getStoredUser()
@@ -51,5 +56,9 @@ onMounted(() => {
 
 watch(() => route.path, () => {
   guardAdminRoute()
+})
+
+onBeforeUnmount(() => {
+  clearAdminTheme()
 })
 </script>

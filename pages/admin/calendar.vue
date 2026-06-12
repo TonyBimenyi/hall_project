@@ -12,7 +12,10 @@
           <h2 class="current-month">{{ currentMonthName }} {{ currentYear }}</h2>
           <button class="btn-icon" @click="nextMonth"><i class="fas fa-chevron-right"></i></button>
         </div>
-        <button class="btn btn-primary btn-sm" @click="goToToday">Aujourd'hui</button>
+        <button class="btn btn-primary btn-sm admin-head-btn" @click="goToToday">
+          <i class="fas fa-calendar-day"></i>
+          <span class="btn-label">Aujourd'hui</span>
+        </button>
       </div>
     </div>
 
@@ -71,33 +74,39 @@
     </div>
 
     <!-- View Modal -->
-    <AdminAppModal v-model="showViewModal" title="Détails de la réservation" width="400px">
-      <div v-if="selectedEvent" class="view-details">
-        <div class="detail-item">
-          <span class="detail-label">Client</span>
-          <span class="detail-val">{{ selectedEvent.customer_name }}</span>
+    <AdminAppModal v-model="showViewModal" title="Détails de la réservation" width="560px">
+      <div v-if="selectedEvent" class="entity-view-modal">
+        <div class="entity-view-hero">
+          <div class="entity-view-avatar">{{ nameInitials(selectedEvent.customer_name) || 'RE' }}</div>
+          <div class="entity-view-main">
+            <div class="entity-view-code">{{ selectedEvent.code || 'Reservation' }}</div>
+            <h3>{{ selectedEvent.customer_name }}</h3>
+            <p>{{ selectedEvent.hall_name }} • {{ selectedEvent.event_type }}</p>
+          </div>
+          <div class="entity-view-badges">
+            <span :class="['badge', getBadgeClass(selectedEvent.status)]">{{ translateStatus(selectedEvent.status) }}</span>
+            <span class="badge badge-info">{{ formatMoney(selectedEvent.total_price) }}</span>
+          </div>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">Salle</span>
-          <span class="detail-val">{{ selectedEvent.hall_name }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Événement</span>
-          <span class="detail-val">{{ selectedEvent.event_type }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Période</span>
-          <span class="detail-val">{{ formatDateRange(selectedEvent.start_date, selectedEvent.end_date) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Montant</span>
-          <span class="detail-val">{{ formatMoney(selectedEvent.total_price) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Statut</span>
-          <span :class="['badge', getBadgeClass(selectedEvent.status)]">
-            {{ translateStatus(selectedEvent.status) }}
-          </span>
+
+        <div class="entity-view-grid">
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Réservation</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Salle</span><span class="entity-view-value">{{ selectedEvent.hall_name }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Événement</span><span class="entity-view-value">{{ selectedEvent.event_type }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedEvent.start_date, selectedEvent.end_date) }}</span></div>
+            </div>
+          </section>
+
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Résumé</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Client</span><span class="entity-view-value">{{ selectedEvent.customer_name }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Montant</span><span class="entity-view-value">{{ formatMoney(selectedEvent.total_price) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ translateStatus(selectedEvent.status) }}</span></div>
+            </div>
+          </section>
         </div>
       </div>
       <template #footer>
@@ -280,8 +289,8 @@ const getBadgeClass = (status) => {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
   border-radius: 999px;
   padding: 6px 10px;
 }
@@ -289,7 +298,7 @@ const getBadgeClass = (status) => {
 .current-month {
   font-size: 1.05rem;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--gray-900);
   min-width: 160px;
   text-align: center;
   margin: 0;
@@ -302,28 +311,28 @@ const getBadgeClass = (status) => {
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gray-200);
   border-radius: 12px;
   overflow: hidden;
-  background: #fff;
+  background: var(--white);
 }
 
 .weekday-header {
   padding: var(--space-4);
-  background: #f8fafc;
+  background: var(--gray-50);
   text-align: center;
   font-weight: 700;
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: #64748b;
-  border-bottom: 1px solid #e2e8f0;
+  color: var(--gray-500);
+  border-bottom: 1px solid var(--gray-200);
 }
 
 .calendar-day {
   min-height: 120px;
   padding: var(--space-2);
-  border-right: 1px solid #e2e8f0;
-  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid var(--gray-200);
+  border-bottom: 1px solid var(--gray-200);
   transition: background 0.2s;
 }
 
@@ -332,11 +341,11 @@ const getBadgeClass = (status) => {
 }
 
 .calendar-day.empty {
-  background: #f1f5f9;
+  background: var(--gray-100);
 }
 
 .calendar-day.today {
-  background: #f0f9ff;
+  background: rgba(59, 130, 246, 0.08);
 }
 
 .calendar-day.today .day-number {
@@ -353,7 +362,7 @@ const getBadgeClass = (status) => {
 .day-number {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--gray-500);
   margin-bottom: var(--space-2);
 }
 
@@ -377,23 +386,23 @@ const getBadgeClass = (status) => {
 }
 
 .event-pill.skeleton {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
   cursor: default;
 }
 
 .event-pill.more {
-  background: #f1f5f9;
-  color: #334155;
-  border: 1px solid #e2e8f0;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  border: 1px solid var(--gray-200);
   cursor: default;
   justify-content: center;
   font-weight: 800;
 }
 
-.event-pill.paid { background: #dcfce7; color: #166534; border-left: 3px solid #22c55e; }
-.event-pill.confirmed { background: #e0f2fe; color: #075985; border-left: 3px solid #0ea5e9; }
-.event-pill.pending { background: #fef3c7; color: #92400e; border-left: 3px solid #f59e0b; }
+.event-pill.paid { background: var(--success-bg); color: var(--success); border-left: 3px solid var(--success); }
+.event-pill.confirmed { background: var(--info-bg); color: var(--info); border-left: 3px solid var(--info); }
+.event-pill.pending { background: var(--warning-bg); color: var(--warning); border-left: 3px solid var(--warning); }
 
 .event-time {
   opacity: 0.7;
@@ -412,7 +421,7 @@ const getBadgeClass = (status) => {
   align-items: center;
   gap: var(--space-2);
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--gray-500);
   font-weight: 600;
 }
 
@@ -426,25 +435,68 @@ const getBadgeClass = (status) => {
 .dot.pending { background: #f59e0b; }
 .dot.paid { background: #22c55e; }
 
-.view-details .detail-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid #f1f5f9;
+.entity-view-modal { display: grid; gap: 18px; }
+.entity-view-hero { display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 20px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; }
+.entity-view-avatar { width: 64px; height: 64px; border-radius: 18px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 800; letter-spacing: .08em; flex-shrink: 0; }
+.entity-view-main { min-width: 0; flex: 1; }
+.entity-view-code { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.14); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.entity-view-main h3 { margin: 6px 0 4px; font-size: 1.15rem; font-weight: 800; color: #ffffff; }
+.entity-view-main p { margin: 0; color: rgba(255,255,255,.78); font-size: .92rem; }
+.entity-view-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.entity-view-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.entity-view-card { border: 1px solid var(--gray-200); border-radius: 18px; background: var(--white); padding: 16px; }
+.entity-view-card-title { margin-bottom: 14px; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--gray-500); }
+.entity-view-list { display: grid; gap: 10px; }
+.entity-view-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--gray-50); border: 1px solid var(--gray-200); }
+.entity-view-label { color: var(--gray-500); font-size: .82rem; font-weight: 700; }
+.entity-view-value { color: var(--gray-900); font-size: .9rem; font-weight: 700; text-align: right; word-break: break-word; }
+
+:global(html[data-admin-theme="dark"]) .calendar-nav {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(30, 41, 59, 0.95);
 }
 
-.view-details .detail-item:last-child {
-  border-bottom: none;
+:global(html[data-admin-theme="dark"]) .calendar-grid {
+  background: rgba(15, 23, 42, 0.78);
+  border-color: rgba(30, 41, 59, 0.95);
 }
 
-.view-details .detail-label {
-  color: #64748b;
-  font-weight: 600;
+:global(html[data-admin-theme="dark"]) .weekday-header {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom-color: rgba(30, 41, 59, 0.95);
 }
 
-.view-details .detail-val {
-  color: #0f172a;
-  font-weight: 700;
+:global(html[data-admin-theme="dark"]) .calendar-day {
+  border-right-color: rgba(30, 41, 59, 0.95);
+  border-bottom-color: rgba(30, 41, 59, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .calendar-day.empty {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+:global(html[data-admin-theme="dark"]) .calendar-day.today {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+:global(html[data-admin-theme="dark"]) .event-pill.more {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(30, 41, 59, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .event-pill.skeleton {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(30, 41, 59, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .entity-view-card {
+  background: rgba(15, 23, 42, 0.78);
+  border-color: rgba(30, 41, 59, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .entity-view-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(30, 41, 59, 0.95);
 }
 
 @media (max-width: 992px) {
@@ -471,5 +523,13 @@ const getBadgeClass = (status) => {
     font-size: 0.68rem;
     padding: 3px 6px;
   }
+}
+
+@media (max-width: 640px) {
+  .entity-view-hero { flex-direction: column; align-items: flex-start; }
+  .entity-view-badges { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+  .entity-view-grid { grid-template-columns: 1fr; }
+  .entity-view-item { flex-direction: column; }
+  .entity-view-value { text-align: left; }
 }
 </style>

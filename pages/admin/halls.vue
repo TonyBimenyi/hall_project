@@ -5,8 +5,9 @@
         <h1>Gestion des Salles</h1>
         <p>Créer, modifier et suivre les capacités et tarifs des salles</p>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openAddModal">
-        <i class="fas fa-plus"></i> Ajouter une salle
+      <button class="btn btn-primary btn-sm admin-head-btn" @click="openAddModal">
+        <i class="fas fa-plus"></i>
+        <span class="btn-label">Ajouter une salle</span>
       </button>
     </div>
 
@@ -118,6 +119,15 @@
                 <span class="k">Prix / Jour</span>
                 <span class="v">{{ formatMoney(hall.price_per_day) }}</span>
               </div>
+              <div class="admin-kv">
+                <span class="k">Services additionnels</span>
+                <span class="v">
+                  <span :class="['service-state-pill', hallHasAdditionalServices(hall) ? 'is-yes' : 'is-no']">
+                    <i :class="hallHasAdditionalServices(hall) ? 'fas fa-circle-check' : 'fas fa-ban'"></i>
+                    {{ hallHasAdditionalServices(hall) ? 'Oui' : 'Non' }}
+                  </span>
+                </span>
+              </div>
             </div>
           </div>
         </template>
@@ -130,6 +140,7 @@
             <th><button class="table-sort-btn" :class="{ active: isHallSortActive('name') }" @click="toggleHallSort('name')">Nom <i :class="hallSortIconClass('name')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isHallSortActive('capacity') }" @click="toggleHallSort('capacity')">Capacité <i :class="hallSortIconClass('capacity')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isHallSortActive('price_per_day') }" @click="toggleHallSort('price_per_day')">Prix / Jour <i :class="hallSortIconClass('price_per_day')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isHallSortActive('services') }" @click="toggleHallSort('services')">Services <i :class="hallSortIconClass('services')"></i></button></th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -139,6 +150,7 @@
               <td><div class="skeleton-line skeleton-w-60"></div></td>
               <td><div class="skeleton-line skeleton-w-30"></div></td>
               <td><div class="skeleton-line skeleton-w-50"></div></td>
+              <td><div class="skeleton-line skeleton-w-30"></div></td>
               <td><div class="skeleton-line skeleton-w-40"></div></td>
             </tr>
           </template>
@@ -147,6 +159,12 @@
               <td><strong>{{ hall.name }}</strong></td>
               <td>{{ hall.capacity }} pers.</td>
               <td>{{ formatMoney(hall.price_per_day) }}</td>
+              <td>
+                <span :class="['service-state-pill', hallHasAdditionalServices(hall) ? 'is-yes' : 'is-no']">
+                  <i :class="hallHasAdditionalServices(hall) ? 'fas fa-circle-check' : 'fas fa-ban'"></i>
+                  {{ hallHasAdditionalServices(hall) ? 'Oui' : 'Non' }}
+                </span>
+              </td>
               <td class="actions-cell">
                 <div class="actions-dropdown">
                   <button class="btn-icon details" title="Détails" @click.stop="toggleActions(hall.id)">
@@ -168,7 +186,7 @@
             </tr>
           </template>
           <tr v-if="halls.length === 0">
-            <td colspan="4" class="empty-cell">Aucune salle disponible</td>
+            <td colspan="5" class="empty-cell">Aucune salle disponible</td>
           </tr>
         </tbody>
       </table>
@@ -219,9 +237,15 @@
                 <input v-model="service.name" list="default-service-options" type="text" class="form-input" placeholder="Ex: Sonorisation" />
               </div>
               <div class="form-group">
-                <label class="checkbox-row service-checkbox">
+                <label :class="['toggle-field', 'service-toggle', { 'is-active': service.has_subservices }]">
                   <input v-model="service.has_subservices" type="checkbox" @change="onServiceHasSubservicesChange(service)" />
-                  <span>Ce service a des sous-services</span>
+                  <span class="toggle-switch" aria-hidden="true">
+                    <span class="toggle-knob"></span>
+                  </span>
+                  <span class="toggle-copy">
+                    <strong>Ce service a des sous-services</strong>
+                    <small>{{ service.has_subservices ? 'Les prix seront definis par sous-service.' : 'Un seul prix sera applique a ce service.' }}</small>
+                  </span>
                 </label>
               </div>
             </div>
@@ -265,45 +289,58 @@
       </template>
     </AdminAppModal>
 
-    <AdminAppModal v-model="showViewModal" title="Détails de la salle" width="400px">
-      <div v-if="selectedHall" class="view-details">
-        <div class="detail-item">
-          <span class="detail-label">Nom</span>
-          <span class="detail-val">{{ selectedHall.name }}</span>
+    <AdminAppModal v-model="showViewModal" title="Détails de la salle" width="620px">
+      <div v-if="selectedHall" class="entity-view-modal">
+        <div class="entity-view-hero">
+          <div class="entity-view-avatar">{{ String(selectedHall.name || 'SA').trim().slice(0, 2).toUpperCase() }}</div>
+          <div class="entity-view-main">
+            <div class="entity-view-code">Salle</div>
+            <h3>{{ selectedHall.name }}</h3>
+            <p>Capacité {{ selectedHall.capacity }} personnes</p>
+          </div>
+          <div class="entity-view-badges">
+            <span class="badge badge-info">{{ selectedHall.capacity }} pers.</span>
+            <span class="badge badge-success">{{ formatMoney(selectedHall.price_per_day) }}</span>
+          </div>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">Capacité</span>
-          <span class="detail-val">{{ selectedHall.capacity }} pers.</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Prix / Jour</span>
-          <span class="detail-val">{{ formatMoney(selectedHall.price_per_day) }}</span>
-        </div>
-        <div class="detail-block">
-          <span class="detail-label">Services additionnels</span>
-          <div v-if="!selectedHall.additional_services?.length" class="detail-val muted-block">Aucun service additionnel</div>
-          <div v-else class="services-preview">
-            <div v-for="(service, index) in selectedHall.additional_services" :key="`${service.name}-${index}`" class="service-preview-item">
-              <div class="service-preview-title">
-                <strong>{{ service.name }}</strong>
-                <span v-if="!service.has_subservices">{{ formatMoney(service.price) }}</span>
-              </div>
-              <div v-if="service.has_subservices" class="service-preview-subs">
-                <div v-for="(subservice, subIndex) in service.subservices || []" :key="`${service.name}-${subIndex}`" class="service-preview-sub">
-                  <span>{{ subservice.name }}</span>
-                  <strong>{{ formatMoney(subservice.price) }}</strong>
+
+        <div class="entity-view-grid">
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Salle</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Nom</span><span class="entity-view-value">{{ selectedHall.name }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Capacité</span><span class="entity-view-value">{{ selectedHall.capacity }} pers.</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Prix / jour</span><span class="entity-view-value">{{ formatMoney(selectedHall.price_per_day) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Services</span><span class="entity-view-value">{{ selectedHall.additional_services?.length || 0 }}</span></div>
+            </div>
+          </section>
+
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Suivi administratif</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedHall.created_by_name || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedHall.updated_by_name || selectedHall.created_by_name || '-' }}</span></div>
+            </div>
+          </section>
+
+          <section class="entity-view-card entity-view-card-full">
+            <div class="entity-view-card-title">Services additionnels</div>
+            <div v-if="!selectedHall.additional_services?.length" class="entity-view-empty">Aucun service additionnel</div>
+            <div v-else class="services-preview">
+              <div v-for="(service, index) in selectedHall.additional_services" :key="`${service.name}-${index}`" class="service-preview-item">
+                <div class="service-preview-title">
+                  <strong>{{ service.name }}</strong>
+                  <span v-if="!service.has_subservices">{{ formatMoney(service.price) }}</span>
+                </div>
+                <div v-if="service.has_subservices" class="service-preview-subs">
+                  <div v-for="(subservice, subIndex) in service.subservices || []" :key="`${service.name}-${subIndex}`" class="service-preview-sub">
+                    <span>{{ subservice.name }}</span>
+                    <strong>{{ formatMoney(subservice.price) }}</strong>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Créé par</span>
-          <span class="detail-val">{{ selectedHall.created_by_name || '-' }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Dernière action par</span>
-          <span class="detail-val">{{ selectedHall.updated_by_name || selectedHall.created_by_name || '-' }}</span>
+          </section>
         </div>
       </div>
       <template #footer>
@@ -365,6 +402,7 @@ const {
   accessors: {
     capacity: hall => Number(hall?.capacity || 0),
     price_per_day: hall => Number(hall?.price_per_day || 0),
+    services: hall => (Array.isArray(hall?.additional_services) && hall.additional_services.length ? 1 : 0),
   },
 })
 const {
@@ -458,6 +496,8 @@ onMounted(() => {
 const toggleActions = (id) => {
   openActionsId.value = openActionsId.value === id ? null : id
 }
+
+const hallHasAdditionalServices = (hall) => Array.isArray(hall?.additional_services) && hall.additional_services.length > 0
 
 const createSubservice = (values = {}) => ({
   id: `sub-${Math.random().toString(36).slice(2, 10)}`,
@@ -795,18 +835,23 @@ const deleteHall = async () => {
   padding: var(--space-4) 0;
 }
 
-.view-details {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid #f1f5f9;
-}
+.entity-view-modal { display: grid; gap: 18px; }
+.entity-view-hero { display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 20px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; }
+.entity-view-avatar { width: 64px; height: 64px; border-radius: 18px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 800; letter-spacing: .08em; flex-shrink: 0; }
+.entity-view-main { min-width: 0; flex: 1; }
+.entity-view-code { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.14); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.entity-view-main h3 { margin: 6px 0 4px; font-size: 1.15rem; font-weight: 800; color: #ffffff; }
+.entity-view-main p { margin: 0; color: rgba(255,255,255,.78); font-size: .92rem; }
+.entity-view-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.entity-view-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.entity-view-card { border: 1px solid #e2e8f0; border-radius: 18px; background: #ffffff; padding: 16px; }
+.entity-view-card-full { grid-column: 1 / -1; }
+.entity-view-card-title { margin-bottom: 14px; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #64748b; }
+.entity-view-list { display: grid; gap: 10px; }
+.entity-view-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.entity-view-label { color: #64748b; font-size: .82rem; font-weight: 700; }
+.entity-view-value { color: #0f172a; font-size: .9rem; font-weight: 700; text-align: right; word-break: break-word; }
+.entity-view-empty { padding: 1rem; border: 1px dashed #cbd5e1; border-radius: 14px; color: #64748b; font-weight: 600; background: #f8fafc; }
 
 .services-section {
   margin-top: 1rem;
@@ -837,6 +882,14 @@ const deleteHall = async () => {
   font-size: 0.88rem;
 }
 
+@media (max-width: 640px) {
+  .entity-view-hero { flex-direction: column; align-items: flex-start; }
+  .entity-view-badges { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+  .entity-view-grid { grid-template-columns: 1fr; }
+  .entity-view-item { flex-direction: column; }
+  .entity-view-value { text-align: left; }
+}
+
 .services-empty {
   margin-top: 0.75rem;
   padding: 1rem;
@@ -859,10 +912,109 @@ const deleteHall = async () => {
   margin-bottom: 0.9rem;
 }
 
-.service-checkbox {
-  min-height: 44px;
+.service-state-pill {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+}
+
+.service-state-pill.is-yes {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+
+.service-state-pill.is-no {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.toggle-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #dbe3ee;
+  border-radius: 16px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.toggle-field:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+.toggle-field input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggle-field.is-active {
+  border-color: #86efac;
+  background: #f0fdf4;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 50px;
+  height: 30px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
+  transition: transform 0.2s ease;
+}
+
+.toggle-field.is-active .toggle-switch {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
+.toggle-field.is-active .toggle-knob {
+  transform: translateX(20px);
+}
+
+.toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.toggle-copy strong {
+  color: #0f172a;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.toggle-copy small {
+  color: #64748b;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .subservices-section {

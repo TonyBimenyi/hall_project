@@ -3,15 +3,13 @@
     <!-- Sidebar -->
     <aside :class="['sidebar', { 'is-collapsed': isCollapsed, 'is-mobile-open': isMobile && isMobileSidebarOpen }]">
       <div class="sidebar-header">
- 
-
         <div class="title" v-if="!isCollapsed">
           <span class="name"><img src="../../../Belta2.png" alt="LaBertha Villa"></span>
-
         </div>
       </div>
 
       <nav class="menu">
+        <div v-if="!isCollapsed" class="menu-caption">Navigation</div>
         <NuxtLink
           v-for="item in filteredNavigation"
           :key="item.title"
@@ -21,52 +19,92 @@
           @click="handleNavClick"
         >
           <i :class="item.icon"></i>
-          <span v-if="!isCollapsed">{{ item.title }}</span>
+          <span v-if="!isCollapsed" class="menu-item-label">{{ item.title }}</span>
+          <span v-if="!isCollapsed && isActive(item.url)" class="menu-item-arrow">
+            <i class="fas fa-arrow-right"></i>
+          </span>
         </NuxtLink>
       </nav>
+
+      <div v-if="!isCollapsed" class="sidebar-footer">
+        <div class="sidebar-footer-label">Connecté en tant que</div>
+        <div class="sidebar-footer-name">{{ currentUserName }}</div>
+        <div class="sidebar-footer-role">{{ currentUserRole }}</div>
+      </div>
     </aside>
 
     <!-- Main -->
     <div class="main">
       <header class="header">
-        <button class="menu-btn" @click="toggleSidebar">
-          <i class="fa-solid fa-bars"></i>
-        </button>
+        <div class="header-left">
+          <button class="menu-btn" @click="toggleSidebar">
+            <i class="fa-solid fa-bars"></i>
+          </button>
 
-        <h1 class="page-title">
-          {{ currentPageTitle }}
-        </h1>
+          <div class="page-heading">
+            <span class="page-eyebrow">Admin Space</span>
+            <h1 class="page-title">
+              {{ currentPageTitle }}
+            </h1>
+          </div>
+        </div>
 
-        <!-- Notifications Bell -->
-        <NotificationBell />
-
-        <!-- USER -->
-        <div class="user-profile" @click="showProfileMenu = !showProfileMenu">
-          <div class="avatar-wrapper">
-            <div class="avatar">
-              {{ userInitials }}
-            </div>
-            <div class="status-dot"></div>
+        <div class="header-right">
+          <div class="topbar-chip" v-if="!isMobile">
+            <i class="fas fa-shield-halved"></i>
+            <span>{{ currentUserRole }}</span>
           </div>
 
-          <div class="user-info">
-            <span class="user-name">
-              {{ currentUserName }}
-              <i class="fas fa-chevron-down"></i>
+          <!-- Notifications Bell -->
+          <NotificationBell />
+
+          <button
+            class="theme-switch"
+            type="button"
+            role="switch"
+            :aria-checked="adminTheme === 'dark'"
+            :title="adminTheme === 'dark' ? 'Mode clair' : 'Mode sombre'"
+            @click="toggleTheme"
+          >
+            <span class="theme-switch-track">
+              <span class="theme-switch-icon theme-switch-icon--moon">
+                <i class="fas fa-moon"></i>
+              </span>
+              <span class="theme-switch-icon theme-switch-icon--sun">
+                <i class="fas fa-sun"></i>
+              </span>
+              <span class="theme-switch-thumb"></span>
             </span>
-            <span class="user-role">{{ currentUserRole }}</span>
-          </div>
+          </button>
 
-          <!-- Dropdown -->
-          <div v-if="showProfileMenu" class="profile-dropdown">
-            <button class="dropdown-item" @click="goToProfile">
-              <i class="fas fa-user-circle"></i>
-              Mon profil
-            </button>
-            <button class="dropdown-item logout" @click="logout">
-              <i class="fas fa-sign-out-alt"></i>
-              Déconnexion
-            </button>
+          <!-- USER -->
+          <div class="user-profile" @click="showProfileMenu = !showProfileMenu">
+            <div class="avatar-wrapper">
+              <div class="avatar">
+                {{ userInitials }}
+              </div>
+              <div class="status-dot"></div>
+            </div>
+
+            <div class="user-info">
+              <span class="user-name">
+                {{ currentUserName }}
+                <i class="fas fa-chevron-down"></i>
+              </span>
+              <span class="user-role">{{ currentUserRole }}</span>
+            </div>
+
+            <!-- Dropdown -->
+            <div v-if="showProfileMenu" class="profile-dropdown">
+              <button class="dropdown-item" @click="goToProfile">
+                <i class="fas fa-user-circle"></i>
+                Mon profil
+              </button>
+              <button class="dropdown-item logout" @click="logout">
+                <i class="fas fa-sign-out-alt"></i>
+                Déconnexion
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -89,6 +127,7 @@
 import { api } from '~/composables/useApi'
 import NotificationBell from '~/components/admin/NotificationBell.vue'
 import { filterNavigationByRole, getRoleLabel } from '~/composables/useRoleAccess'
+import { getAdminTheme, toggleAdminTheme } from '~/composables/useAdminTheme'
 
 export default {
   components: {
@@ -100,6 +139,7 @@ export default {
       isMobile: false,
       isMobileSidebarOpen: false,
       showProfileMenu: false,
+      adminTheme: 'light',
 
       currentUser: {},
 
@@ -157,6 +197,7 @@ export default {
 
   mounted() {
     if (process.client) {
+      this.adminTheme = getAdminTheme()
       this.isMobile = window.innerWidth <= 992
       this.isMobileSidebarOpen = false
       if (this.isMobile) this.isCollapsed = false
@@ -247,6 +288,10 @@ export default {
       localStorage.removeItem('user')
       this.$router.push('/login')
       this.showProfileMenu = false
+    },
+
+    toggleTheme() {
+      this.adminTheme = toggleAdminTheme()
     }
   }
 }
@@ -255,14 +300,16 @@ export default {
 .layout {
   display: flex;
   height: 100vh;
-  background: #f8fafc; /* Very light gray/blue background */
+  background: var(--gray-50);
 }
 
 /* Sidebar */
 .sidebar {
   width: 280px;
-  background: #0f172a; /* Darker, cleaner navy */
-  color: var(--white);
+  background:
+    radial-gradient(circle at top left, rgba(212, 175, 55, 0.16), transparent 28%),
+    linear-gradient(180deg, #081225 0%, #0f172a 52%, #111c31 100%);
+  color: #ffffff;
   transition: var(--transition-all);
   position: relative;
   z-index: 100;
@@ -276,12 +323,30 @@ export default {
   width: 80px;
 }
 
+.sidebar.is-collapsed .sidebar-header {
+  justify-content: center;
+  padding: var(--space-6) var(--space-2);
+}
+
+.sidebar.is-collapsed .sidebar-footer,
+.sidebar.is-collapsed .menu-caption,
+.sidebar.is-collapsed .menu-item-arrow {
+  display: none !important;
+}
+
+.sidebar.is-collapsed .title,
+.sidebar.is-collapsed .title .name,
+.sidebar.is-collapsed .title .name img,
+.sidebar.is-collapsed .title .sub {
+  display: none !important;
+}
+
 .sidebar-header {
-  padding: var(--space-8) var(--space-6);
+  padding: var(--space-7) var(--space-6) var(--space-5);
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logo {
@@ -303,17 +368,19 @@ export default {
   font-weight: 800;
   font-size: 1.1rem;
   letter-spacing: 0.02em;
-  color: var(--white);
+  color: #ffffff;
 }
 .title .name img{
   height: 82px;
   background-color: #fbfbf7;
   border-radius: 10px;
+  display: block;
+  max-width: 100%;
 }
 
 .title .sub {
   font-size: 0.7rem;
-  opacity: 0.5;
+  opacity: 0.68;
   text-transform: uppercase;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -321,42 +388,96 @@ export default {
 
 .menu {
   flex: 1;
-  padding: var(--space-6) var(--space-4);
+  padding: var(--space-5) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 6px;
   overflow-y: auto;
   min-height: 0;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
 
+.menu-caption {
+  padding: 0 var(--space-3) var(--space-3);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.5);
+}
+
 .menu-item {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--rounded-lg);
-  color: #94a3b8; /* Muted text */
-  font-weight: 500;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  color: #94a3b8;
+  font-weight: 700;
   transition: var(--transition-fast);
+  position: relative;
 }
 
 .menu-item i {
   width: 20px;
   font-size: 1rem;
+  text-align: center;
+}
+
+.menu-item-label {
+  flex: 1;
+}
+
+.menu-item-arrow {
+  opacity: 0.72;
+  font-size: 0.75rem;
 }
 
 .menu-item:hover {
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--white);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  transform: translateX(2px);
 }
 
 .menu-item.active {
-  background: var(--accent);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.96), rgba(192, 143, 17, 0.96));
   color: #0f172a;
   font-weight: 700;
-  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.2);
+  box-shadow: 0 14px 26px rgba(212, 175, 55, 0.24);
+}
+
+.menu-item.active .menu-item-arrow {
+  opacity: 1;
+}
+
+.sidebar-footer {
+  margin: var(--space-4);
+  padding: var(--space-4);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.sidebar-footer-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.56);
+}
+
+.sidebar-footer-name {
+  margin-top: 8px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.sidebar-footer-role {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: rgba(226, 232, 240, 0.72);
 }
 
 /* Main Area */
@@ -368,23 +489,40 @@ export default {
 }
 
 .header {
-  height: 80px;
-  background: var(--white);
-  padding: 0 var(--space-10);
+  min-height: 82px;
+  background: color-mix(in srgb, var(--white) 86%, transparent);
+  padding: 0 var(--space-8);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--gray-200);
   z-index: 90;
   position: sticky;
   top: 0;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.header-left,
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.header-right {
+  margin-left: auto;
 }
 
 .menu-btn {
   font-size: 1.25rem;
-  color: #64748b;
-  padding: var(--space-2);
-  border-radius: var(--rounded-md);
+  color: var(--gray-500);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 14px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
 }
 
 .menu-btn:hover {
@@ -392,11 +530,177 @@ export default {
   color: var(--primary);
 }
 
+.page-heading {
+  display: grid;
+  gap: 3px;
+}
+
+.page-eyebrow {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+}
+
 .page-title {
-  font-family: var(--font-sans); /* Cleaner than serif for admin headers */
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1e293b;
+  font-family: var(--font-sans);
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--gray-800);
+  line-height: 1.1;
+}
+
+.topbar-chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  color: var(--gray-600);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 0.82rem;
+}
+
+.theme-switch {
+  margin-right: var(--space-2);
+  width: 52px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.theme-switch-track {
+  width: 52px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  position: relative;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+.theme-switch-icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.theme-switch-icon--moon {
+  left: 6px;
+}
+
+.theme-switch-icon--sun {
+  right: 6px;
+}
+
+.theme-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
+  transition: transform 0.22s ease, border-color 0.22s ease, background-color 0.22s ease;
+}
+
+.theme-switch:hover .theme-switch-track {
+  border-color: var(--gray-300);
+}
+
+.theme-switch:focus-visible .theme-switch-track {
+  box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.16), 0 12px 26px rgba(15, 23, 42, 0.10);
+  border-color: rgba(212, 175, 55, 0.55);
+}
+
+.theme-switch[aria-checked="true"] .theme-switch-track {
+  background: rgba(212, 175, 55, 0.22);
+  border-color: rgba(212, 175, 55, 0.55);
+}
+
+.theme-switch[aria-checked="true"] .theme-switch-thumb {
+  transform: translateX(24px);
+  border-color: rgba(212, 175, 55, 0.6);
+}
+
+html:not([data-admin-theme="dark"]) .theme-switch[aria-checked="true"] .theme-switch-icon--sun {
+  color: #92400e;
+  opacity: 1;
+}
+
+html:not([data-admin-theme="dark"]) .theme-switch[aria-checked="true"] .theme-switch-icon--moon {
+  opacity: 0.55;
+}
+
+html:not([data-admin-theme="dark"]) .theme-switch[aria-checked="false"] .theme-switch-icon--moon {
+  color: #334155;
+  opacity: 1;
+}
+
+html:not([data-admin-theme="dark"]) .theme-switch[aria-checked="false"] .theme-switch-icon--sun {
+  opacity: 0.55;
+}
+
+html[data-admin-theme="dark"] .theme-switch {
+  background: transparent;
+}
+
+html[data-admin-theme="dark"] .theme-switch-thumb {
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+}
+
+html[data-admin-theme="dark"] .theme-switch-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(30, 41, 59, 0.95);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+}
+
+html[data-admin-theme="dark"] .theme-switch:hover .theme-switch-track {
+  border-color: rgba(51, 65, 85, 0.95);
+}
+
+html[data-admin-theme="dark"] .theme-switch-icon {
+  color: rgba(203, 213, 225, 0.85);
+}
+
+html[data-admin-theme="dark"] .theme-switch[aria-checked="true"] .theme-switch-icon--sun {
+  color: #fde68a;
+  opacity: 1;
+}
+
+html[data-admin-theme="dark"] .theme-switch[aria-checked="true"] .theme-switch-icon--moon {
+  opacity: 0.55;
+}
+
+html[data-admin-theme="dark"] .theme-switch[aria-checked="false"] .theme-switch-icon--moon {
+  color: #e2e8f0;
+  opacity: 1;
+}
+
+html[data-admin-theme="dark"] .theme-switch[aria-checked="false"] .theme-switch-icon--sun {
+  opacity: 0.55;
 }
 
 .user-profile {
@@ -404,42 +708,43 @@ export default {
   align-items: center;
   gap: var(--space-3);
   cursor: pointer;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--rounded-full);
-  border: 1px solid #f1f5f9;
+  padding: 8px 12px;
+  border-radius: 18px;
+  border: 1px solid var(--gray-200);
+  background: color-mix(in srgb, var(--white) 82%, var(--gray-50));
   transition: var(--transition-fast);
   position: relative;
 }
 
 .user-profile:hover {
-  background: #f8fafc;
-  border-color: #e2e8f0;
+  background: var(--gray-50);
+  border-color: var(--gray-200);
 }
 
 .avatar {
-  width: 32px;
-  height: 32px;
-  background: #f1f5f9;
-  color: var(--primary);
-  border-radius: var(--rounded-full);
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.18), rgba(212, 175, 55, 0.34));
+  color: #7c5b00;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 0.8rem;
-  border: none;
+  border: 1px solid rgba(212, 175, 55, 0.25);
 }
 
 .user-name {
   font-weight: 600;
   font-size: 0.85rem;
-  color: #475569;
+  color: var(--gray-600);
 }
 
 .user-role {
   display: block;
   font-size: 0.72rem;
-  color: #94a3b8;
+  color: var(--gray-400);
   margin-top: 0.15rem;
 }
 
@@ -452,7 +757,19 @@ export default {
   border-radius: var(--rounded-xl);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
   padding: var(--space-2);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gray-200);
+}
+
+html[data-admin-theme="dark"] .menu-btn,
+html[data-admin-theme="dark"] .topbar-chip,
+html[data-admin-theme="dark"] .user-profile {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(30, 41, 59, 0.95);
+}
+
+html[data-admin-theme="dark"] .avatar {
+  color: #fef3c7;
+  border-color: rgba(212, 175, 55, 0.28);
 }
 
 .dropdown-item {
@@ -461,21 +778,21 @@ export default {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--rounded-lg);
   font-size: 0.85rem;
-  color: #475569;
+  color: var(--gray-600);
   display: flex;
   align-items: center;
   gap: var(--space-3);
 }
 
 .dropdown-item:hover {
-  background: #f8fafc;
+  background: var(--gray-50);
   color: var(--primary);
 }
 
 .dropdown-item.logout {
   color: var(--danger);
   margin-top: var(--space-1);
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--gray-100);
   border-radius: 0 0 var(--rounded-lg) var(--rounded-lg);
 }
 
@@ -483,7 +800,7 @@ export default {
   flex: 1;
   overflow-y: auto;
   padding: var(--space-10);
-  background-color: #f8fafc;
+  background-color: var(--gray-50);
 }
 
 /* Mobile */
@@ -520,17 +837,23 @@ export default {
   }
 
   .header {
-    height: 64px;
+    min-height: 64px;
     padding: 0 var(--space-4);
     gap: var(--space-3);
   }
 
   .page-title {
     font-size: 1rem;
-    max-width: 48vw;
+    max-width: 52vw;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .page-eyebrow,
+  .topbar-chip,
+  .sidebar-footer {
+    display: none;
   }
 
   .user-profile {

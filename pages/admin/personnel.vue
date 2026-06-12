@@ -7,14 +7,17 @@
         <p>Suivi des employés et assignation des tâches</p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
-          <i class="fas fa-file-pdf"></i> Export PDF
+        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
+          <i class="fas fa-file-pdf"></i>
+          <span class="btn-label">Export PDF</span>
         </button>
-        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
-          <i class="fas fa-file-excel"></i> Export XLS
+        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
+          <i class="fas fa-file-excel"></i>
+          <span class="btn-label">Export XLS</span>
         </button>
-        <button v-if="canManagePersonnelAccounts" class="btn btn-primary btn-sm" @click="openAddModal">
-          <i class="fas fa-user-plus"></i> Ajouter un employé
+        <button v-if="canManagePersonnelAccounts" class="btn btn-primary btn-sm admin-head-btn" @click="openAddModal">
+          <i class="fas fa-user-plus"></i>
+          <span class="btn-label">Ajouter un employé</span>
         </button>
       </div>
     </div>
@@ -285,49 +288,67 @@
     </AdminAppModal>
 
     <!-- View Modal -->
-    <AdminAppModal v-model="showViewModal" title="Détails de l'employé" width="400px">
-      <div v-if="selectedStaff" class="view-details">
-        <div class="detail-item">
-          <span class="detail-label">ID</span>
-          <span class="detail-val">{{ getStaffDisplayId(selectedStaff) }}</span>
+    <AdminAppModal v-model="showViewModal" title="Détails de l'employé" width="560px">
+      <div v-if="selectedStaff" class="staff-view-modal">
+        <div class="staff-view-hero">
+          <div class="staff-view-avatar">{{ getStaffInitials(selectedStaff) }}</div>
+          <div class="staff-view-main">
+            <div class="staff-view-code">{{ getStaffDisplayId(selectedStaff) }}</div>
+            <h3>{{ selectedStaff.name }}</h3>
+            <p>{{ selectedStaff.role }}</p>
+          </div>
+          <div class="staff-view-badges">
+            <span :class="['badge', getBadgeClass(selectedStaff.status)]">
+              {{ translateStatus(selectedStaff.status) }}
+            </span>
+            <span class="badge badge-info">{{ accountStatusText(selectedStaff) }}</span>
+          </div>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">Nom</span>
-          <span class="detail-val">{{ selectedStaff.name }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Rôle</span>
-          <span class="detail-val">{{ selectedStaff.role }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Contact</span>
-          <span class="detail-val">{{ selectedStaff.phone || '-' }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Email</span>
-          <span class="detail-val">{{ selectedStaff.email || '-' }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Compte</span>
-          <span class="detail-val">{{ accountStatusText(selectedStaff) }}</span>
-        </div>
-        <div v-if="selectedStaff.account_username" class="detail-item">
-          <span class="detail-label">Identifiant</span>
-          <span class="detail-val">{{ selectedStaff.account_username }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Statut</span>
-          <span :class="['badge', getBadgeClass(selectedStaff.status)]">
-            {{ translateStatus(selectedStaff.status) }}
-          </span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Créé par</span>
-          <span class="detail-val">{{ selectedStaff.created_by_name || '-' }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Dernière action par</span>
-          <span class="detail-val">{{ selectedStaff.updated_by_name || selectedStaff.created_by_name || '-' }}</span>
+
+        <div class="staff-view-grid">
+          <section class="staff-view-card">
+            <div class="staff-view-card-title">Informations principales</div>
+            <div class="staff-view-list">
+              <div class="staff-view-item">
+                <span class="staff-view-label">Téléphone</span>
+                <span class="staff-view-value">{{ selectedStaff.phone || '-' }}</span>
+              </div>
+              <div class="staff-view-item">
+                <span class="staff-view-label">Email</span>
+                <span class="staff-view-value">{{ selectedStaff.email || '-' }}</span>
+              </div>
+              <div class="staff-view-item">
+                <span class="staff-view-label">Compte</span>
+                <span class="staff-view-value">{{ selectedStaff.has_account ? 'Oui' : 'Non' }}</span>
+              </div>
+              <div v-if="selectedStaff.account_username" class="staff-view-item">
+                <span class="staff-view-label">Identifiant</span>
+                <span class="staff-view-value">{{ selectedStaff.account_username }}</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="staff-view-card">
+            <div class="staff-view-card-title">Suivi administratif</div>
+            <div class="staff-view-list">
+              <div class="staff-view-item">
+                <span class="staff-view-label">Créé par</span>
+                <span class="staff-view-value">{{ selectedStaff.created_by_name || '-' }}</span>
+              </div>
+              <div class="staff-view-item">
+                <span class="staff-view-label">Dernière action</span>
+                <span class="staff-view-value">{{ selectedStaff.updated_by_name || selectedStaff.created_by_name || '-' }}</span>
+              </div>
+              <div class="staff-view-item">
+                <span class="staff-view-label">Disponibilité</span>
+                <span class="staff-view-value">{{ translateStatus(selectedStaff.status) }}</span>
+              </div>
+              <div class="staff-view-item">
+                <span class="staff-view-label">Rôle</span>
+                <span class="staff-view-value">{{ selectedStaff.role }}</span>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
       <template #footer>
@@ -354,9 +375,11 @@ import { api } from '~/composables/useApi'
 import { usePagination } from '~/composables/usePagination'
 import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
+import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
 import { canManageStaffAccounts as canManageStaffAccountsByRole } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
+const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
 
 const personnel = ref([])
 const { buildPersonnelSequenceMap } = useDisplayIds()
@@ -404,14 +427,8 @@ const exportXls = async () => {
   if (!tableRef.value) return
   exportingXls.value = true
   await nextTick()
-  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableRef.value.outerHTML}</body></html>`
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'personnel.xls'
-  a.click()
-  URL.revokeObjectURL(url)
+  const contentHtml = getSanitizedExportHtml(tableRef.value, { htmlMode: 'outer', removeActionsColumn: true })
+  downloadHtmlAsXls({ type: 'personnel', contentHtml })
   setTimeout(() => {
     exportingXls.value = false
   }, 350)
@@ -421,21 +438,21 @@ const exportPdf = async () => {
   if (!tableRef.value) return
   exportingPdf.value = true
   await nextTick()
-  const win = window.open('', '_blank')
-  if (!win) {
+  const contentHtml = getSanitizedExportHtml(tableRef.value, { htmlMode: 'outer', removeActionsColumn: true })
+  const html = buildPdfDocumentHtml({
+    title: 'Personnel',
+    documentTitle: buildExportFileName('personnel', 'pdf').replace(/\.pdf$/, ''),
+    subtitle: 'Liste du personnel exportée depuis l’administration.',
+    typeLabel: 'Personnel PDF',
+    tableTitle: 'Liste du personnel',
+    periodLabel: 'Toutes les dates',
+    contentHtml,
+  })
+  const ok = await downloadPdfHtml({ html, fileName: buildExportFileName('personnel', 'pdf') })
+  if (!ok) {
     exportingPdf.value = false
     return
   }
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Personnel</title><style>
-  body{font-family:Arial, sans-serif; padding:20px}
-  table{width:100%; border-collapse:collapse}
-  th,td{border:1px solid #e2e8f0; padding:8px; text-align:left; font-size:12px}
-  th{background:#f8fafc}
-  </style></head><body><h2>Personnel</h2>${tableRef.value.outerHTML}</body></html>`)
-  win.document.close()
-  win.focus()
-  win.print()
-  win.close()
   setTimeout(() => {
     exportingPdf.value = false
   }, 350)
@@ -661,6 +678,13 @@ const accountStatusText = (staff) => {
   if (!staff?.has_account) return 'Sans compte'
   return staff.must_change_password ? 'Mot de passe temporaire' : 'Compte actif'
 }
+
+const getStaffInitials = (staff) => {
+  const name = String(staff?.name || '').trim()
+  if (!name) return 'ST'
+  const parts = name.split(' ').filter(Boolean)
+  return `${parts[0]?.[0] || ''}${parts[1]?.[0] || parts[0]?.[1] || ''}`.toUpperCase()
+}
 </script>
 
 <style scoped>
@@ -671,8 +695,18 @@ const accountStatusText = (staff) => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: var(--space-10);
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.header-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .5rem;
 }
 
 .page-header h1 {
@@ -689,7 +723,7 @@ const accountStatusText = (staff) => {
 }
 
 .muted-line {
-  color: #94a3b8;
+  color: var(--gray-500);
   font-size: 0.82rem;
   margin-top: 0.15rem;
 }
@@ -804,13 +838,13 @@ const accountStatusText = (staff) => {
 
 .staff-info .name {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--gray-900);
   font-size: 0.95rem;
 }
 
 .staff-info .id {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--gray-500);
   font-weight: 500;
 }
 
@@ -875,5 +909,148 @@ const accountStatusText = (staff) => {
 .actions-item.danger:hover {
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.staff-view-modal {
+  display: grid;
+  gap: 18px;
+}
+
+.staff-view-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+}
+
+.staff-view-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+
+.staff-view-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.staff-view-main h3 {
+  margin: 6px 0 4px;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.staff-view-main p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.92rem;
+}
+
+.staff-view-code {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.staff-view-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.staff-view-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.staff-view-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.staff-view-card-title {
+  margin-bottom: 14px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.staff-view-list {
+  display: grid;
+  gap: 10px;
+}
+
+.staff-view-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.staff-view-label {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.staff-view-value {
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: right;
+  word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .staff-view-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .staff-view-badges {
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .staff-view-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .staff-view-item {
+    flex-direction: column;
+  }
+
+  .staff-view-value {
+    text-align: left;
+  }
 }
 </style>

@@ -8,17 +8,21 @@
         <p>Gérer toutes les réservations de salle</p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
-          <i class="fas fa-file-pdf"></i> Export PDF
+        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
+          <i class="fas fa-file-pdf"></i>
+          <span class="btn-label">Export PDF</span>
         </button>
-        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
-          <i class="fas fa-file-excel"></i> Export XLS
+        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
+          <i class="fas fa-file-excel"></i>
+          <span class="btn-label">Export XLS</span>
         </button>
-        <NuxtLink to="/admin/calendar" class="btn btn-secondary btn-sm">
-          <i class="fas fa-calendar-alt"></i> Calendrier global
+        <NuxtLink to="/admin/calendar" class="btn btn-secondary btn-sm admin-head-btn">
+          <i class="fas fa-calendar-alt"></i>
+          <span class="btn-label">Calendrier global</span>
         </NuxtLink>
-        <button class="btn btn-primary btn-sm" @click="openAddModal">
-          <i class="fas fa-plus"></i> Nouvelle réservation
+        <button class="btn btn-primary btn-sm admin-head-btn" @click="openAddModal">
+          <i class="fas fa-plus"></i>
+          <span class="btn-label">Nouvelle réservation</span>
         </button>
       </div>
     </div>
@@ -143,7 +147,7 @@
                   <i class="fas fa-ellipsis-vertical"></i>
                 </button>
                 <div v-if="openActionsId === booking.id" class="actions-menu" @click.stop>
-                  <NuxtLink class="actions-item" :to="`/admin/payments?booking=${booking.id}`" @click="closeActions">
+                  <NuxtLink v-if="booking.status !== 'paid'" class="actions-item" :to="`/admin/payments?booking=${booking.id}`" @click="closeActions">
                     <i class="fas fa-coins"></i> Payer
                   </NuxtLink>
                   <button
@@ -268,7 +272,7 @@
                     <i class="fas fa-ellipsis-vertical"></i>
                   </button>
                   <div v-if="openActionsId === booking.id" class="actions-menu" @click.stop>
-                    <NuxtLink class="actions-item" :to="`/admin/payments?booking=${booking.id}`" @click="closeActions">
+                    <NuxtLink v-if="booking.status !== 'paid'" class="actions-item" :to="`/admin/payments?booking=${booking.id}`" @click="closeActions">
                       <i class="fas fa-coins"></i> Payer
                     </NuxtLink>
                     <button v-if="booking.status === 'pending'" class="actions-item" @click="printBookingJeton(booking)">
@@ -301,6 +305,34 @@
     <!-- Modals -->
     <AdminAppModal v-model="showFormModal" :title="isEditing ? 'Modifier la réservation' : 'Nouvelle réservation'" width="600px">
       <form @submit.prevent="saveBooking" class="admin-form">
+        <div class="booking-total-banner">
+          <div class="booking-total-main">
+            <span class="booking-total-label">Montant total en direct</span>
+            <strong class="booking-total-value">{{ formatMoney(form.total_price || 0) }}</strong>
+            <small class="booking-total-hint">
+              Le total se met à jour automatiquement selon la salle, la période et les services ajoutés.
+            </small>
+          </div>
+          <div class="booking-total-meta">
+            <div class="booking-total-chip">
+              <span class="chip-label">Base</span>
+              <strong>{{ formatMoney(baseBookingAmount) }}</strong>
+            </div>
+            <div class="booking-total-chip">
+              <span class="chip-label">Services</span>
+              <strong>{{ selectedAddonsCount }} selection{{ selectedAddonsCount > 1 ? 's' : '' }}</strong>
+            </div>
+            <div class="booking-total-chip">
+              <span class="chip-label">Supplément</span>
+              <strong>{{ formatMoney(addonsTotal) }}</strong>
+            </div>
+            <div class="booking-total-chip">
+              <span class="chip-label">Durée</span>
+              <strong>{{ daysCount > 0 ? `${daysCount} jour(s)` : 'Non definie' }}</strong>
+            </div>
+          </div>
+        </div>
+
         <div class="form-grid">
           <div class="form-group">
             <label class="form-label">Prénom</label>
@@ -396,15 +428,21 @@
             <div class="addons-list">
               <div v-for="service in hallAdditionalServices" :key="service.name" class="addon-item">
                 <div v-if="!service.has_subservices" class="addon-line">
-                  <label class="checkbox-row">
+                  <label :class="['addon-toggle', { 'is-active': isServiceSelected(service.name) }]">
                     <input
                       type="checkbox"
                       :checked="isServiceSelected(service.name)"
                       @change="toggleSimpleService(service)"
                     />
-                    <span>{{ service.name }}</span>
+                    <span class="toggle-switch" aria-hidden="true">
+                      <span class="toggle-knob"></span>
+                    </span>
+                    <span class="addon-toggle-copy">
+                      <strong>{{ service.name }}</strong>
+                      <small>{{ isServiceSelected(service.name) ? 'Service ajoute a la reservation.' : 'Activer pour ajouter ce service.' }}</small>
+                    </span>
                   </label>
-                  <strong>{{ formatMoney(service.price) }}</strong>
+                  <strong class="addon-price">{{ formatMoney(service.price) }}</strong>
                 </div>
                 <div v-else class="addon-sub-block">
                   <div class="addon-sub-head">
@@ -415,15 +453,21 @@
                     <label
                       v-for="sub in (service.subservices || [])"
                       :key="`${service.name}-${sub.name}`"
-                      class="checkbox-row addon-sub-line"
+                      :class="['addon-toggle', 'addon-sub-line', { 'is-active': isSubserviceSelected(service.name, sub.name) }]"
                     >
                       <input
                         type="checkbox"
                         :checked="isSubserviceSelected(service.name, sub.name)"
                         @change="toggleSubservice(service.name, sub.name)"
                       />
-                      <span>{{ sub.name }}</span>
-                      <strong>{{ formatMoney(sub.price) }}</strong>
+                      <span class="toggle-switch" aria-hidden="true">
+                        <span class="toggle-knob"></span>
+                      </span>
+                      <span class="addon-toggle-copy">
+                        <strong>{{ sub.name }}</strong>
+                        <small>{{ isSubserviceSelected(service.name, sub.name) ? 'Sous-service selectionne.' : 'Activer pour ajouter ce sous-service.' }}</small>
+                      </span>
+                      <strong class="addon-price">{{ formatMoney(sub.price) }}</strong>
                     </label>
                   </div>
                 </div>
@@ -453,72 +497,62 @@
     </AdminAppModal>
 
     <!-- View Modal -->
-    <AdminAppModal v-model="showViewModal" title="Détails de la réservation" width="500px">
-      <div v-if="selectedBooking" class="view-details">
-        <div class="detail-item">
-          <span class="detail-label">Code</span>
-          <span class="detail-val">{{ getBookingDisplayId(selectedBooking) }}</span>
+    <AdminAppModal v-model="showViewModal" title="Détails de la réservation" width="640px">
+      <div v-if="selectedBooking" class="entity-view-modal">
+        <div class="entity-view-hero">
+          <div class="entity-view-avatar">{{ String(selectedBooking.customer_name || 'RE').trim().slice(0, 2).toUpperCase() }}</div>
+          <div class="entity-view-main">
+            <div class="entity-view-code">{{ getBookingDisplayId(selectedBooking) }}</div>
+            <h3>{{ selectedBooking.customer_name }}</h3>
+            <p>{{ selectedBooking.hall_name }} • {{ selectedBooking.event_type }}</p>
+          </div>
+          <div class="entity-view-badges">
+            <span :class="['badge', getBadgeClass(selectedBooking.status)]">{{ getStatusTranslation(selectedBooking.status) }}</span>
+            <span class="badge badge-info">{{ formatMoney(selectedBooking.total_price) }}</span>
+          </div>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">Client</span>
-          <span class="detail-val">{{ selectedBooking.customer_name }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Email</span>
-          <span class="detail-val">{{ selectedBooking.customer_email }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Salle</span>
-          <span class="detail-val">{{ selectedBooking.hall_name }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Événement</span>
-          <span class="detail-val">{{ selectedBooking.event_type }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Période</span>
-          <span class="detail-val">{{ formatDateRange(selectedBooking.start_date, selectedBooking.end_date) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Montant</span>
-          <span class="detail-val">{{ formatMoney(selectedBooking.total_price) }}</span>
-        </div>
-        <div v-if="Number(selectedBooking.addons_total || 0) > 0" class="detail-item">
-          <span class="detail-label">Services additionnels</span>
-          <span class="detail-val">{{ formatMoney(selectedBooking.addons_total) }}</span>
-        </div>
-        <div v-if="selectedBooking.additional_services_selected?.length" class="detail-block">
-          <span class="detail-label">Détails services</span>
-          <div class="detail-val services-preview">
-            <div
-              v-for="(svc, idx) in selectedBooking.additional_services_selected"
-              :key="`${svc.name}-${idx}`"
-              class="service-preview-item"
-            >
-              <div class="service-preview-title">
-                <strong>{{ svc.name }}</strong>
-              </div>
-              <div v-if="svc.subservices?.length" class="service-preview-subs">
-                <div v-for="(sub, sidx) in svc.subservices" :key="`${svc.name}-${sidx}`" class="service-preview-sub">
-                  <span>{{ sub.name }}</span>
+
+        <div class="entity-view-grid">
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Réservation</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Email</span><span class="entity-view-value">{{ selectedBooking.customer_email || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Salle</span><span class="entity-view-value">{{ selectedBooking.hall_name }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Événement</span><span class="entity-view-value">{{ selectedBooking.event_type }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedBooking.start_date, selectedBooking.end_date) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Montant total</span><span class="entity-view-value">{{ formatMoney(selectedBooking.total_price) }}</span></div>
+              <div v-if="Number(selectedBooking.addons_total || 0) > 0" class="entity-view-item"><span class="entity-view-label">Services additionnels</span><span class="entity-view-value">{{ formatMoney(selectedBooking.addons_total) }}</span></div>
+            </div>
+          </section>
+
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Suivi administratif</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ getStatusTranslation(selectedBooking.status) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedBooking.created_by_name || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedBooking.updated_by_name || selectedBooking.created_by_name || '-' }}</span></div>
+            </div>
+          </section>
+
+          <section v-if="selectedBooking.additional_services_selected?.length" class="entity-view-card entity-view-card-full">
+            <div class="entity-view-card-title">Détails services</div>
+            <div class="services-preview">
+              <div
+                v-for="(svc, idx) in selectedBooking.additional_services_selected"
+                :key="`${svc.name}-${idx}`"
+                class="service-preview-item"
+              >
+                <div class="service-preview-title">
+                  <strong>{{ svc.name }}</strong>
+                </div>
+                <div v-if="svc.subservices?.length" class="service-preview-subs">
+                  <div v-for="(sub, sidx) in svc.subservices" :key="`${svc.name}-${sidx}`" class="service-preview-sub">
+                    <span>{{ sub.name }}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Statut</span>
-          <span :class="['badge', getBadgeClass(selectedBooking.status)]">
-            {{ getStatusTranslation(selectedBooking.status) }}
-          </span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Créé par</span>
-          <span class="detail-val">{{ selectedBooking.created_by_name || '-' }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Dernière action par</span>
-          <span class="detail-val">{{ selectedBooking.updated_by_name || selectedBooking.created_by_name || '-' }}</span>
+          </section>
         </div>
       </div>
       <template #footer>
@@ -545,6 +579,8 @@ import { usePagination } from '~/composables/usePagination'
 import { useDateFormat } from '~/composables/useDateFormat'
 import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
+import { useDocumentBranding } from '~/composables/useDocumentBranding'
+import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
 import { canDeleteBookings as canDeleteBookingsByRole, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
@@ -552,15 +588,9 @@ const route = useRoute()
 const { formatMoney, formatNumberSpaces, moneyInputModel, parseMoney } = useMoney()
 const { formatDateRange, formatDisplayDate } = useDateFormat()
 const { buildMonthlySequenceMap } = useDisplayIds()
+const { documentBranding, documentLogoUrl, escapeHtml } = useDocumentBranding()
+const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
 const eventTypeOptions = ['Mariage', 'Séminaire', 'Gala', 'Anniversaire', 'Réunion', 'Autres']
-const jetonLogoUrl = new URL('../../labertha-logo.png', import.meta.url).href
-const villaAddress = 'Karurama, Cibitoke, Bujumbura, Burundi'
-const villaContacts = [
-  '+257 66 47 66 43 (WhatsApp & Appel)',
-  '+257 76 65 39 31 (Appel)',
-  'info@labertha-villa.com',
-  'labertha-villa.com',
-]
 
 const search = ref('')
 const statusFilter = ref('')
@@ -770,14 +800,8 @@ const exportXls = async () => {
   if (!tableRef.value) return
   exportingXls.value = true
   await nextTick()
-  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableRef.value.outerHTML}</body></html>`
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'bookings.xls'
-  a.click()
-  URL.revokeObjectURL(url)
+  const contentHtml = getSanitizedExportHtml(tableRef.value, { htmlMode: 'outer', removeActionsColumn: true })
+  downloadHtmlAsXls({ type: 'bookings', contentHtml })
   setTimeout(() => {
     exportingXls.value = false
   }, 350)
@@ -787,21 +811,21 @@ const exportPdf = async () => {
   if (!tableRef.value) return
   exportingPdf.value = true
   await nextTick()
-  const win = window.open('', '_blank')
-  if (!win) {
+  const contentHtml = getSanitizedExportHtml(tableRef.value, { htmlMode: 'outer', removeActionsColumn: true })
+  const html = buildPdfDocumentHtml({
+    title: 'Réservations',
+    documentTitle: buildExportFileName('bookings', 'pdf').replace(/\.pdf$/, ''),
+    subtitle: 'Liste des réservations filtrées exportée depuis l’administration.',
+    typeLabel: 'Réservations PDF',
+    tableTitle: 'Liste des réservations',
+    periodLabel: rangeStartYmd.value && rangeEndYmd.value ? `${rangeStartYmd.value} -> ${rangeEndYmd.value}` : 'Toutes les dates',
+    contentHtml,
+  })
+  const ok = await downloadPdfHtml({ html, fileName: buildExportFileName('bookings', 'pdf') })
+  if (!ok) {
     exportingPdf.value = false
     return
   }
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Réservations</title><style>
-  body{font-family:Arial, sans-serif; padding:20px}
-  table{width:100%; border-collapse:collapse}
-  th,td{border:1px solid #e2e8f0; padding:8px; text-align:left; font-size:12px}
-  th{background:#f8fafc}
-  </style></head><body><h2>Réservations</h2>${tableRef.value.outerHTML}</body></html>`)
-  win.document.close()
-  win.focus()
-  win.print()
-  win.close()
   setTimeout(() => {
     exportingPdf.value = false
   }, 350)
@@ -936,6 +960,16 @@ const daysCount = ref(0)
 
 const selectedHall = computed(() => halls.value.find(h => String(h.id) === String(form.value.hall)) || null)
 const hallAdditionalServices = computed(() => Array.isArray(selectedHall.value?.additional_services) ? selectedHall.value.additional_services : [])
+const baseBookingAmount = computed(() => Number(daysCount.value || 0) * Number(pricePerDay.value || 0))
+const selectedAddonsCount = computed(() => {
+  const selected = Array.isArray(form.value.additional_services_selected) ? form.value.additional_services_selected : []
+  let count = 0
+  for (const item of selected) {
+    const subs = Array.isArray(item?.subservices) ? item.subservices : []
+    count += subs.length > 0 ? subs.length : 1
+  }
+  return count
+})
 
 const addonsTotal = computed(() => {
   const services = hallAdditionalServices.value
@@ -1318,13 +1352,6 @@ const buildBookingPayload = () => {
   }
 }
 
-const escapeHtml = (value) => String(value || '')
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;')
-
 const getCurrentPrintUserLabel = () => {
   if (!process.client) return 'Utilisateur'
 
@@ -1360,7 +1387,7 @@ const printReservationJeton = (booking, emailSent = null) => {
   <html>
     <head>
       <meta charset="utf-8" />
-      <title>Jeton de reservation</title>
+      <title>${escapeHtml(documentBranding.documents?.bookingTitle || 'Jeton de reservation')}</title>
       <style>
         body { font-family: Arial, sans-serif; background: #eef2f7; padding: 24px; color: #0f172a; }
         .ticket { max-width: 820px; margin: 0 auto; background: #fff; border: 1px solid #dbe3ee; border-radius: 28px; overflow: hidden; box-shadow: 0 24px 50px rgba(15, 23, 42, 0.10); }
@@ -1413,12 +1440,12 @@ const printReservationJeton = (booking, emailSent = null) => {
           <div class="brand">
             <div class="brand-main">
               <div class="logo-wrap">
-                <img src="${escapeHtml(jetonLogoUrl)}" alt="Logo Labertha Villa" />
+                <img src="${escapeHtml(documentLogoUrl)}" alt="Logo ${escapeHtml(documentBranding.name)}" />
               </div>
               <div class="brand-copy">
-                <small>Reception & Evenementiel</small>
-                <h1>LaBertha Villa</h1>
-                <p>Jeton officiel de reservation a presenter pour le suivi et l'accueil.</p>
+                <small>${escapeHtml(documentBranding.tagline)}</small>
+                <h1>${escapeHtml(documentBranding.name)}</h1>
+                <p>${escapeHtml(documentBranding.documents?.bookingTitle || 'Jeton officiel de reservation a presenter pour le suivi et l\'accueil.')}</p>
               </div>
             </div>
             <div class="chip">Reservation</div>
@@ -1453,11 +1480,11 @@ const printReservationJeton = (booking, emailSent = null) => {
           <div class="footer-title">Informations de contact</div>
           <div class="footer-grid">
             <div class="footer-card">
-              <p><strong>Adresse</strong><br />${escapeHtml(villaAddress)}</p>
+              <p><strong>Adresse</strong><br />${escapeHtml(documentBranding.address)}</p>
             </div>
             <div class="footer-card">
               <ul>
-                ${villaContacts.map(contact => `<li>${escapeHtml(contact)}</li>`).join('')}
+                ${documentBranding.contacts.map(contact => `<li>${escapeHtml(contact)}</li>`).join('')}
               </ul>
             </div>
           </div>
@@ -1694,13 +1721,13 @@ const printReservationJeton = (booking, emailSent = null) => {
 
 .customer-name {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--gray-900);
   font-size: 0.95rem;
 }
 
 .customer-email {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: var(--gray-500);
   font-weight: 500;
 }
 
@@ -1729,35 +1756,103 @@ const printReservationJeton = (booking, emailSent = null) => {
 .btn-icon.delete:hover { color: var(--danger); }
 .btn-icon.pay:hover { color: #b45309; }
 
-.view-details {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.detail-label {
-  font-weight: 700;
-  color: #64748b;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-}
-
-.detail-val {
-  font-weight: 600;
-  color: #0f172a;
-}
+.entity-view-modal { display: grid; gap: 18px; }
+.entity-view-hero { display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 20px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; }
+.entity-view-avatar { width: 64px; height: 64px; border-radius: 18px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 800; letter-spacing: .08em; flex-shrink: 0; }
+.entity-view-main { min-width: 0; flex: 1; }
+.entity-view-code { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.14); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.entity-view-main h3 { margin: 6px 0 4px; font-size: 1.15rem; font-weight: 800; color: #ffffff; }
+.entity-view-main p { margin: 0; color: rgba(255,255,255,.78); font-size: .92rem; }
+.entity-view-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.entity-view-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.entity-view-card { border: 1px solid #e2e8f0; border-radius: 18px; background: #ffffff; padding: 16px; }
+.entity-view-card-full { grid-column: 1 / -1; }
+.entity-view-card-title { margin-bottom: 14px; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #64748b; }
+.entity-view-list { display: grid; gap: 10px; }
+.entity-view-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.entity-view-label { color: #64748b; font-size: .82rem; font-weight: 700; }
+.entity-view-value { color: #0f172a; font-size: .9rem; font-weight: 700; text-align: right; word-break: break-word; }
 
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
+}
+
+.booking-total-banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.78) 0%, rgba(30, 41, 59, 0.72) 58%, rgba(139, 107, 18, 0.68) 100%);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+  isolation: isolate;
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.booking-total-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.booking-total-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.booking-total-value {
+  color: #ffffff;
+  font-size: 1.8rem;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.booking-total-hint {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.booking-total-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.booking-total-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.booking-total-chip .chip-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.booking-total-chip strong {
+  color: #ffffff;
+  font-size: 0.92rem;
+  font-weight: 800;
+  word-break: break-word;
 }
 
 .form-group.full {
@@ -1881,7 +1976,7 @@ const printReservationJeton = (booking, emailSent = null) => {
 }
 
 .addons-section {
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid var(--gray-200);
   padding-top: 14px;
 }
 
@@ -1894,7 +1989,7 @@ const printReservationJeton = (booking, emailSent = null) => {
 }
 
 .addons-total {
-  color: #0f172a;
+  color: var(--gray-900);
   font-weight: 900;
 }
 
@@ -1905,10 +2000,10 @@ const printReservationJeton = (booking, emailSent = null) => {
 }
 
 .addon-item {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gray-200);
   border-radius: 14px;
   padding: 12px 14px;
-  background: #f8fafc;
+  background: var(--gray-50);
 }
 
 .addon-line {
@@ -1916,6 +2011,94 @@ const printReservationJeton = (booking, emailSent = null) => {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
+}
+
+.addon-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-height: 56px;
+  padding: 12px 14px;
+  border: 1px solid var(--gray-200);
+  border-radius: 16px;
+  background: var(--white);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.addon-toggle:hover {
+  border-color: var(--gray-300);
+  background: var(--gray-50);
+}
+
+.addon-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.addon-toggle.is-active {
+  border-color: #86efac;
+  background: color-mix(in srgb, #22c55e 12%, var(--white));
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 50px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--gray-300);
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
+  transition: transform 0.2s ease;
+}
+
+.addon-toggle.is-active .toggle-switch {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
+.addon-toggle.is-active .toggle-knob {
+  transform: translateX(20px);
+}
+
+.addon-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.addon-toggle-copy strong {
+  color: var(--gray-900);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.addon-toggle-copy small {
+  color: var(--gray-500);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.addon-price {
+  color: var(--gray-900);
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .addon-sub-head {
@@ -1934,16 +2117,8 @@ const printReservationJeton = (booking, emailSent = null) => {
 
 .addon-sub-line {
   display: flex;
-  justify-content: space-between;
   gap: 12px;
-}
-
-.detail-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid #f1f5f9;
+  align-items: center;
 }
 
 .services-preview {
@@ -1953,10 +2128,10 @@ const printReservationJeton = (booking, emailSent = null) => {
 }
 
 .service-preview-item {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gray-200);
   border-radius: 14px;
   padding: 0.85rem 1rem;
-  background: #f8fafc;
+  background: var(--gray-50);
 }
 
 .service-preview-title,
@@ -1971,6 +2146,88 @@ const printReservationJeton = (booking, emailSent = null) => {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  color: #475569;
+  color: var(--gray-600);
+}
+
+html[data-admin-theme="dark"] .addons-section {
+  border-top-color: rgba(51, 65, 85, 0.9);
+}
+
+html[data-admin-theme="dark"] .addon-item {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: rgba(15, 23, 42, 0.74);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+html[data-admin-theme="dark"] .addon-toggle {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: rgba(15, 23, 42, 0.88);
+}
+
+html[data-admin-theme="dark"] .addon-toggle:hover {
+  border-color: rgba(71, 85, 105, 0.95);
+  background: rgba(15, 23, 42, 0.96);
+}
+
+html[data-admin-theme="dark"] .addon-toggle.is-active {
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(20, 83, 45, 0.34);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+}
+
+html[data-admin-theme="dark"] .toggle-switch {
+  background: rgba(71, 85, 105, 0.9);
+}
+
+html[data-admin-theme="dark"] .toggle-knob {
+  background: #f8fafc;
+  box-shadow: 0 6px 14px rgba(2, 6, 23, 0.45);
+}
+
+html[data-admin-theme="dark"] .addon-price {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .addon-sub-head .muted-line,
+html[data-admin-theme="dark"] .addon-toggle-copy small {
+  color: #cbd5e1;
+}
+
+html[data-admin-theme="dark"] .service-preview-item {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: rgba(15, 23, 42, 0.7);
+}
+
+@media (max-width: 640px) {
+  .entity-view-hero { flex-direction: column; align-items: flex-start; }
+  .entity-view-badges { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+  .entity-view-grid { grid-template-columns: 1fr; }
+  .entity-view-item { flex-direction: column; }
+  .entity-view-value { text-align: left; }
+  .booking-total-banner {
+    padding: 16px;
+  }
+  .booking-total-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+  .addon-line {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .addon-sub-line {
+    align-items: flex-start;
+  }
+  .addon-price {
+    padding-left: 62px;
+  }
+}
+
+@media (max-width: 480px) {
+  .booking-total-meta {
+    grid-template-columns: 1fr;
+  }
+  .booking-total-value {
+    font-size: 1.5rem;
+  }
 }
 </style>

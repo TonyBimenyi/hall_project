@@ -80,9 +80,228 @@
   box-shadow: 0 10px 25px -5px rgba(212, 175, 55, 0.4);
 }
 
+.admin-head-btn {
+  min-height: 46px;
+  padding: 0.65rem 1.1rem;
+  border-radius: 14px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 992px) {
+  .admin-head-btn {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 12px;
+    gap: 0;
+  }
+
+  .admin-head-btn .btn-label {
+    display: none;
+  }
+}
+
+html[data-admin-theme="dark"] .layout .content,
+html[data-admin-theme="dark"] .layout .content p,
+html[data-admin-theme="dark"] .layout .content span,
+html[data-admin-theme="dark"] .layout .content small,
+html[data-admin-theme="dark"] .layout .content label,
+html[data-admin-theme="dark"] .layout .content td,
+html[data-admin-theme="dark"] .layout .content th,
+html[data-admin-theme="dark"] .layout .content input,
+html[data-admin-theme="dark"] .layout .content select,
+html[data-admin-theme="dark"] .layout .content textarea {
+  color: var(--gray-700);
+}
+
+html[data-admin-theme="dark"] .layout .content h1,
+html[data-admin-theme="dark"] .layout .content h2,
+html[data-admin-theme="dark"] .layout .content h3,
+html[data-admin-theme="dark"] .layout .content h4,
+html[data-admin-theme="dark"] .layout .content .page-header h1,
+html[data-admin-theme="dark"] .layout .content .table-title {
+  color: var(--gray-900) !important;
+}
+
+html[data-admin-theme="dark"] .layout .content .card,
+html[data-admin-theme="dark"] .layout .content .table-container,
+html[data-admin-theme="dark"] .layout .content .section-card {
+  border-color: var(--gray-200);
+}
+
+html[data-admin-theme="dark"] .layout .content .form-input,
+html[data-admin-theme="dark"] .layout .content .form-select,
+html[data-admin-theme="dark"] .layout .content .form-textarea,
+html[data-admin-theme="dark"] .layout .content .filter-input-clean,
+html[data-admin-theme="dark"] .layout .content .filter-select-clean,
+html[data-admin-theme="dark"] .layout .content .search-input-clean,
+html[data-admin-theme="dark"] .layout .content input[type="text"],
+html[data-admin-theme="dark"] .layout .content input[type="email"],
+html[data-admin-theme="dark"] .layout .content input[type="tel"],
+html[data-admin-theme="dark"] .layout .content input[type="date"],
+html[data-admin-theme="dark"] .layout .content input[type="number"],
+html[data-admin-theme="dark"] .layout .content select,
+html[data-admin-theme="dark"] .layout .content textarea {
+  background-color: rgba(15, 23, 42, 0.88);
+  border-color: var(--gray-200);
+}
+
+html[data-admin-theme="dark"] .layout .content .form-input:focus,
+html[data-admin-theme="dark"] .layout .content .form-select:focus,
+html[data-admin-theme="dark"] .layout .content .form-textarea:focus,
+html[data-admin-theme="dark"] .layout .content .filter-input-clean:focus,
+html[data-admin-theme="dark"] .layout .content .filter-select-clean:focus,
+html[data-admin-theme="dark"] .layout .content .search-input-clean:focus,
+html[data-admin-theme="dark"] .layout .content input:focus,
+html[data-admin-theme="dark"] .layout .content select:focus,
+html[data-admin-theme="dark"] .layout .content textarea:focus {
+  background-color: rgba(11, 18, 32, 0.92);
+  border-color: rgba(212, 175, 55, 0.55);
+  box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.10);
+}
+
+html[data-admin-theme="dark"] .layout .content input::placeholder,
+html[data-admin-theme="dark"] .layout .content textarea::placeholder {
+  color: rgba(148, 163, 184, 0.85);
+}
+
+html[data-admin-theme="dark"] .layout .content .admin-table td {
+  border-bottom-color: rgba(30, 41, 59, 0.9);
+}
+
+html[data-admin-theme="dark"] .layout .content .admin-table tr:hover td {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+html[data-admin-theme="dark"] .layout .content .btn-icon {
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: rgba(226, 232, 240, 0.8) !important;
+  border: 1px solid rgba(30, 41, 59, 0.95) !important;
+}
+
+html[data-admin-theme="dark"] .layout .content .btn-icon:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: var(--gray-900) !important;
+  transform: none !important;
+}
+
+html[data-admin-theme="dark"] .modal-content .entity-view-card,
+html[data-admin-theme="dark"] .modal-content .staff-view-card,
+html[data-admin-theme="dark"] .modal-content .staff-view-hero,
+html[data-admin-theme="dark"] .modal-content .entity-view-item,
+html[data-admin-theme="dark"] .modal-content .staff-view-item,
+html[data-admin-theme="dark"] .modal-content .services-preview,
+html[data-admin-theme="dark"] .modal-content .service-preview-item,
+html[data-admin-theme="dark"] .modal-content .service-card,
+html[data-admin-theme="dark"] .modal-content .services-empty,
+html[data-admin-theme="dark"] .modal-content .entity-view-empty {
+  background: rgba(15, 23, 42, 0.82) !important;
+  border-color: rgba(30, 41, 59, 0.95) !important;
+}
+
+html[data-admin-theme="dark"] .modal-content .entity-view-item,
+html[data-admin-theme="dark"] .modal-content .staff-view-item,
+html[data-admin-theme="dark"] .modal-content .service-preview-sub {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(30, 41, 59, 0.95) !important;
+}
+
+html[data-admin-theme="dark"] .modal-content .entity-view-card-title,
+html[data-admin-theme="dark"] .modal-content .staff-view-card-title,
+html[data-admin-theme="dark"] .modal-content .staff-view-label,
+html[data-admin-theme="dark"] .modal-content .entity-view-label {
+  color: rgba(203, 213, 225, 0.82) !important;
+}
+
+html[data-admin-theme="dark"] .modal-content .entity-view-value,
+html[data-admin-theme="dark"] .modal-content .staff-view-value,
+html[data-admin-theme="dark"] .modal-content .service-preview-title,
+html[data-admin-theme="dark"] .modal-content .service-preview-sub strong {
+  color: rgba(248, 250, 252, 0.92) !important;
+}
+
+html[data-admin-theme="dark"] .modal-content .entity-view-empty,
+html[data-admin-theme="dark"] .modal-content .services-empty {
+  border-style: dashed !important;
+  color: rgba(226, 232, 240, 0.78) !important;
+}
+
 /* Form Elements */
 .form-group {
   margin-bottom: var(--space-6);
+}
+
+.modal-content .field,
+.modal-content .form-group {
+  position: relative;
+}
+
+.modal-content .field > span,
+.modal-content .form-group > .form-label {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+
+.modal-content .field input,
+.modal-content .field select,
+.modal-content .field textarea,
+.modal-content .form-group input,
+.modal-content .form-group select,
+.modal-content .form-group textarea {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--gray-900);
+  box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.18);
+  transition: var(--transition-fast);
+}
+
+.modal-content .field textarea,
+.modal-content .form-group textarea {
+  min-height: 120px;
+  padding-top: 0.9rem;
+  padding-bottom: 0.9rem;
+}
+
+.modal-content .field input:focus,
+.modal-content .field select:focus,
+.modal-content .field textarea:focus,
+.modal-content .form-group input:focus,
+.modal-content .form-group select:focus,
+.modal-content .form-group textarea:focus {
+  border-color: rgba(212, 175, 55, 0.55);
+  box-shadow:
+    0 0 0 4px rgba(212, 175, 55, 0.10),
+    inset 0 -1px 0 rgba(212, 175, 55, 0.35);
+}
+
+html[data-admin-theme="dark"] .modal-content .field input,
+html[data-admin-theme="dark"] .modal-content .field select,
+html[data-admin-theme="dark"] .modal-content .field textarea,
+html[data-admin-theme="dark"] .modal-content .form-group input,
+html[data-admin-theme="dark"] .modal-content .form-group select,
+html[data-admin-theme="dark"] .modal-content .form-group textarea {
+  background: rgba(15, 23, 42, 0.88) !important;
+  border-color: rgba(30, 41, 59, 0.95) !important;
+  color: rgba(248, 250, 252, 0.94) !important;
+  box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.16);
+}
+
+html[data-admin-theme="dark"] .modal-content .field input:focus,
+html[data-admin-theme="dark"] .modal-content .field select:focus,
+html[data-admin-theme="dark"] .modal-content .field textarea:focus,
+html[data-admin-theme="dark"] .modal-content .form-group input:focus,
+html[data-admin-theme="dark"] .modal-content .form-group select:focus,
+html[data-admin-theme="dark"] .modal-content .form-group textarea:focus {
+  border-color: rgba(212, 175, 55, 0.58) !important;
+  box-shadow:
+    0 0 0 4px rgba(212, 175, 55, 0.10),
+    inset 0 -1px 0 rgba(212, 175, 55, 0.34) !important;
 }
 
 .form-label {
@@ -305,6 +524,12 @@ label.field:has(input[required], select[required], textarea[required]) > span::a
   box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.2);
 }
 
+html[data-admin-theme="dark"] .btn-primary,
+html[data-admin-theme="dark"] .btn-danger,
+html[data-admin-theme="dark"] .btn-outline:hover {
+  color: #ffffff;
+}
+
 .btn-danger:hover {
   background-color: #dc2626;
   transform: translateY(-2px);
@@ -407,7 +632,7 @@ label.field:has(input[required], select[required], textarea[required]) > span::a
 .skeleton-line {
   height: 12px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background: linear-gradient(90deg, var(--gray-100) 0%, var(--gray-50) 50%, var(--gray-100) 100%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.05s ease-in-out infinite;
 }
@@ -440,8 +665,8 @@ label.field:has(input[required], select[required], textarea[required]) > span::a
 }
 
 .admin-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
   border-radius: 16px;
   padding: 14px;
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
@@ -486,7 +711,7 @@ label.field:has(input[required], select[required], textarea[required]) > span::a
 
 .admin-card-title {
   font-weight: 900;
-  color: #0f172a;
+  color: var(--gray-900);
   line-height: 1.15;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -494,11 +719,31 @@ label.field:has(input[required], select[required], textarea[required]) > span::a
 
 .admin-card-subtitle {
   margin-top: 4px;
-  color: #64748b;
+  color: var(--gray-500);
   font-weight: 600;
   font-size: 0.9rem;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+html[data-admin-theme="dark"] .layout .content .actions-menu {
+  background: rgba(15, 23, 42, 0.96) !important;
+  border-color: rgba(30, 41, 59, 0.95) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45) !important;
+}
+
+html[data-admin-theme="dark"] .layout .content .actions-item {
+  color: var(--gray-700) !important;
+}
+
+html[data-admin-theme="dark"] .layout .content .actions-item:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--gray-900) !important;
+}
+
+html[data-admin-theme="dark"] .layout .content .actions-item.danger:hover {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #fecaca !important;
 }
 
 .admin-card-body {
@@ -515,7 +760,7 @@ label.field:has(input[required], select[required], textarea[required]) > span::a
 }
 
 .admin-kv .k {
-  color: #94a3b8;
+  color: var(--gray-400);
   font-weight: 900;
   font-size: 0.65rem;
   text-transform: uppercase;
@@ -523,7 +768,7 @@ label.field:has(input[required], select[required], textarea[required]) > span::a
 }
 
 .admin-kv .v {
-  color: #0f172a;
+  color: var(--gray-900);
   font-weight: 800;
   text-align: right;
   overflow-wrap: anywhere;

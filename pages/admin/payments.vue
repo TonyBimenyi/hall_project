@@ -6,14 +6,17 @@
         <p>Choisir une réservation non soldée, payer en avance ou en totalité</p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
-          <i class="fas fa-file-pdf"></i> Export PDF
+        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
+          <i class="fas fa-file-pdf"></i>
+          <span class="btn-label">Export PDF</span>
         </button>
-        <button class="btn btn-export btn-sm" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
-          <i class="fas fa-file-excel"></i> Export XLS
+        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
+          <i class="fas fa-file-excel"></i>
+          <span class="btn-label">Export XLS</span>
         </button>
-        <button class="btn btn-primary btn-sm" @click="openAddModal()">
-          <i class="fas fa-plus"></i> Nouveau paiement
+        <button class="btn btn-primary btn-sm admin-head-btn" @click="openAddModal()">
+          <i class="fas fa-plus"></i>
+          <span class="btn-label">Nouveau paiement</span>
         </button>
       </div>
     </div>
@@ -439,17 +442,44 @@
       </template>
     </AdminAppModal>
 
-    <AdminAppModal v-model="showViewModal" title="Détails du paiement" width="420px">
-      <div v-if="selectedPayment" class="view-details">
-        <div class="detail-item"><span class="detail-label">Code</span><span class="detail-val">{{ getPaymentDisplayId(selectedPayment) }}</span></div>
-        <div class="detail-item"><span class="detail-label">Client</span><span class="detail-val">{{ selectedPayment.booking_customer_name }}</span></div>
-        <div class="detail-item"><span class="detail-label">Réservation</span><span class="detail-val">{{ selectedPayment.booking_hall_name }}</span></div>
-        <div class="detail-item"><span class="detail-label">Période</span><span class="detail-val">{{ formatDateRange(selectedPayment.booking_start_date, selectedPayment.booking_end_date) }}</span></div>
-        <div class="detail-item"><span class="detail-label">Type</span><span class="detail-val">{{ selectedPayment.kind === 'full' ? 'Paiement total' : 'Avance' }}</span></div>
-        <div class="detail-item"><span class="detail-label">Montant</span><span class="detail-val">{{ formatMoney(selectedPayment.amount) }}</span></div>
-        <div class="detail-item"><span class="detail-label">Reste après paiement</span><span class="detail-val">{{ formatMoney(selectedPayment.booking_remaining_amount) }}</span></div>
-        <div class="detail-item"><span class="detail-label">Créé par</span><span class="detail-val">{{ selectedPayment.created_by_name || '-' }}</span></div>
-        <div class="detail-item"><span class="detail-label">Dernière action par</span><span class="detail-val">{{ selectedPayment.updated_by_name || selectedPayment.created_by_name || '-' }}</span></div>
+    <AdminAppModal v-model="showViewModal" title="Détails du paiement" width="580px">
+      <div v-if="selectedPayment" class="entity-view-modal">
+        <div class="entity-view-hero">
+          <div class="entity-view-avatar">{{ String(getPaymentDisplayId(selectedPayment) || 'PA').slice(0, 2).toUpperCase() }}</div>
+          <div class="entity-view-main">
+            <div class="entity-view-code">{{ getPaymentDisplayId(selectedPayment) }}</div>
+            <h3>{{ selectedPayment.booking_customer_name || 'Client' }}</h3>
+            <p>{{ selectedPayment.booking_hall_name || '-' }}</p>
+          </div>
+          <div class="entity-view-badges">
+            <span :class="['badge', getBadgeClass(selectedPayment.status)]">{{ translateStatus(selectedPayment.status) }}</span>
+            <span class="badge badge-info">{{ formatMoney(selectedPayment.amount) }}</span>
+          </div>
+        </div>
+
+        <div class="entity-view-grid">
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Paiement</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Réservation</span><span class="entity-view-value">{{ selectedPayment.booking_code || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedPayment.booking_start_date, selectedPayment.booking_end_date) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Type</span><span class="entity-view-value">{{ selectedPayment.kind === 'full' ? 'Paiement total' : 'Avance' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Référence</span><span class="entity-view-value">{{ selectedPayment.reference || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Méthode</span><span class="entity-view-value">{{ selectedPayment.method || '-' }}</span></div>
+            </div>
+          </section>
+
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Suivi</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Montant</span><span class="entity-view-value">{{ formatMoney(selectedPayment.amount) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Reste après paiement</span><span class="entity-view-value">{{ formatMoney(selectedPayment.booking_remaining_amount) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedPayment.created_by_name || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedPayment.updated_by_name || selectedPayment.created_by_name || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ translateStatus(selectedPayment.status) }}</span></div>
+            </div>
+          </section>
+        </div>
       </div>
       <template #footer>
         <button class="btn btn-outline" @click="printPaymentInvoice(selectedPayment)">Imprimer la facture</button>
@@ -477,10 +507,13 @@ import { usePagination } from '~/composables/usePagination'
 import { useDateFormat } from '~/composables/useDateFormat'
 import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
+import { useDocumentBranding } from '~/composables/useDocumentBranding'
+import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
 
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
-const invoiceLogoUrl = new URL('../../labertha-logo.png', import.meta.url).href
+const { documentBranding, documentLogoUrl, escapeHtml } = useDocumentBranding()
+const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
 const { formatMoney, moneyInputModel } = useMoney()
 const { formatDateRange, formatDisplayDate } = useDateFormat()
 const { buildMonthlySequenceMap } = useDisplayIds()
@@ -594,14 +627,8 @@ const exportXls = async () => {
   if (!exportRef.value) return
   exportingXls.value = true
   await nextTick()
-  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${exportRef.value.innerHTML}</body></html>`
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'payments.xls'
-  a.click()
-  URL.revokeObjectURL(url)
+  const contentHtml = getSanitizedExportHtml(exportRef.value, { htmlMode: 'inner', removeActionsColumn: true })
+  downloadHtmlAsXls({ type: 'payments', contentHtml })
   setTimeout(() => {
     exportingXls.value = false
   }, 350)
@@ -611,39 +638,25 @@ const exportPdf = async () => {
   if (!exportRef.value) return
   exportingPdf.value = true
   await nextTick()
-  const win = window.open('', '_blank')
-  if (!win) {
+  const contentHtml = getSanitizedExportHtml(exportRef.value, { htmlMode: 'inner', removeActionsColumn: true })
+  const html = buildPdfDocumentHtml({
+    title: 'Paiements',
+    documentTitle: buildExportFileName('payments', 'pdf').replace(/\.pdf$/, ''),
+    subtitle: 'Etat des paiements et des réservations à solder exporté depuis l’administration.',
+    typeLabel: 'Paiements PDF',
+    tableTitles: ['Liste des paiements', 'Réservations à solder'],
+    periodLabel: rangeStartYmd.value && rangeEndYmd.value ? `${rangeStartYmd.value} -> ${rangeEndYmd.value}` : 'Toutes les dates',
+    contentHtml,
+  })
+  const ok = await downloadPdfHtml({ html, fileName: buildExportFileName('payments', 'pdf') })
+  if (!ok) {
     exportingPdf.value = false
     return
   }
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Paiements</title><style>
-  body{font-family:Arial, sans-serif; padding:20px}
-  table{width:100%; border-collapse:collapse; margin-bottom:16px}
-  th,td{border:1px solid #e2e8f0; padding:8px; text-align:left; font-size:12px}
-  th{background:#f8fafc}
-  </style></head><body><h2>Paiements</h2>${exportRef.value.innerHTML}</body></html>`)
-  win.document.close()
-  win.focus()
-  win.print()
-  win.close()
   setTimeout(() => {
     exportingPdf.value = false
   }, 350)
 }
-
-const invoiceBrand = {
-  name: 'Labertha Villa',
-  subtitle: 'Facture de paiement',
-  address: 'Karurama, Cibitoke, Bujumbura, Burundi',
-  contacts: ['+257 66 47 66 43', '+257 76 65 39 31', 'info@labertha-villa.com']
-}
-
-const escapeHtml = (value) => String(value ?? '')
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;')
 
 const buildInvoiceHtml = (payment) => {
   const typeLabel = payment?.kind === 'full' ? 'Paiement total' : 'Avance'
@@ -813,10 +826,10 @@ const buildInvoiceHtml = (payment) => {
 <body>
   <main class="receipt">
     <section class="center">
-      <img src="${escapeHtml(invoiceLogoUrl)}" alt="${escapeHtml(invoiceBrand.name)}" class="brand-logo" />
-      <div class="brand-name">${escapeHtml(invoiceBrand.name)}</div>
-      <div class="brand-title">${escapeHtml(invoiceBrand.subtitle)}</div>
-      <div class="brand-subtitle">Recu de paiement</div>
+      <img src="${escapeHtml(documentLogoUrl)}" alt="${escapeHtml(documentBranding.name)}" class="brand-logo" />
+      <div class="brand-name">${escapeHtml(documentBranding.name)}</div>
+      <div class="brand-title">${escapeHtml(documentBranding.tagline)}</div>
+      <div class="brand-subtitle">${escapeHtml(documentBranding.documents?.invoiceTitle || 'Recu de paiement')}</div>
     </section>
 
     <div class="divider"></div>
@@ -893,8 +906,8 @@ const buildInvoiceHtml = (payment) => {
 
     <section class="footer-contact">
       <strong>Adresse et contact</strong>
-      <div>${escapeHtml(invoiceBrand.address)}</div>
-      <div>${escapeHtml(invoiceBrand.contacts.join(' • '))}</div>
+      <div>${escapeHtml(documentBranding.address)}</div>
+      <div>${escapeHtml(documentBranding.contacts.join(' • '))}</div>
     </section>
 
     <div class="footer-note">
@@ -1262,19 +1275,49 @@ onMounted(async () => {
 .section-card { margin-bottom: var(--space-8); }
 .section-header { margin-bottom: var(--space-4); }
 .section-header h2 { font-size: 1rem; font-weight: 800; color: #1e293b; }
-.customer-name { font-weight: 700; color: #0f172a; }
-.customer-email { font-size: .8rem; color: #94a3b8; }
+.customer-name { font-weight: 700; color: var(--gray-900); }
+.customer-email { font-size: .8rem; color: var(--gray-500); }
 .remain { color: #b45309; font-weight: 800; }
 .text-red { color: #dc2626; font-weight: 800; }
 .text-yellow { color: #d97706; font-weight: 800; }
 .empty-cell { text-align: center; color: #94a3b8; font-weight: 600; padding: 1rem; }
-.booking-summary { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: .85rem 1rem; display: grid; gap: .3rem; margin-bottom: .25rem; }
+.booking-summary {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 14px;
+  padding: 0.95rem 1rem;
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 0.25rem;
+  color: var(--gray-700);
+}
+
+.booking-summary strong {
+  color: var(--gray-900);
+}
+
+html[data-admin-theme="dark"] .booking-summary {
+  background: rgba(15, 23, 42, 0.78);
+  border-color: rgba(51, 65, 85, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
 .btn-sm { padding: .45rem .75rem; font-size: .78rem; }
 .btn-icon { width: 32px; height: 32px; background: #f8fafc; color: #64748b; }
-.view-details { display: grid; gap: .7rem; }
-.detail-item { display: flex; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: .45rem; }
-.detail-label { color: #64748b; font-weight: 600; }
-.detail-val { color: #0f172a; font-weight: 700; text-align: right; }
+.entity-view-modal { display: grid; gap: 18px; }
+.entity-view-hero { display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 20px; background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%); color: #ffffff; }
+.entity-view-avatar { width: 64px; height: 64px; border-radius: 18px; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 800; letter-spacing: .08em; flex-shrink: 0; }
+.entity-view-main { min-width: 0; flex: 1; }
+.entity-view-code { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.14); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.entity-view-main h3 { margin: 6px 0 4px; font-size: 1.15rem; font-weight: 800; color: #ffffff; }
+.entity-view-main p { margin: 0; color: rgba(255,255,255,.78); font-size: .92rem; }
+.entity-view-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.entity-view-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.entity-view-card { border: 1px solid #e2e8f0; border-radius: 18px; background: #ffffff; padding: 16px; }
+.entity-view-card-title { margin-bottom: 14px; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #64748b; }
+.entity-view-list { display: grid; gap: 10px; }
+.entity-view-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.entity-view-label { color: #64748b; font-size: .82rem; font-weight: 700; }
+.entity-view-value { color: #0f172a; font-size: .9rem; font-weight: 700; text-align: right; word-break: break-word; }
 
 .actions-cell { width: 1%; white-space: nowrap; }
 .actions-dropdown { position: relative; display: inline-flex; }
@@ -1287,5 +1330,13 @@ onMounted(async () => {
 @media (max-width: 992px) {
   .filters-toggle { display: inline-flex; align-items: center; justify-content: center; }
   .filters-panel { gap: var(--space-3); }
+}
+
+@media (max-width: 640px) {
+  .entity-view-hero { flex-direction: column; align-items: flex-start; }
+  .entity-view-badges { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+  .entity-view-grid { grid-template-columns: 1fr; }
+  .entity-view-item { flex-direction: column; }
+  .entity-view-value { text-align: left; }
 }
 </style>
