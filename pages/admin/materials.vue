@@ -313,6 +313,7 @@
             <div class="entity-view-card-title">Suivi administratif</div>
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Référence</span><span class="entity-view-value">{{ getMaterialDisplayId(selectedMaterial) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Créé le</span><span class="entity-view-value">{{ formatDisplayDate(selectedMaterial.created_at) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedMaterial.created_by_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedMaterial.updated_by_name || selectedMaterial.created_by_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">État stock</span><span class="entity-view-value">{{ Number(selectedMaterial.available_quantity || 0) > 0 ? 'Disponible' : 'Rupture' }}</span></div>
@@ -342,6 +343,7 @@
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { usePagination } from '~/composables/usePagination'
+import { useDateFormat } from '~/composables/useDateFormat'
 import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
@@ -349,6 +351,7 @@ import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
+const { formatDisplayDate } = useDateFormat()
 
 const materials = ref([])
 const { buildHashSequenceMap } = useDisplayIds()

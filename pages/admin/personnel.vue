@@ -332,6 +332,10 @@
             <div class="staff-view-card-title">Suivi administratif</div>
             <div class="staff-view-list">
               <div class="staff-view-item">
+                <span class="staff-view-label">Créé le</span>
+                <span class="staff-view-value">{{ formatDisplayDate(selectedStaff.created_at) }}</span>
+              </div>
+              <div class="staff-view-item">
                 <span class="staff-view-label">Créé par</span>
                 <span class="staff-view-value">{{ selectedStaff.created_by_name || '-' }}</span>
               </div>
@@ -372,6 +376,7 @@
 <script setup>
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
+import { useDateFormat } from '~/composables/useDateFormat'
 import { usePagination } from '~/composables/usePagination'
 import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
@@ -380,6 +385,7 @@ import { canManageStaffAccounts as canManageStaffAccountsByRole } from '~/compos
 
 definePageMeta({ layout: 'admin' })
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
+const { formatDisplayDate } = useDateFormat()
 
 const personnel = ref([])
 const { buildPersonnelSequenceMap } = useDisplayIds()

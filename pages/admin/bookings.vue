@@ -529,6 +529,7 @@
             <div class="entity-view-card-title">Suivi administratif</div>
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ getStatusTranslation(selectedBooking.status) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Créé le</span><span class="entity-view-value">{{ formatDisplayDate(selectedBooking.created_at) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedBooking.created_by_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedBooking.updated_by_name || selectedBooking.created_by_name || '-' }}</span></div>
             </div>

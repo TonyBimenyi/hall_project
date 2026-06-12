@@ -474,6 +474,7 @@
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Montant</span><span class="entity-view-value">{{ formatMoney(selectedPayment.amount) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Reste après paiement</span><span class="entity-view-value">{{ formatMoney(selectedPayment.booking_remaining_amount) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Créé le</span><span class="entity-view-value">{{ formatDisplayDate(selectedPayment.created_at) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedPayment.created_by_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedPayment.updated_by_name || selectedPayment.created_by_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ translateStatus(selectedPayment.status) }}</span></div>

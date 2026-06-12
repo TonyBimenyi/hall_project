@@ -338,6 +338,7 @@
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Référence</span><span class="entity-view-value">{{ getExpenseDisplayId(selectedExpense) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ translateStatus(selectedExpense.status) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Créé le</span><span class="entity-view-value">{{ formatDisplayDate(selectedExpense.created_at) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedExpense.created_by_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedExpense.updated_by_name || selectedExpense.created_by_name || '-' }}</span></div>
             </div>
@@ -366,6 +367,7 @@
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
+import { useDateFormat } from '~/composables/useDateFormat'
 import { usePagination } from '~/composables/usePagination'
 import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
@@ -639,6 +641,7 @@ const form = ref({
   status: 'paid'
 })
 const amountInput = moneyInputModel(form, 'amount')
+const { formatDisplayDate } = useDateFormat()
 
 const resetForm = () => {
   form.value = {
