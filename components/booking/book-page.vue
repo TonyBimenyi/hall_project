@@ -210,17 +210,14 @@
         </div>
       </div>
     </div>
-    <Notification />
   </section>
 </template>
 
 <script>
-import Notification from '~/components/Notification.vue'
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 
 export default {
-  components: { Notification },
   data() {
     return {
       viewMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),

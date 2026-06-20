@@ -40,6 +40,84 @@ class Hall(models.Model):
     def __str__(self):
         return self.name
 
+class Room(models.Model):
+    ROOM_TYPE_CHOICES = [
+        ('single', 'Single'),
+        ('double', 'Double'),
+        ('twin', 'Twin'),
+        ('suite', 'Suite'),
+        ('family', 'Family'),
+    ]
+    STATUS_CHOICES = [
+        ('available', 'Available'),
+        ('reserved', 'Reserved'),
+        ('occupied', 'Occupied'),
+        ('cleaning', 'Cleaning'),
+        ('maintenance', 'Maintenance'),
+    ]
+    name = models.CharField(max_length=100)
+    room_number = models.CharField(max_length=20, unique=True)
+    room_type = models.CharField(max_length=20, choices=ROOM_TYPE_CHOICES)
+    capacity = models.IntegerField()
+    price_per_night = models.DecimalField(max_digits=12, decimal_places=2)
+    additional_services = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_rooms')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_rooms')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def room_type_label(self):
+        mapping = {
+            'single': 'Simple',
+            'double': 'Double',
+            'twin': 'Twin',
+            'suite': 'Suite',
+            'family': 'Familiale',
+            'Single': 'Simple',
+            'Double': 'Double',
+            'Twin': 'Twin',
+            'Suite': 'Suite',
+            'Family': 'Familiale',
+        }
+        return mapping.get(self.room_type, self.room_type)
+
+    def __str__(self):
+        return f"{self.room_number} - {self.name} ({self.room_type_label})"
+
+
+class Customer(models.Model):
+    IDENTITY_TYPE_CHOICES = [
+        ('', 'Non renseigné'),
+        ('passport', 'Passeport'),
+        ('id_card', "Carte d'identité"),
+        ('driving_license', 'Permis de conduire'),
+        ('other', 'Autre'),
+    ]
+
+    first_name = models.CharField(max_length=80)
+    last_name = models.CharField(max_length=80, blank=True, default='')
+    phone = models.CharField(max_length=30, db_index=True)
+    email = models.EmailField(blank=True, default='')
+    identity_type = models.CharField(max_length=30, choices=IDENTITY_TYPE_CHOICES, blank=True, default='')
+    identity_number = models.CharField(max_length=60, blank=True, default='')
+    address = models.CharField(max_length=255, blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_customers')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_customers')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}".strip()
+
+    def __str__(self):
+        return self.full_name or self.phone
+
+
 class Booking(models.Model):
     STATUS_CHOICES = [
         ('pending', 'En attente'),
@@ -47,13 +125,25 @@ class Booking(models.Model):
         ('paid', 'Payé'),
         ('cancelled', 'Annulé'),
     ]
-    hall = models.ForeignKey(Hall, on_delete=models.CASCADE)
+    BOOKING_TYPE_CHOICES = [
+        ('hall', 'Salle'),
+        ('room', 'Chambre'),
+    ]
+    booking_type = models.CharField(max_length=20, choices=BOOKING_TYPE_CHOICES, default='hall')
+    customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='bookings')
+    hall = models.ForeignKey(Hall, on_delete=models.CASCADE, null=True, blank=True)
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, null=True, blank=True)
     customer_name = models.CharField(max_length=100)
     customer_email = models.EmailField(blank=True, default='')
     customer_phone = models.CharField(max_length=30, blank=True, default='')
+    guest_full_name = models.CharField(max_length=120, blank=True, default='')
+    guest_id_type = models.CharField(max_length=30, blank=True, default='')
+    guest_id_number = models.CharField(max_length=60, blank=True, default='')
     event_type = models.CharField(max_length=100)
     start_date = models.DateField()
     end_date = models.DateField()
+    checked_in_at = models.DateTimeField(null=True, blank=True)
+    checked_out_at = models.DateTimeField(null=True, blank=True)
     total_price = models.DecimalField(max_digits=12, decimal_places=2)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     addons_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
@@ -72,8 +162,20 @@ class Booking(models.Model):
             self.code = _next_monthly_code(Booking, 'LBR', self.created_at)
         super().save(*args, **kwargs)
 
+    @property
+    def booked_item_name(self):
+        if self.booking_type == 'hall' and self.hall:
+            return self.hall.name
+        elif self.booking_type == 'room' and self.room:
+            return str(self.room)
+        return 'Non spécifié'
+
+    @property
+    def active_guest_name(self):
+        return (self.guest_full_name or '').strip() or (self.customer_name or '').strip()
+
     def __str__(self):
-        return f"{self.customer_name} - {self.hall.name}"
+        return f"{self.customer_name} - {self.booked_item_name}"
 
 class Personnel(models.Model):
     STATUS_CHOICES = [

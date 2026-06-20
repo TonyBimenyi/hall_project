@@ -148,6 +148,7 @@ export default {
         { title: 'Calendrier', url: '/admin/calendar', icon: 'fa-solid fa-calendar-alt' },
         { title: 'Notifications', url: '/admin/notifications', icon: 'fa-solid fa-bell' },
         { title: 'Salles', url: '/admin/halls', icon: 'fa-solid fa-building' },
+        { title: 'Chambres', url: '/admin/rooms', icon: 'fa-solid fa-door-closed' },
         { title: 'Réservations', url: '/admin/bookings', icon: 'fa-solid fa-calendar-days' },
         { title: 'Paiements', url: '/admin/payments', icon: 'fa-solid fa-credit-card' },
         { title: 'Matériel', url: '/admin/materials', icon: 'fa-solid fa-box-open' },

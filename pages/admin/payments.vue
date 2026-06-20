@@ -52,9 +52,9 @@
         </select>
         <select v-model="preset" class="filter-select-clean">
           <option value="all">Toutes les dates</option>
-          <option value="7d">7 jours</option>
-          <option value="28d">28 jours</option>
-          <option value="90d">90 jours</option>
+          <option value="7d">7 derniers jours</option>
+          <option value="28d">28 derniers jours</option>
+          <option value="90d">90 derniers jours</option>
           <option value="this_month">Ce mois</option>
           <option value="last_month">Mois dernier</option>
           <option value="year">Cette année</option>
@@ -63,6 +63,7 @@
         <input v-if="preset === 'custom'" v-model="customStart" type="date" class="filter-input-clean" />
         <input v-if="preset === 'custom'" v-model="customEnd" type="date" class="filter-input-clean" />
       </div>
+      <div class="filter-range-note">{{ activeRangeNotice }}</div>
     </div>
 
     <div ref="exportRef" class="export-scope">
@@ -111,7 +112,7 @@
 
     <div class="card section-card">
       <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-        <h2>Réservations à payer</h2>
+        <h2>Réservations à payer / séjour</h2>
         <AdminAppTablePagination
           :start="unpaidStartIndex"
           :end="unpaidEndIndex"
@@ -144,11 +145,29 @@
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ booking.customer_name }}</div>
-                <div class="admin-card-subtitle">{{ getBookingDisplayId(booking) }} • {{ booking.hall_name }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
+                <div class="admin-card-subtitle">{{ getBookingDisplayId(booking) }} • {{ bookingItemLabel(booking) }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
               </div>
               <div class="admin-card-actions">
-                <button class="btn btn-primary btn-sm" title="Payer" @click="openAddModal(booking)">
+                <button v-if="toNumber(booking.remaining_amount) > 0" class="btn btn-primary btn-sm" title="Payer" @click="openAddModal(booking)">
                   <i class="fas fa-coins"></i>
+                </button>
+                <button
+                  v-if="booking.booking_type === 'room' && !booking.checked_in_at"
+                  class="btn btn-outline btn-sm"
+                  :class="{ 'is-loading': stayActionLoadingId === booking.id && stayActionType === 'check_in' }"
+                  :disabled="stayActionLoadingId === booking.id"
+                  @click="manageStay(booking, 'check_in')"
+                >
+                  <i class="fas fa-right-to-bracket"></i>
+                </button>
+                <button
+                  v-if="booking.booking_type === 'room' && booking.checked_in_at && !booking.checked_out_at"
+                  class="btn btn-outline btn-sm"
+                  :class="{ 'is-loading': stayActionLoadingId === booking.id && stayActionType === 'check_out' }"
+                  :disabled="stayActionLoadingId === booking.id"
+                  @click="manageStay(booking, 'check_out')"
+                >
+                  <i class="fas fa-right-from-bracket"></i>
                 </button>
               </div>
             </div>
@@ -156,6 +175,14 @@
               <div class="admin-kv">
                 <span class="k">Code</span>
                 <span class="v">{{ getBookingDisplayId(booking) }}</span>
+              </div>
+              <div class="admin-kv">
+                <span class="k">Type</span>
+                <span class="v">{{ booking.booking_type === 'room' ? 'Chambre' : 'Salle' }}</span>
+              </div>
+              <div v-if="booking.booking_type === 'room'" class="admin-kv">
+                <span class="k">Client hébergé</span>
+                <span class="v">{{ booking.guest_full_name || booking.customer_name }}</span>
               </div>
               <div class="admin-kv">
                 <span class="k">Total</span>
@@ -172,7 +199,7 @@
             </div>
           </div>
         </template>
-        <div v-if="!isLoading && filteredUnpaidBookings.length === 0" class="empty-cell">Toutes les réservations sont soldées</div>
+        <div v-if="!isLoading && filteredUnpaidBookings.length === 0" class="empty-cell">Aucune réservation à gérer</div>
       </div>
 
       <table v-else class="admin-table">
@@ -180,7 +207,7 @@
           <tr>
             <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('code') }" @click="toggleUnpaidSort('code')">Code <i :class="unpaidSortIconClass('code')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('customer_name') }" @click="toggleUnpaidSort('customer_name')">Client <i :class="unpaidSortIconClass('customer_name')"></i></button></th>
-            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('hall_name') }" @click="toggleUnpaidSort('hall_name')">Salle <i :class="unpaidSortIconClass('hall_name')"></i></button></th>
+            <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('hall_name') }" @click="toggleUnpaidSort('hall_name')">Salle / Chambre <i :class="unpaidSortIconClass('hall_name')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('start_date') }" @click="toggleUnpaidSort('start_date')">Période <i :class="unpaidSortIconClass('start_date')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('total_price') }" @click="toggleUnpaidSort('total_price')">Total <i :class="unpaidSortIconClass('total_price')"></i></button></th>
             <th><button class="table-sort-btn" :class="{ active: isUnpaidSortActive('paid_amount') }" @click="toggleUnpaidSort('paid_amount')">Déjà payé <i :class="unpaidSortIconClass('paid_amount')"></i></button></th>
@@ -212,20 +239,41 @@
               <td>
                 <div class="customer-name">{{ booking.customer_name }}</div>
                 <div class="customer-email">{{ booking.customer_email }}</div>
+                <div v-if="booking.booking_type === 'room'" class="customer-email">{{ booking.guest_full_name || booking.customer_name }} • {{ guestIdSummary(booking) }}</div>
               </td>
-              <td>{{ booking.hall_name }}</td>
+              <td>{{ bookingItemLabel(booking) }}</td>
               <td>{{ formatDateRange(booking.start_date, booking.end_date) }}</td>
               <td>{{ formatMoney(booking.total_price) }}</td>
               <td :class="{ 'text-red': toNumber(booking.paid_amount) === 0, 'text-yellow': toNumber(booking.paid_amount) > 0 && toNumber(booking.paid_amount) < toNumber(booking.total_price) }">{{ formatMoney(booking.paid_amount) }}</td>
               <td><span class="remain">{{ formatMoney(booking.remaining_amount) }}</span></td>
               <td>
-                <button class="btn btn-primary btn-sm" @click="openAddModal(booking)">
-                  <i class="fas fa-coins"></i> Payer
-                </button>
+                <div class="table-inline-actions">
+                  <button v-if="toNumber(booking.remaining_amount) > 0" class="btn btn-primary btn-sm" @click="openAddModal(booking)">
+                    <i class="fas fa-coins"></i> Payer
+                  </button>
+                  <button
+                    v-if="booking.booking_type === 'room' && !booking.checked_in_at"
+                    class="btn btn-outline btn-sm"
+                    :class="{ 'is-loading': stayActionLoadingId === booking.id && stayActionType === 'check_in' }"
+                    :disabled="stayActionLoadingId === booking.id"
+                    @click="manageStay(booking, 'check_in')"
+                  >
+                    <i class="fas fa-right-to-bracket"></i> Check-in
+                  </button>
+                  <button
+                    v-if="booking.booking_type === 'room' && booking.checked_in_at && !booking.checked_out_at"
+                    class="btn btn-outline btn-sm"
+                    :class="{ 'is-loading': stayActionLoadingId === booking.id && stayActionType === 'check_out' }"
+                    :disabled="stayActionLoadingId === booking.id"
+                    @click="manageStay(booking, 'check_out')"
+                  >
+                    <i class="fas fa-right-from-bracket"></i> Check-out
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="filteredUnpaidBookings.length === 0">
-              <td colspan="8" class="empty-cell">Toutes les réservations sont soldées</td>
+              <td colspan="8" class="empty-cell">Aucune réservation à gérer</td>
             </tr>
           </template>
         </tbody>
@@ -387,16 +435,20 @@
         <div class="form-group">
           <label class="form-label">Réservation</label>
           <select v-model="form.booking" class="form-select" required @change="onBookingChange">
-            <option v-for="b in unpaidBookings" :key="b.id" :value="b.id">
-              {{ b.customer_name }} - {{ b.hall_name }} (reste: {{ formatMoney(b.remaining_amount) }})
+            <option v-for="b in actionableBookings" :key="b.id" :value="b.id">
+              {{ b.customer_name }} - {{ bookingItemLabel(b) }} (reste: {{ formatMoney(b.remaining_amount) }})
             </option>
           </select>
         </div>
 
         <div v-if="selectedBookingForForm" class="booking-summary">
+          <div><strong>Type:</strong> {{ selectedBookingForForm.booking_type === 'room' ? 'Chambre' : 'Salle' }}</div>
+          <div><strong>Unité:</strong> {{ bookingItemLabel(selectedBookingForForm) }}</div>
           <div><strong>Total:</strong> {{ formatMoney(selectedBookingForForm.total_price) }}</div>
           <div><strong>Déjà payé:</strong> {{ formatMoney(selectedBookingForForm.paid_amount) }}</div>
           <div><strong>Reste:</strong> {{ formatMoney(selectedBookingForForm.remaining_amount) }}</div>
+          <div v-if="selectedBookingForForm.booking_type === 'room'"><strong>Client hébergé:</strong> {{ selectedBookingForForm.guest_full_name || selectedBookingForForm.customer_name }}</div>
+          <div v-if="selectedBookingForForm.booking_type === 'room'"><strong>Pièce:</strong> {{ guestIdSummary(selectedBookingForForm) }}</div>
         </div>
 
         <div class="form-grid">
@@ -433,6 +485,16 @@
           <label class="form-label">Référence</label>
           <input v-model="form.reference" type="text" class="form-input" required />
         </div>
+
+        <div v-if="selectedBookingForForm?.booking_type === 'room'" class="form-group">
+          <label class="form-label">Gestion du séjour</label>
+          <select v-model="form.room_action" class="form-select">
+            <option value="none">Aucune action</option>
+            <option v-if="!selectedBookingForForm.checked_in_at" value="check_in">Valider le check-in</option>
+            <option v-if="selectedBookingForForm.checked_in_at && !selectedBookingForForm.checked_out_at" value="check_out">Valider le check-out</option>
+          </select>
+          <small class="form-hint">Le check-in exige un paiement marqué comme payé et une pièce d'identité déjà renseignée.</small>
+        </div>
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showFormModal = false">Annuler</button>
@@ -449,7 +511,7 @@
           <div class="entity-view-main">
             <div class="entity-view-code">{{ getPaymentDisplayId(selectedPayment) }}</div>
             <h3>{{ selectedPayment.booking_customer_name || 'Client' }}</h3>
-            <p>{{ selectedPayment.booking_hall_name || '-' }}</p>
+            <p>{{ paymentBookingItemLabel(selectedPayment) || '-' }}</p>
           </div>
           <div class="entity-view-badges">
             <span :class="['badge', getBadgeClass(selectedPayment.status)]">{{ translateStatus(selectedPayment.status) }}</span>
@@ -462,8 +524,10 @@
             <div class="entity-view-card-title">Paiement</div>
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Réservation</span><span class="entity-view-value">{{ selectedPayment.booking_code || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Type</span><span class="entity-view-value">{{ selectedPayment.booking_type === 'room' ? 'Chambre' : 'Salle' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Salle / Chambre</span><span class="entity-view-value">{{ paymentBookingItemLabel(selectedPayment) || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedPayment.booking_start_date, selectedPayment.booking_end_date) }}</span></div>
-              <div class="entity-view-item"><span class="entity-view-label">Type</span><span class="entity-view-value">{{ selectedPayment.kind === 'full' ? 'Paiement total' : 'Avance' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Paiement</span><span class="entity-view-value">{{ selectedPayment.kind === 'full' ? 'Paiement total' : 'Avance' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Référence</span><span class="entity-view-value">{{ selectedPayment.reference || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Méthode</span><span class="entity-view-value">{{ selectedPayment.method || '-' }}</span></div>
             </div>
@@ -474,6 +538,11 @@
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Montant</span><span class="entity-view-value">{{ formatMoney(selectedPayment.amount) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Reste après paiement</span><span class="entity-view-value">{{ formatMoney(selectedPayment.booking_remaining_amount) }}</span></div>
+              <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Client hébergé</span><span class="entity-view-value">{{ selectedPayment.booking_guest_full_name || selectedPayment.booking_customer_name }}</span></div>
+              <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Pièce</span><span class="entity-view-value">{{ guestIdSummary({ guest_id_type: selectedPayment.booking_guest_id_type, guest_id_number: selectedPayment.booking_guest_id_number }) }}</span></div>
+              <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Statut chambre</span><span class="entity-view-value">{{ roomStatusLabel(selectedPayment.booking_room_status) }}</span></div>
+              <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-in</span><span class="entity-view-value">{{ selectedPayment.booking_checked_in_at ? formatDisplayDate(selectedPayment.booking_checked_in_at) : 'Non effectué' }}</span></div>
+              <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-out</span><span class="entity-view-value">{{ selectedPayment.booking_checked_out_at ? formatDisplayDate(selectedPayment.booking_checked_out_at) : 'Non effectué' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé le</span><span class="entity-view-value">{{ formatDisplayDate(selectedPayment.created_at) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedPayment.created_by_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedPayment.updated_by_name || selectedPayment.created_by_name || '-' }}</span></div>
@@ -506,7 +575,6 @@ import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useDateFormat } from '~/composables/useDateFormat'
-import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
 import { useDocumentBranding } from '~/composables/useDocumentBranding'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
@@ -517,7 +585,6 @@ const { documentBranding, documentLogoUrl, escapeHtml } = useDocumentBranding()
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
 const { formatMoney, moneyInputModel } = useMoney()
 const { formatDateRange, formatDisplayDate } = useDateFormat()
-const { buildMonthlySequenceMap } = useDisplayIds()
 
 const payments = ref([])
 const bookings = ref([])
@@ -537,6 +604,8 @@ const filtersOpen = ref(false)
 const openActionsId = ref(null)
 const savingPayment = ref(false)
 const deletingPayment = ref(false)
+const stayActionLoadingId = ref(null)
+const stayActionType = ref('')
 
 const toggleActions = (id) => {
   openActionsId.value = openActionsId.value === id ? null : id
@@ -606,20 +675,17 @@ const resolvePreset = (value) => {
 const activeRange = computed(() => resolvePreset(preset.value))
 const rangeStartYmd = computed(() => activeRange.value.start)
 const rangeEndYmd = computed(() => activeRange.value.end)
+const activeRangeNotice = computed(() => {
+  if (!rangeStartYmd.value || !rangeEndYmd.value) return 'Aucune limite de période sur la date de création.'
+  if (preset.value === 'custom') return `Date de création personnalisée: du ${rangeStartYmd.value} au ${rangeEndYmd.value}.`
+  return `Date de création calculée jusqu'à aujourd'hui: du ${rangeStartYmd.value} au ${rangeEndYmd.value}.`
+})
 
 const inRangeYmd = (ymd, rangeStart, rangeEnd) => {
   const v = String(ymd || '').slice(0, 10)
   if (!rangeStart || !rangeEnd) return true
   if (!v) return false
   return v >= rangeStart && v <= rangeEnd
-}
-
-const dateOverlapsRange = (start, end, rangeStart, rangeEnd) => {
-  const s = String(start || '').slice(0, 10)
-  const e = String(end || '').slice(0, 10)
-  if (!rangeStart || !rangeEnd) return true
-  if (!s || !e) return false
-  return s <= rangeEnd && e >= rangeStart
 }
 
 const isLoading = computed(() => loadingPayments.value || loadingBookingsData.value)
@@ -860,7 +926,7 @@ const buildInvoiceHtml = (payment) => {
       <span class="section-label">Client</span>
       <div><strong>${escapeHtml(payment?.booking_customer_name || 'Client')}</strong></div>
       <div class="muted">${escapeHtml(payment?.booking_customer_email || '-')}</div>
-      <div>${escapeHtml(payment?.booking_hall_name || '-')}</div>
+      <div>${escapeHtml(paymentBookingItemLabel(payment) || '-')}</div>
       <div class="muted">Periode: ${escapeHtml(formatDateRange(payment?.booking_start_date, payment?.booking_end_date))}</div>
     </section>
 
@@ -880,8 +946,8 @@ const buildInvoiceHtml = (payment) => {
           <strong>${escapeHtml(typeLabel)}</strong>
         </div>
         <div class="meta-row">
-          <span class="muted">Salle</span>
-          <strong>${escapeHtml(payment?.booking_hall_name || '-')}</strong>
+          <span class="muted">${escapeHtml(payment?.booking_type === 'room' ? 'Chambre' : 'Salle')}</span>
+          <strong>${escapeHtml(paymentBookingItemLabel(payment) || '-')}</strong>
         </div>
       </div>
     </section>
@@ -941,6 +1007,27 @@ const showViewModal = ref(false)
 const showDeleteModal = ref(false)
 const selectedPayment = ref(null)
 
+// #region debug-point A:payment-debug-reporter
+const reportPaymentDebug = (hypothesisId, msg, data = {}) => {
+  try {
+    fetch('http://127.0.0.1:7777/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'post-broken-pipe',
+        runId: 'pre-fix',
+        hypothesisId,
+        location: 'pages/admin/payments.vue',
+        msg: `[DEBUG] ${msg}`,
+        data,
+        ts: Date.now(),
+      }),
+    }).catch(() => {})
+  } catch {
+  }
+}
+// #endregion
+
 const form = ref({
   booking: null,
   date: new Date().toISOString().split('T')[0],
@@ -948,20 +1035,49 @@ const form = ref({
   amount: 0,
   method: 'Virement',
   kind: 'advance',
-  status: 'paid'
+  status: 'paid',
+  room_action: 'none',
 })
 const amountInput = moneyInputModel(form, 'amount')
 
 const toNumber = (v) => Number(v || 0)
-const unpaidBookings = computed(() => bookings.value.filter(b => toNumber(b.remaining_amount) > 0 && b.status !== 'cancelled'))
+const unpaidOnlyBookings = computed(() => bookings.value.filter(b => toNumber(b.remaining_amount) > 0 && b.status !== 'cancelled'))
+const actionableBookings = computed(() => bookings.value.filter((booking) => {
+  if (booking.status === 'cancelled') return false
+  if (toNumber(booking.remaining_amount) > 0) return true
+  return booking.booking_type === 'room' && !booking.checked_out_at
+}))
+const roomStatusLabel = (status) => ({
+  available: 'Disponible',
+  reserved: 'Réservée',
+  occupied: 'Occupée',
+  cleaning: 'Nettoyage',
+  maintenance: 'Maintenance',
+}[String(status || 'available')] || String(status || 'available'))
+const guestIdSummary = (booking) => {
+  const type = String(booking?.guest_id_type || '').trim()
+  const number = String(booking?.guest_id_number || '').trim()
+  if (!type && !number) return '-'
+  const labelMap = {
+    passport: 'Passeport',
+    id_card: 'Carte d’identité',
+    driving_license: 'Permis de conduire',
+  }
+  return [labelMap[type] || type || 'Pièce', number].filter(Boolean).join(' • ')
+}
+const bookingItemLabel = (booking) => booking?.booking_type === 'room' ? (booking?.room_display || '-') : (booking?.hall_name || '-')
+const paymentBookingItemLabel = (payment) => payment?.booking_type === 'room' ? (payment?.booking_room_display || '-') : (payment?.booking_hall_name || '-')
 const filteredUnpaidBookings = computed(() => {
   const q = search.value.toLowerCase().trim()
-  return unpaidBookings.value.filter((b) => {
+  return actionableBookings.value.filter((b) => {
     const matchesSearch = q === '' ||
       String(b.customer_name || '').toLowerCase().includes(q) ||
       String(b.customer_email || '').toLowerCase().includes(q) ||
-      String(b.hall_name || '').toLowerCase().includes(q)
-    const matchesDate = dateOverlapsRange(b.start_date, b.end_date, rangeStartYmd.value, rangeEndYmd.value)
+      String(b.hall_name || '').toLowerCase().includes(q) ||
+      String(b.room_display || '').toLowerCase().includes(q) ||
+      String(b.guest_full_name || '').toLowerCase().includes(q) ||
+      String(b.guest_id_number || '').toLowerCase().includes(q)
+    const matchesDate = inRangeYmd(b.created_at, rangeStartYmd.value, rangeEndYmd.value)
     return matchesSearch && matchesDate
   })
 })
@@ -975,6 +1091,7 @@ const {
   initialKey: 'id',
   initialDirection: 'desc',
   accessors: {
+    hall_name: booking => booking?.booking_type === 'room' ? (booking?.room_display || '') : (booking?.hall_name || ''),
     total_price: booking => toNumber(booking?.total_price),
     paid_amount: booking => toNumber(booking?.paid_amount),
     remaining_amount: booking => toNumber(booking?.remaining_amount),
@@ -988,10 +1105,14 @@ const filteredPayments = computed(() => {
   return (payments.value || []).filter((p) => {
     const matchesSearch = q === '' ||
       String(p.booking_customer_name || '').toLowerCase().includes(q) ||
-      String(p.reference || '').toLowerCase().includes(q)
+      String(p.reference || '').toLowerCase().includes(q) ||
+      String(p.booking_hall_name || '').toLowerCase().includes(q) ||
+      String(p.booking_room_display || '').toLowerCase().includes(q) ||
+      String(p.booking_guest_full_name || '').toLowerCase().includes(q) ||
+      String(p.booking_guest_id_number || '').toLowerCase().includes(q)
     const matchesStatus = statusFilter.value === '' || p.status === statusFilter.value
     const matchesMethod = methodFilter.value === '' || p.method === methodFilter.value
-    const matchesDate = inRangeYmd(p.date, rangeStartYmd.value, rangeEndYmd.value)
+    const matchesDate = inRangeYmd(p.created_at || p.date, rangeStartYmd.value, rangeEndYmd.value)
     return matchesSearch && matchesStatus && matchesMethod && matchesDate
   })
 })
@@ -1033,7 +1154,7 @@ const {
   nextPage: unpaidNextPage,
 } = usePagination(sortedUnpaidBookings, 5)
 
-const selectedBookingForForm = computed(() => filteredUnpaidBookings.value.find(b => b.id === form.value.booking) || null)
+const selectedBookingForForm = computed(() => actionableBookings.value.find(b => b.id === form.value.booking) || null)
 const totalRevenue = computed(() => filteredPayments.value.filter(p => p.status === 'paid').reduce((a, p) => a + toNumber(p.amount), 0))
 const totalRemaining = computed(() => filteredUnpaidBookings.value.reduce((a, b) => a + toNumber(b.remaining_amount), 0))
 const methods = computed(() => Array.from(new Set((filteredPayments.value || []).map(p => p.method).filter(Boolean))).sort())
@@ -1071,7 +1192,7 @@ const animateCounter = (outRef, toValue) => {
 
 watch(totalRevenue, (v) => animateCounter(displayTotalRevenue, v), { immediate: true })
 watch(totalRemaining, (v) => animateCounter(displayTotalRemaining, v), { immediate: true })
-watch(() => filteredUnpaidBookings.value.length, (v) => animateCounter(displayUnpaidBookings, v), { immediate: true })
+watch(() => unpaidOnlyBookings.value.length, (v) => animateCounter(displayUnpaidBookings, v), { immediate: true })
 watch(() => filteredPayments.value.length, (v) => animateCounter(displayPaymentsCount, v), { immediate: true })
 
 onBeforeUnmount(() => {
@@ -1104,13 +1225,14 @@ const fetchBookings = async () => {
 
 const resetForm = () => {
   form.value = {
-    booking: unpaidBookings.value[0]?.id || null,
+    booking: actionableBookings.value[0]?.id || null,
     date: new Date().toISOString().split('T')[0],
     reference: 'PAY-' + Math.floor(1000 + Math.random() * 9000),
     amount: 0,
     method: 'Virement',
     kind: 'advance',
-    status: 'paid'
+    status: 'paid',
+    room_action: 'none',
   }
 }
 
@@ -1123,10 +1245,28 @@ const onKindChange = () => {
 
 const onBookingChange = () => {
   if (!selectedBookingForForm.value) return
+  form.value.room_action = 'none'
   if (form.value.kind === 'full') {
     form.value.amount = toNumber(selectedBookingForForm.value.remaining_amount)
   } else if (form.value.amount <= 0) {
     form.value.amount = Math.min(100000, toNumber(selectedBookingForForm.value.remaining_amount))
+  }
+}
+
+const manageStay = async (booking, action) => {
+  if (!booking?.id || stayActionLoadingId.value) return
+  stayActionLoadingId.value = booking.id
+  stayActionType.value = action
+  try {
+    await api.post(`bookings/${booking.id}/${action === 'check_in' ? 'check-in' : 'check-out'}/`)
+    notify(action === 'check_in' ? 'Check-in enregistré' : 'Check-out enregistré', 'success')
+    await Promise.all([fetchBookings(), fetchPayments()])
+  } catch (error) {
+    const data = error?.response?.data || {}
+    notify(data.detail || 'Impossible de mettre à jour le séjour', 'danger')
+  } finally {
+    stayActionLoadingId.value = null
+    stayActionType.value = ''
   }
 }
 
@@ -1158,15 +1298,55 @@ const savePayment = async () => {
   }
   savingPayment.value = true
   try {
+    // #region debug-point A:payment-submit
+    reportPaymentDebug('A', 'savePayment submit', {
+      booking: form.value.booking,
+      amount: form.value.amount,
+      kind: form.value.kind,
+      status: form.value.status,
+      roomAction: form.value.room_action,
+      selectedBookingId: selectedBookingForForm.value?.id ?? null,
+      remaining,
+    })
+    // #endregion
     const { data } = await api.post('payments/', form.value)
+    // #region debug-point B:payment-post-success
+    reportPaymentDebug('B', 'payment post success before refresh', {
+      responseId: data?.id ?? null,
+      responseKeys: Object.keys(data || {}),
+      invoiceEmailSent: data?.invoice_email_sent ?? null,
+    })
+    // #endregion
     notify('Paiement enregistré avec succès', 'success')
     showFormModal.value = false
     await Promise.all([fetchPayments(), fetchBookings()])
     const createdPayment = payments.value.find(item => item.id === data?.id) || data
+    // #region debug-point D:payment-after-refresh
+    reportPaymentDebug('D', 'payment refresh completed', {
+      paymentsCount: payments.value.length,
+      bookingsCount: bookings.value.length,
+      createdPaymentFound: Boolean(createdPayment),
+      createdPaymentId: createdPayment?.id ?? null,
+    })
+    // #endregion
     await nextTick()
+    // #region debug-point E:payment-before-print
+    reportPaymentDebug('E', 'payment about to print invoice', {
+      createdPaymentId: createdPayment?.id ?? null,
+      responseId: data?.id ?? null,
+    })
+    // #endregion
     printPaymentInvoice(createdPayment)
-  } catch {
-    notify('Erreur lors de l\'enregistrement du paiement', 'danger')
+  } catch (error) {
+    const data = error?.response?.data || {}
+    // #region debug-point C:payment-submit-error
+    reportPaymentDebug('C', 'savePayment catch', {
+      message: error?.message || null,
+      status: error?.response?.status ?? null,
+      data,
+    })
+    // #endregion
+    notify(data.room_action || data.amount || data.booking || data.detail || 'Erreur lors de l\'enregistrement du paiement', 'danger')
   } finally {
     savingPayment.value = false
   }
@@ -1250,6 +1430,12 @@ onMounted(async () => {
 .controls { display: flex; gap: var(--space-4); margin-bottom: var(--space-8); padding: var(--space-4) var(--space-6); align-items: center; flex-wrap: wrap; }
 .controls-top { width: 100%; display: flex; gap: var(--space-3); align-items: center; }
 .filters-panel { width: 100%; display: flex; gap: var(--space-4); flex-wrap: wrap; align-items: center; }
+.filter-range-note {
+  margin-top: 0.75rem;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
 .filters-toggle { display: none; width: 42px; height: 42px; border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; }
 .filters-toggle.active { background: rgba(212, 175, 55, .18); border-color: rgba(212, 175, 55, .35); color: #0f172a; }
 .filters-panel .filter-select-clean, .filters-panel .filter-input-clean { flex: 1 1 190px; }
@@ -1282,6 +1468,7 @@ onMounted(async () => {
 .text-red { color: #dc2626; font-weight: 800; }
 .text-yellow { color: #d97706; font-weight: 800; }
 .empty-cell { text-align: center; color: #94a3b8; font-weight: 600; padding: 1rem; }
+.table-inline-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .booking-summary {
   background: var(--gray-50);
   border: 1px solid var(--gray-200);

@@ -5,6 +5,8 @@ from . import views
 router = DefaultRouter()
 router.register(r'notifications', views.NotificationViewSet, basename='notification')
 router.register(r'halls', views.HallViewSet)
+router.register(r'rooms', views.RoomViewSet)
+router.register(r'customers', views.CustomerViewSet)
 router.register(r'bookings', views.BookingViewSet)
 router.register(r'personnel', views.PersonnelViewSet)
 router.register(r'materials', views.MaterialViewSet)

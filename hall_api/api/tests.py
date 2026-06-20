@@ -134,7 +134,7 @@ class PaymentInvoiceEmailTests(TestCase):
         self.assertIn(booking.code, mail.outbox[0].body)
         self.assertIn('100 000.00 Fbu', mail.outbox[0].body)
         self.assertEqual(len(mail.outbox[0].alternatives), 1)
-        self.assertIn('text/html', mail.outbox[0].alternatives[0].mime_type)
+        self.assertIn('text/html', mail.outbox[0].alternatives[0][1])
 
     def test_skips_invoice_email_when_booking_has_no_customer_email(self):
         booking = Booking.objects.create(

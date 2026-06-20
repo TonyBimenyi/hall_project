@@ -39,15 +39,12 @@
         <NuxtLink :to="localePath('/login')" class="btn-signin">{{ t('auth.register.signIn') }}</NuxtLink>
       </p>
 
-      <!-- Notification component -->
-      <Notification />
     </div>
   </div>
 </template>
 
 <script setup>
 import axios from 'axios'
-import Notification from '~/components/Notification.vue'
 import { notify } from '~/composables/useNotification'
 import { getApiOrigin } from '~/composables/useApi'
 

@@ -1,15 +1,15 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
-from .models import Hall, Booking, Personnel, Material, Expense, Payment, Notification, MagicLoginToken, AccountSecurityProfile
+from .models import Hall, Booking, Personnel, Material, Expense, Payment, Notification, MagicLoginToken, AccountSecurityProfile, Room, Customer
 from .serializers import (
     HallSerializer, BookingSerializer, PersonnelSerializer,
-    MaterialSerializer, ExpenseSerializer, PaymentSerializer, NotificationSerializer
+    MaterialSerializer, ExpenseSerializer, PaymentSerializer, NotificationSerializer, RoomSerializer, CustomerSerializer
 )
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from decimal import Decimal
 from django.contrib.auth import get_user_model
@@ -68,10 +68,22 @@ class SummaryView(APIView):
         
         total_bookings = Booking.objects.count()
         active_halls = Hall.objects.count()
+        active_rooms = Room.objects.filter(is_active=True).count()
         total_revenue = Payment.objects.filter(status='paid', booking__isnull=False).aggregate(Sum('amount'))['amount__sum'] or 0
         monthly_expenses = Expense.objects.filter(date__gte=first_day_of_month).aggregate(Sum('amount'))['amount__sum'] or 0
         pending_payments = Payment.objects.filter(status='pending', booking__isnull=False).count()
         material_losses = Material.objects.filter(status='lost').count()
+        room_status_counts = {
+            'available': Room.objects.filter(status='available').count(),
+            'reserved': Room.objects.filter(status='reserved').count(),
+            'occupied': Room.objects.filter(status='occupied').count(),
+            'cleaning': Room.objects.filter(status='cleaning').count(),
+            'maintenance': Room.objects.filter(status='maintenance').count(),
+        }
+        occupied_rooms_today = room_status_counts['occupied']
+        room_occupancy_rate_today = round((occupied_rooms_today / active_rooms) * 100, 1) if active_rooms > 0 else 0
+        todays_check_ins = Booking.objects.filter(booking_type='room', checked_in_at__date=today).count()
+        todays_check_outs = Booking.objects.filter(booking_type='room', checked_out_at__date=today).count()
         
         # Monthly stats for reports
         monthly_revenue = Payment.objects.filter(date__gte=first_day_of_month, status='paid', booking__isnull=False).aggregate(Sum('amount'))['amount__sum'] or 0
@@ -166,10 +178,16 @@ class SummaryView(APIView):
         return Response({
             'total_bookings': total_bookings,
             'active_halls': active_halls,
+            'active_rooms': active_rooms,
             'total_revenue': total_revenue,
             'monthly_expenses': monthly_expenses,
             'pending_payments': pending_payments,
             'material_losses': material_losses,
+            'room_occupancy_rate_today': room_occupancy_rate_today,
+            'occupied_rooms_today': occupied_rooms_today,
+            'todays_check_ins': todays_check_ins,
+            'todays_check_outs': todays_check_outs,
+            'room_status_counts': room_status_counts,
             'monthly_revenue': monthly_revenue,
             'revenue_last_28_days': revenue_last_28_days,
             'expenses_last_28_days': expenses_last_28_days,
@@ -219,6 +237,8 @@ def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, 
     first_name, _ = _split_full_name(full_name)
     greeting_name = first_name or full_name or 'Client'
     subject = 'Confirmation de réservation'
+    item_label = 'Salle' if getattr(booking, 'booking_type', 'hall') == 'hall' else 'Chambre'
+    item_name = getattr(booking, 'booked_item_name', '') or 'Non spécifié'
     account_line = (
         "Nous avons également créé automatiquement votre compte afin que vous puissiez gérer facilement vos réservations, consulter votre historique et effectuer vos prochaines réservations plus rapidement.\n\n"
         if account_created
@@ -241,7 +261,7 @@ def _send_reservation_email(*, to_email: str, full_name: str, booking: Booking, 
         f"{intro_line}"
         "Détails de la réservation :\n"
         f"- ID de réservation : {booking.id}\n"
-        f"- Salle : {booking.hall.name}\n"
+        f"- {item_label} : {item_name}\n"
         f"- Type d evenement : {booking.event_type}\n"
         f"- date debbut : {booking.start_date}\n"
         f"- date fin : {booking.end_date}\n\n"
@@ -295,6 +315,89 @@ def _normalize_phone(raw_phone):
     return ''.join(ch for ch in str(raw_phone or '') if ch.isdigit())
 
 
+def _match_customer(*, full_name='', phone='', email='', identity_number=''):
+    filters = Q()
+    phone_value = str(phone or '').strip()
+    email_value = str(email or '').strip().lower()
+    identity_value = str(identity_number or '').strip()
+    first_name, last_name = _split_full_name(full_name)
+
+    if phone_value:
+        filters |= Q(phone__icontains=phone_value)
+    if email_value:
+        filters |= Q(email__iexact=email_value)
+    if identity_value:
+        filters |= Q(identity_number__iexact=identity_value)
+    if first_name:
+        filters |= Q(first_name__iexact=first_name, last_name__iexact=last_name)
+
+    if not filters:
+        return None
+
+    return Customer.objects.filter(filters).order_by('-updated_at', '-id').first()
+
+
+def _upsert_customer_from_snapshot(*, customer=None, full_name='', phone='', email='', identity_type='', identity_number='', actor=None):
+    first_name, last_name = _split_full_name(full_name)
+    phone_value = str(phone or '').strip()
+    email_value = str(email or '').strip().lower()
+    identity_type_value = str(identity_type or '').strip()
+    identity_number_value = str(identity_number or '').strip()
+
+    if customer is None:
+        customer = _match_customer(
+            full_name=full_name,
+            phone=phone_value,
+            email=email_value,
+            identity_number=identity_number_value,
+        )
+
+    if customer is None:
+        if not phone_value:
+            return None
+        customer = Customer(
+            first_name=first_name or last_name or 'Client',
+            last_name=last_name if first_name else '',
+            phone=phone_value,
+            email=email_value,
+            identity_type=identity_type_value,
+            identity_number=identity_number_value,
+            created_by=actor,
+            updated_by=actor,
+        )
+        customer.save()
+        return customer
+
+    changed = []
+    next_first = first_name or customer.first_name
+    next_last = last_name if first_name else (customer.last_name or last_name)
+    if customer.first_name != next_first:
+        customer.first_name = next_first
+        changed.append('first_name')
+    if customer.last_name != next_last:
+        customer.last_name = next_last
+        changed.append('last_name')
+    if phone_value and customer.phone != phone_value:
+        customer.phone = phone_value
+        changed.append('phone')
+    if email_value and customer.email != email_value:
+        customer.email = email_value
+        changed.append('email')
+    if identity_type_value and customer.identity_type != identity_type_value:
+        customer.identity_type = identity_type_value
+        changed.append('identity_type')
+    if identity_number_value and customer.identity_number != identity_number_value:
+        customer.identity_number = identity_number_value
+        changed.append('identity_number')
+    if actor and getattr(customer, 'updated_by_id', None) != getattr(actor, 'id', None):
+        customer.updated_by = actor
+        changed.append('updated_by')
+    if changed:
+        changed.append('updated_at')
+        customer.save(update_fields=changed)
+    return customer
+
+
 def _index_hall_additional_services(hall: Hall):
     services = getattr(hall, 'additional_services', None) or []
     index = {}
@@ -327,28 +430,28 @@ def _index_hall_additional_services(hall: Hall):
     return index
 
 
-def _compute_addons_total(hall: Hall, selected_services):
+def _compute_addons_total(item: Hall | Room, selected_services):
     selected_services = selected_services or []
     if not isinstance(selected_services, list):
         raise DjangoValidationError('Les services sélectionnés doivent être une liste')
 
-    services_index = _index_hall_additional_services(hall)
+    services_index = _index_hall_additional_services(item)
     addons_total = Decimal('0.00')
     normalized_selected = []
 
-    for item in selected_services:
-        if not isinstance(item, dict):
+    for selected_item in selected_services:
+        if not isinstance(selected_item, dict):
             raise DjangoValidationError('Format de service sélectionné invalide')
 
-        name = str(item.get('name') or '').strip()
+        name = str(selected_item.get('name') or '').strip()
         if not name:
             raise DjangoValidationError("Chaque service sélectionné doit avoir un nom")
         if name not in services_index:
-            raise DjangoValidationError(f"Service '{name}' introuvable pour cette salle")
+            raise DjangoValidationError(f"Service '{name}' introuvable pour cette salle/chambre")
 
         cfg = services_index[name]
         if cfg['has_subservices']:
-            subs = item.get('subservices') or []
+            subs = selected_item.get('subservices') or []
             if not isinstance(subs, list) or not subs:
                 raise DjangoValidationError(f"Choisissez au moins un sous-service pour '{name}'")
 
@@ -367,7 +470,7 @@ def _compute_addons_total(hall: Hall, selected_services):
             normalized_selected.append({'name': name, 'subservices': normalized_subs})
             continue
 
-        if item.get('subservices'):
+        if selected_item.get('subservices'):
             raise DjangoValidationError(f"Le service '{name}' n'a pas de sous-services")
 
         addons_total += cfg['price']
@@ -376,12 +479,17 @@ def _compute_addons_total(hall: Hall, selected_services):
     return addons_total.quantize(Decimal('0.01')), normalized_selected
 
 
-def _compute_booking_totals(hall: Hall, start_dt: date, end_dt: date, selected_services):
+def _compute_booking_totals(item: Hall | Room, start_dt: date, end_dt: date, selected_services):
     if end_dt < start_dt:
         raise DjangoValidationError('La date fin doit être après la date début')
     days = (end_dt - start_dt).days + 1
-    base_total = (Decimal(days) * (hall.price_per_day or Decimal('0.00'))).quantize(Decimal('0.01'))
-    addons_total, normalized_selected = _compute_addons_total(hall, selected_services)
+    if isinstance(item, Hall):
+        base_total = (Decimal(days) * Decimal(str(item.price_per_day or '0.00'))).quantize(Decimal('0.01'))
+    elif isinstance(item, Room):
+        base_total = (Decimal(days) * Decimal(str(item.price_per_night or '0.00'))).quantize(Decimal('0.01'))
+    else:
+        base_total = Decimal('0.00')
+    addons_total, normalized_selected = _compute_addons_total(item, selected_services)
     total = (base_total + addons_total).quantize(Decimal('0.01'))
     return base_total, addons_total, total, normalized_selected
 
@@ -420,6 +528,70 @@ def _can_manage_staff_accounts(user):
 def _actor(request):
     user = getattr(request, 'user', None)
     return user if getattr(user, 'is_authenticated', False) else None
+
+
+def _sync_room_status_for_booking(booking, room_action='none'):
+    if not booking or getattr(booking, 'booking_type', '') != 'room' or not getattr(booking, 'room_id', None):
+        return
+
+    room = booking.room
+    now = timezone.now()
+    booking_fields = []
+    room_fields = []
+
+    if room_action == 'check_in':
+        if booking.checked_in_at is None:
+            booking.checked_in_at = now
+            booking_fields.append('checked_in_at')
+        if room.status != 'occupied':
+            room.status = 'occupied'
+            room_fields.append('status')
+    elif room_action == 'check_out':
+        if booking.checked_out_at is None:
+            booking.checked_out_at = now
+            booking_fields.append('checked_out_at')
+        if room.status != 'cleaning':
+            room.status = 'cleaning'
+            room_fields.append('status')
+    else:
+        if booking.checked_in_at and not booking.checked_out_at and room.status != 'occupied':
+            room.status = 'occupied'
+            room_fields.append('status')
+        elif booking.checked_out_at and room.status != 'cleaning':
+            room.status = 'cleaning'
+            room_fields.append('status')
+        else:
+            if (
+                not booking.checked_in_at
+                and not booking.checked_out_at
+                and getattr(booking, 'status', '') in ('pending', 'confirmed', 'paid')
+                and room.status == 'available'
+            ):
+                room.status = 'reserved'
+                room_fields.append('status')
+
+    if booking_fields:
+        booking.save(update_fields=booking_fields)
+    if room_fields:
+        room.save(update_fields=room_fields)
+
+
+def _refresh_room_reservation_state(room):
+    if not room or getattr(room, 'status', '') not in ('available', 'reserved'):
+        return
+
+    has_active_reservation = Booking.objects.filter(
+        booking_type='room',
+        room=room,
+        status__in=['pending', 'confirmed', 'paid'],
+        checked_in_at__isnull=True,
+        checked_out_at__isnull=True,
+    ).exists()
+
+    desired = 'reserved' if has_active_reservation else 'available'
+    if room.status != desired:
+        room.status = desired
+        room.save(update_fields=['status', 'updated_at'])
 
 def _normalize_role_label(value):
     text = str(value or '').strip().lower()
@@ -723,6 +895,52 @@ class HallViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         serializer.save(updated_by=_actor(self.request))
 
+class RoomViewSet(viewsets.ModelViewSet):
+    queryset = Room.objects.all().order_by('-id')
+    serializer_class = RoomSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))
+        _refresh_room_reservation_state(serializer.instance)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=_actor(self.request))
+        _refresh_room_reservation_state(serializer.instance)
+
+
+class CustomerViewSet(viewsets.ModelViewSet):
+    queryset = Customer.objects.all().order_by('-updated_at', '-id')
+    serializer_class = CustomerSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = str(self.request.query_params.get('search') or '').strip()
+        if search:
+            parts = [part for part in search.split(' ') if part]
+            filters = (
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(phone__icontains=search) |
+                Q(email__icontains=search) |
+                Q(identity_number__icontains=search)
+            )
+            if len(parts) >= 2:
+                filters |= Q(first_name__icontains=parts[0], last_name__icontains=' '.join(parts[1:]))
+            queryset = queryset.filter(filters)
+
+        limit = str(self.request.query_params.get('limit') or '').strip()
+        if limit.isdigit():
+            queryset = queryset[:max(1, min(int(limit), 25))]
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=_actor(self.request))
+
 class BookingViewSet(viewsets.ModelViewSet):
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
@@ -740,34 +958,108 @@ class BookingViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
+        customer = serializer.validated_data.get('customer')
+        customer_name = serializer.validated_data.get('customer_name', '')
+        customer_phone = serializer.validated_data.get('customer_phone', '')
+        customer_email = serializer.validated_data.get('customer_email', '')
+        guest_id_type = serializer.validated_data.get('guest_id_type', '')
+        guest_id_number = serializer.validated_data.get('guest_id_number', '')
+        resolved_customer = _upsert_customer_from_snapshot(
+            customer=customer,
+            full_name=customer_name,
+            phone=customer_phone,
+            email=customer_email,
+            identity_type=guest_id_type,
+            identity_number=guest_id_number,
+            actor=_actor(self.request),
+        )
+        booking_type = serializer.validated_data.get('booking_type', 'hall')
         hall = serializer.validated_data.get('hall')
+        room = serializer.validated_data.get('room')
+        item = hall if booking_type == 'hall' else room
         start_dt = serializer.validated_data.get('start_date')
         end_dt = serializer.validated_data.get('end_date')
         selected = serializer.validated_data.get('additional_services_selected') or []
-        _, addons_total, total, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected)
+        _, addons_total, total, normalized_selected = _compute_booking_totals(item, start_dt, end_dt, selected)
+        save_kwargs = {
+            'created_by': self.request.user,
+            'updated_by': self.request.user,
+            'customer': resolved_customer,
+            'total_price': total,
+            'addons_total': addons_total,
+            'additional_services_selected': normalized_selected,
+        }
+        if booking_type == 'hall':
+            save_kwargs.update({
+                'room': None,
+                'guest_full_name': '',
+                'guest_id_type': '',
+                'guest_id_number': '',
+                'checked_in_at': None,
+                'checked_out_at': None,
+            })
+        else:
+            save_kwargs['hall'] = None
         serializer.save(
-            created_by=self.request.user,
-            updated_by=self.request.user,
-            total_price=total,
-            addons_total=addons_total,
-            additional_services_selected=normalized_selected,
+            **save_kwargs,
         )
+        if getattr(serializer.instance, 'booking_type', '') == 'room' and getattr(serializer.instance, 'room_id', None):
+            _sync_room_status_for_booking(serializer.instance, 'none')
 
     def perform_update(self, serializer):
         instance = serializer.instance
+        customer = serializer.validated_data.get('customer', getattr(instance, 'customer', None))
+        customer_name = serializer.validated_data.get('customer_name', getattr(instance, 'customer_name', ''))
+        customer_phone = serializer.validated_data.get('customer_phone', getattr(instance, 'customer_phone', ''))
+        customer_email = serializer.validated_data.get('customer_email', getattr(instance, 'customer_email', ''))
+        guest_id_type = serializer.validated_data.get('guest_id_type', getattr(instance, 'guest_id_type', ''))
+        guest_id_number = serializer.validated_data.get('guest_id_number', getattr(instance, 'guest_id_number', ''))
+        resolved_customer = _upsert_customer_from_snapshot(
+            customer=customer,
+            full_name=customer_name,
+            phone=customer_phone,
+            email=customer_email,
+            identity_type=guest_id_type,
+            identity_number=guest_id_number,
+            actor=_actor(self.request),
+        )
+        booking_type = serializer.validated_data.get('booking_type', getattr(instance, 'booking_type', 'hall'))
         hall = serializer.validated_data.get('hall', getattr(instance, 'hall', None))
+        room = serializer.validated_data.get('room', getattr(instance, 'room', None))
+        item = hall if booking_type == 'hall' else room
         start_dt = serializer.validated_data.get('start_date', getattr(instance, 'start_date', None))
         end_dt = serializer.validated_data.get('end_date', getattr(instance, 'end_date', None))
         selected = serializer.validated_data.get('additional_services_selected', getattr(instance, 'additional_services_selected', [])) or []
-        _, addons_total, total, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected)
+        _, addons_total, total, normalized_selected = _compute_booking_totals(item, start_dt, end_dt, selected)
+        save_kwargs = {
+            'updated_by': _actor(self.request),
+            'customer': resolved_customer,
+            'total_price': total,
+            'addons_total': addons_total,
+            'additional_services_selected': normalized_selected,
+        }
+        if booking_type == 'hall':
+            save_kwargs.update({
+                'room': None,
+                'guest_full_name': '',
+                'guest_id_type': '',
+                'guest_id_number': '',
+                'checked_in_at': None,
+                'checked_out_at': None,
+            })
+        else:
+            save_kwargs['hall'] = None
         serializer.save(
-            updated_by=_actor(self.request),
-            total_price=total,
-            addons_total=addons_total,
-            additional_services_selected=normalized_selected,
+            **save_kwargs,
         )
+        if getattr(serializer.instance, 'booking_type', '') == 'room' and getattr(serializer.instance, 'room_id', None):
+            _sync_room_status_for_booking(serializer.instance, 'none')
+            _refresh_room_reservation_state(serializer.instance.room)
 
     def create(self, request, *args, **kwargs):
+        # #region debug-point A:booking-create-entry
+        import json, urllib.request; _p='.dbg/post-broken-pipe.env'; _u,_s='http://127.0.0.1:7777/event','post-broken-pipe'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"A","location":"api/views.py:BookingViewSet.create","msg":"[DEBUG] booking create entry","data":{"keys":list((request.data or {}).keys()),"booking_type":(request.data or {}).get("booking_type"),"has_email":bool((request.data or {}).get("customer_email"))}}).encode(), headers={"Content-Type":"application/json"}), timeout=2).read()
+        # #endregion
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
@@ -820,6 +1112,9 @@ class BookingViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         response_data = dict(serializer.data)
         response_data['email_sent'] = email_sent
+        # #region debug-point B:booking-create-response
+        import json, urllib.request; _p='.dbg/post-broken-pipe.env'; _u,_s='http://127.0.0.1:7777/event','post-broken-pipe'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"B","location":"api/views.py:BookingViewSet.create","msg":"[DEBUG] booking response ready","data":{"booking_id":getattr(booking,"id",None),"email_sent":email_sent,"response_keys":list(response_data.keys())}}).encode(), headers={"Content-Type":"application/json"}), timeout=2).read()
+        # #endregion
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny], url_path='guest')
@@ -931,13 +1226,55 @@ class BookingViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @action(detail=True, methods=['post'], url_path='check-in')
+    def check_in(self, request, pk=None):
+        booking = self.get_object()
+        if booking.booking_type != 'room' or not booking.room_id:
+            return Response({'detail': 'Action disponible uniquement pour une réservation de chambre'}, status=status.HTTP_400_BAD_REQUEST)
+        if booking.checked_in_at:
+            return Response({'detail': 'Le check-in a déjà été effectué'}, status=status.HTTP_400_BAD_REQUEST)
+        if booking.status == 'cancelled':
+            return Response({'detail': 'Impossible de gérer une réservation annulée'}, status=status.HTTP_400_BAD_REQUEST)
+        if getattr(booking.room, 'status', '') in ('maintenance', 'cleaning'):
+            return Response({'detail': "Cette chambre n'est pas prête pour le check-in"}, status=status.HTTP_400_BAD_REQUEST)
+        if not str(booking.guest_full_name or '').strip() or not str(booking.guest_id_type or '').strip() or not str(booking.guest_id_number or '').strip():
+            return Response({'detail': 'Complétez le profil client et la pièce d’identité avant le check-in'}, status=status.HTTP_400_BAD_REQUEST)
+        if (booking.paid_amount or Decimal('0.00')) <= Decimal('0.00'):
+            return Response({'detail': 'Enregistrez au moins un paiement avant le check-in'}, status=status.HTTP_400_BAD_REQUEST)
+        _sync_room_status_for_booking(booking, 'check_in')
+        booking.updated_by = _actor(request)
+        booking.save(update_fields=['updated_by', 'updated_at'])
+        return Response(self.get_serializer(booking).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='check-out')
+    def check_out(self, request, pk=None):
+        booking = self.get_object()
+        if booking.booking_type != 'room' or not booking.room_id:
+            return Response({'detail': 'Action disponible uniquement pour une réservation de chambre'}, status=status.HTTP_400_BAD_REQUEST)
+        if not booking.checked_in_at:
+            return Response({'detail': 'Le check-in doit être effectué avant le check-out'}, status=status.HTTP_400_BAD_REQUEST)
+        if booking.checked_out_at:
+            return Response({'detail': 'Le check-out a déjà été effectué'}, status=status.HTTP_400_BAD_REQUEST)
+        if booking.status == 'cancelled':
+            return Response({'detail': 'Impossible de gérer une réservation annulée'}, status=status.HTTP_400_BAD_REQUEST)
+        remaining = (booking.total_price or Decimal('0.00')) - (booking.paid_amount or Decimal('0.00'))
+        if remaining > Decimal('0.00'):
+            return Response({'detail': 'Le séjour doit être soldé avant le check-out'}, status=status.HTTP_400_BAD_REQUEST)
+        _sync_room_status_for_booking(booking, 'check_out')
+        booking.updated_by = _actor(request)
+        booking.save(update_fields=['updated_by', 'updated_at'])
+        return Response(self.get_serializer(booking).data, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], url_path='calendar')
     def calendar(self, request):
         hall_id = request.query_params.get('hall')
+        room_id = request.query_params.get('room')
         qs = Booking.objects.all()
         if hall_id:
             qs = qs.filter(hall_id=hall_id)
-        qs = qs.exclude(status='cancelled').values('hall_id', 'start_date', 'end_date')
+        if room_id:
+            qs = qs.filter(room_id=room_id)
+        qs = qs.exclude(status='cancelled').values('hall_id', 'room_id', 'start_date', 'end_date')
         return Response(list(qs))
 
 class MagicLinkRequestView(APIView):
@@ -1213,10 +1550,20 @@ class PaymentViewSet(viewsets.ModelViewSet):
             payment=payment,
         )
 
+    def _apply_room_action(self, payment, room_action):
+        booking = getattr(payment, 'booking', None)
+        if not booking or room_action == 'none':
+            return
+        _sync_room_status_for_booking(booking, room_action)
+
     def create(self, request, *args, **kwargs):
+        # #region debug-point A:payment-create-entry
+        import json, urllib.request; _p='.dbg/post-broken-pipe.env'; _u,_s='http://127.0.0.1:7777/event','post-broken-pipe'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"A","location":"api/views.py:PaymentViewSet.create","msg":"[DEBUG] payment create entry","data":{"keys":list((request.data or {}).keys()),"booking":(request.data or {}).get("booking"),"room_action":(request.data or {}).get("room_action")}}).encode(), headers={"Content-Type":"application/json"}), timeout=2).read()
+        # #endregion
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         payment = serializer.save(created_by=_actor(request), updated_by=_actor(request))
+        room_action = getattr(serializer, '_room_action', 'none')
         invoice_email_sent = False
 
         amount = payment.amount or Decimal('0.00')
@@ -1234,6 +1581,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
             payment.save(update_fields=['kind'])
 
         self._recalc_booking_paid(payment.booking)
+        self._apply_room_action(payment, room_action)
         self._emit_payment_received_notification(payment)
         try:
             invoice_email_sent = send_payment_invoice_email(payment)
@@ -1244,6 +1592,9 @@ class PaymentViewSet(viewsets.ModelViewSet):
         output = self.get_serializer(payment)
         response_data = dict(output.data)
         response_data['invoice_email_sent'] = invoice_email_sent
+        # #region debug-point B:payment-create-response
+        import json, urllib.request; _p='.dbg/post-broken-pipe.env'; _u,_s='http://127.0.0.1:7777/event','post-broken-pipe'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"B","location":"api/views.py:PaymentViewSet.create","msg":"[DEBUG] payment response ready","data":{"payment_id":getattr(payment,"id",None),"booking_id":getattr(getattr(payment,"booking",None),"id",None),"invoice_email_sent":invoice_email_sent,"response_keys":list(response_data.keys())}}).encode(), headers={"Content-Type":"application/json"}), timeout=2).read()
+        # #endregion
         return Response(response_data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
@@ -1254,8 +1605,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         payment = serializer.instance
-        response = Response(serializer.data)
+        room_action = getattr(serializer, '_room_action', 'none')
         self._recalc_booking_paid(payment.booking)
+        self._apply_room_action(payment, room_action)
+        response = Response(self.get_serializer(payment).data)
         if not was_paid and payment.status == 'paid':
             self._emit_payment_received_notification(payment)
             try:

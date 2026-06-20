@@ -69,6 +69,33 @@
       </article>
 
       <article class="stat-card card">
+        <div class="stat-icon success"><i class="fas fa-bed"></i></div>
+        <div class="stat-content">
+          <span class="stat-label">Taux d'occupation chambres</span>
+          <strong class="stat-value">{{ roomOccupancyRateLabel }}</strong>
+          <div class="stat-meta">{{ occupiedRoomsTodayCount }} occupée(s) / {{ activeRoomsCount }} active(s)</div>
+        </div>
+      </article>
+
+      <article class="stat-card card">
+        <div class="stat-icon primary"><i class="fas fa-right-to-bracket"></i></div>
+        <div class="stat-content">
+          <span class="stat-label">Check-ins du jour</span>
+          <strong class="stat-value">{{ todaysCheckInsFormatted }}</strong>
+          <div class="stat-meta">Arrivées enregistrées</div>
+        </div>
+      </article>
+
+      <article class="stat-card card">
+        <div class="stat-icon warning"><i class="fas fa-right-from-bracket"></i></div>
+        <div class="stat-content">
+          <span class="stat-label">Check-outs du jour</span>
+          <strong class="stat-value">{{ todaysCheckOutsFormatted }}</strong>
+          <div class="stat-meta">Départs enregistrés</div>
+        </div>
+      </article>
+
+      <article class="stat-card card">
         <div class="stat-icon warning"><i class="fas fa-hourglass-half"></i></div>
         <div class="stat-content">
           <span class="stat-label">Paiements en attente</span>
@@ -137,7 +164,7 @@
               <div class="row-sub">
                 <span class="pill">{{ booking.code || '-' }}</span>
                 <span class="dot">•</span>
-                <span>{{ booking.hall_name || booking.hall?.name || '-' }}</span>
+                <span>{{ booking.booking_type === 'room' ? (booking.room_display || '-') : (booking.hall_name || booking.hall?.name || '-') }}</span>
                 <span class="dot">•</span>
                 <span>{{ booking.start_date }} → {{ booking.end_date }}</span>
               </div>
@@ -189,6 +216,57 @@
             <div class="row-side">
               <div class="row-value">{{ formatMoney(payment.amount || 0) }}</div>
               <span class="badge" :class="paymentStatusClass(payment.status)">{{ paymentStatusLabel(payment.status) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel card">
+        <div class="panel-head">
+          <div>
+            <h2>Statut des chambres</h2>
+            <p>Disponibilité actuelle, entretien et occupation.</p>
+          </div>
+          <NuxtLink to="/admin/rooms" class="btn btn-outline btn-sm admin-head-btn">
+            <i class="fas fa-bed"></i>
+            <span class="btn-label">Gérer</span>
+          </NuxtLink>
+        </div>
+
+        <div class="alerts room-status-grid">
+          <div class="alert-card">
+            <div class="alert-icon"><i class="fas fa-circle-check"></i></div>
+            <div>
+              <div class="alert-title">Disponibles</div>
+              <div class="alert-value">{{ roomStatusCounts.available || 0 }}</div>
+            </div>
+          </div>
+          <div class="alert-card info">
+            <div class="alert-icon"><i class="fas fa-bookmark"></i></div>
+            <div>
+              <div class="alert-title">Réservées</div>
+              <div class="alert-value">{{ roomStatusCounts.reserved || 0 }}</div>
+            </div>
+          </div>
+          <div class="alert-card">
+            <div class="alert-icon"><i class="fas fa-bed"></i></div>
+            <div>
+              <div class="alert-title">Occupées</div>
+              <div class="alert-value">{{ roomStatusCounts.occupied || 0 }}</div>
+            </div>
+          </div>
+          <div class="alert-card warning">
+            <div class="alert-icon"><i class="fas fa-soap"></i></div>
+            <div>
+              <div class="alert-title">Nettoyage</div>
+              <div class="alert-value">{{ roomStatusCounts.cleaning || 0 }}</div>
+            </div>
+          </div>
+          <div class="alert-card danger">
+            <div class="alert-icon"><i class="fas fa-screwdriver-wrench"></i></div>
+            <div>
+              <div class="alert-title">Maintenance</div>
+              <div class="alert-value">{{ roomStatusCounts.maintenance || 0 }}</div>
             </div>
           </div>
         </div>
@@ -317,10 +395,22 @@ const loadingMaterials = ref(false)
 const summary = ref({
   total_bookings: 0,
   active_halls: 0,
+  active_rooms: 0,
   total_revenue: 0,
   monthly_expenses: 0,
   pending_payments: 0,
   material_losses: 0,
+  room_occupancy_rate_today: 0,
+  occupied_rooms_today: 0,
+  todays_check_ins: 0,
+  todays_check_outs: 0,
+  room_status_counts: {
+    available: 0,
+    reserved: 0,
+    occupied: 0,
+    cleaning: 0,
+    maintenance: 0,
+  },
 })
 
 const bookings = ref([])
@@ -343,13 +433,21 @@ const showFinancialCards = computed(() => canSeeSyntheticRevenue(currentUser.val
 
 const totalBookingsCount = computed(() => Number(summary.value.total_bookings || 0))
 const activeHallsCount = computed(() => Number(summary.value.active_halls || 0))
+const activeRoomsCount = computed(() => Number(summary.value.active_rooms || 0))
 const pendingPaymentsCount = computed(() => Number(summary.value.pending_payments || 0))
 const totalRevenueAmount = computed(() => Number(summary.value.total_revenue || 0))
 const monthlyExpensesAmount = computed(() => Number(summary.value.monthly_expenses || 0))
+const occupiedRoomsTodayCount = computed(() => Number(summary.value.occupied_rooms_today || 0))
+const todaysCheckInsCount = computed(() => Number(summary.value.todays_check_ins || 0))
+const todaysCheckOutsCount = computed(() => Number(summary.value.todays_check_outs || 0))
+const roomStatusCounts = computed(() => summary.value.room_status_counts || {})
+const roomOccupancyRateLabel = computed(() => `${Number(summary.value.room_occupancy_rate_today || 0).toFixed(1)}%`)
 
 const totalBookingsFormatted = computed(() => totalBookingsCount.value.toLocaleString())
 const activeHallsFormatted = computed(() => activeHallsCount.value.toLocaleString())
 const pendingPaymentsFormatted = computed(() => pendingPaymentsCount.value.toLocaleString())
+const todaysCheckInsFormatted = computed(() => todaysCheckInsCount.value.toLocaleString())
+const todaysCheckOutsFormatted = computed(() => todaysCheckOutsCount.value.toLocaleString())
 
 const normalizeDate = (value) => String(value || '').slice(0, 10)
 
@@ -899,6 +997,10 @@ onMounted(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.room-status-grid {
+  margin-bottom: 0;
 }
 
 .alert-card {

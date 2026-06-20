@@ -906,8 +906,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBase: "http://127.0.0.1:8000/api/",
-      // apiBase: "https://api.labertha-villa.com/api/",
-      
+      // apiBase: "https://api.labertha-villa.com/api/", 
     },
   },
 
@@ -915,5 +914,4 @@ export default defineNuxtConfig({
     "@/assets/css/main.css",
     "@/assets/css/components.css",
   ],
-
 })

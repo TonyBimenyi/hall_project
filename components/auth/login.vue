@@ -60,8 +60,6 @@
     
       </p>
 
-      <!-- Notification component -->
-      <Notification />
     </div>
   </div>
 </template>
@@ -69,7 +67,6 @@
 <script setup>
 import axios from 'axios'
 import { useLocalePath, useRoute, useRouter } from '#imports'
-import Notification from '~/components/Notification.vue'
 import { notify } from '~/composables/useNotification'
 import { getApiOrigin } from '~/composables/useApi'
 import { getDefaultAdminRoute } from '~/composables/useRoleAccess'

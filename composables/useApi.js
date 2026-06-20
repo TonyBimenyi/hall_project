@@ -2,6 +2,27 @@
 import axios from 'axios'
 import { computed } from 'vue'
 
+// #region debug-point A:post-debug-reporter
+const reportPostDebug = (hypothesisId, msg, data = {}) => {
+  try {
+    fetch('http://127.0.0.1:7777/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'post-broken-pipe',
+        runId: 'pre-fix',
+        hypothesisId,
+        location: 'composables/useApi.js',
+        msg: `[DEBUG] ${msg}`,
+        data,
+        ts: Date.now(),
+      }),
+    }).catch(() => {})
+  } catch {
+  }
+}
+// #endregion
+
 const normalizeApiBase = (value) => {
   const v = String(value || '').trim()
   if (!v) return ''
@@ -25,6 +46,7 @@ export const getApiBaseUrl = () => {
   // return 'https://api.labertha-villa.com/api/'
   return 'http://localhost:3000/api/'
 }
+
 
 export const getApiOrigin = () => {
   const apiBase = getApiBaseUrl()
@@ -58,6 +80,16 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    // #region debug-point A:request-start
+    if (String(config.method || '').toLowerCase() === 'post' && /(bookings|payments)\/?$/.test(String(config.url || ''))) {
+      reportPostDebug('A', 'axios request start', {
+        method: config.method,
+        url: config.url,
+        hasAuth: Boolean(token),
+        payloadKeys: Object.keys(config.data || {}),
+      })
+    }
+    // #endregion
     return config
   },
   (error) => {
@@ -67,9 +99,31 @@ api.interceptors.request.use(
 
 // Response interceptor to handle token expiration
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // #region debug-point B:response-success
+    if (String(response?.config?.method || '').toLowerCase() === 'post' && /(bookings|payments)\/?$/.test(String(response?.config?.url || ''))) {
+      reportPostDebug('B', 'axios response success', {
+        url: response?.config?.url,
+        status: response?.status,
+        responseKeys: Object.keys(response?.data || {}),
+        responseId: response?.data?.id ?? null,
+      })
+    }
+    // #endregion
+    return response
+  },
   async (error) => {
     const originalRequest = error.config
+    // #region debug-point C:response-error
+    if (String(originalRequest?.method || '').toLowerCase() === 'post' && /(bookings|payments)\/?$/.test(String(originalRequest?.url || ''))) {
+      reportPostDebug('C', 'axios response error', {
+        url: originalRequest?.url,
+        status: error?.response?.status ?? null,
+        message: error?.message || null,
+        responseData: error?.response?.data || null,
+      })
+    }
+    // #endregion
     if (error.response.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
       const refreshToken = localStorage.getItem('refresh_token')

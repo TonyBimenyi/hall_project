@@ -5,7 +5,7 @@
     <div class="page-header">
       <div>
         <h1>Réservations</h1>
-        <p>Gérer toutes les réservations de salle</p>
+        <p>Gérer toutes les réservations de salle et chambre</p>
       </div>
       <div class="header-actions">
         <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingPdf }" :disabled="exportingPdf || exportingXls" @click="exportPdf">
@@ -35,7 +35,7 @@
           <input
             type="text"
             v-model="search"
-            placeholder="Rechercher par client ou salle..."
+            placeholder="Rechercher par client, salle ou chambre..."
             class="search-input-clean"
           />
         </div>
@@ -58,8 +58,9 @@
         </div>
         <div class="filter-wrapper">
           <select v-model="hallFilter" class="filter-select-clean">
-            <option value="">Toutes les salles</option>
-            <option v-for="h in halls" :key="h.id" :value="h.id">{{ h.name }}</option>
+            <option value="">Tous les types</option>
+            <option value="hall">Salles</option>
+            <option value="room">Chambres</option>
           </select>
         </div>
         <div class="filter-wrapper">
@@ -76,9 +77,9 @@
         <div class="filter-wrapper">
           <select v-model="preset" class="filter-select-clean">
             <option value="all">Toutes les dates</option>
-            <option value="7d">7 jours</option>
-            <option value="28d">28 jours</option>
-            <option value="90d">90 jours</option>
+            <option value="7d">7 derniers jours</option>
+            <option value="28d">28 derniers jours</option>
+            <option value="90d">90 derniers jours</option>
             <option value="this_month">Ce mois</option>
             <option value="last_month">Mois dernier</option>
             <option value="year">Cette année</option>
@@ -98,6 +99,7 @@
           <input v-model="maxAmountInput" inputmode="numeric" type="text" class="filter-input-clean" placeholder="Max (Fbu)" />
         </div>
       </div>
+      <div class="filter-range-note">{{ activeRangeNotice }}</div>
     </div>
 
     <!-- Table -->
@@ -138,7 +140,7 @@
             <div class="admin-card-head">
               <div>
                 <div class="admin-card-title">{{ booking.customer_name }}</div>
-                <div class="admin-card-subtitle">{{ getBookingDisplayId(booking) }} • {{ booking.hall_name }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
+                <div class="admin-card-subtitle">{{ getBookingDisplayId(booking) }} • {{ booking.booking_type === 'hall' ? booking.hall_name : booking.room_display }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
               </div>
 
               <div class="admin-card-actions">
@@ -198,6 +200,10 @@
                 <span class="k">Événement</span>
                 <span class="v">{{ booking.event_type }}</span>
               </div>
+              <div v-if="booking.booking_type === 'room'" class="admin-kv">
+                <span class="k">Client hébergé</span>
+                <span class="v">{{ booking.guest_full_name || booking.customer_name }}</span>
+              </div>
               <div class="admin-kv">
                 <span class="k">Montant</span>
                 <span class="v">{{ formatMoney(booking.total_price) }}</span>
@@ -220,7 +226,8 @@
             <tr>
               <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('code') }" @click="toggleBookingSort('code')">Code <i :class="bookingSortIconClass('code')"></i></button></th>
               <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('customer_name') }" @click="toggleBookingSort('customer_name')">Client <i :class="bookingSortIconClass('customer_name')"></i></button></th>
-              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('hall_name') }" @click="toggleBookingSort('hall_name')">Salle <i :class="bookingSortIconClass('hall_name')"></i></button></th>
+              <th>Type</th>
+              <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('hall_name') }" @click="toggleBookingSort('hall_name')">Salle/Chambre <i :class="bookingSortIconClass('hall_name')"></i></button></th>
               <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('event_type') }" @click="toggleBookingSort('event_type')">Événement <i :class="bookingSortIconClass('event_type')"></i></button></th>
               <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('start_date') }" @click="toggleBookingSort('start_date')">Dates <i :class="bookingSortIconClass('start_date')"></i></button></th>
               <th><button class="table-sort-btn" :class="{ active: isBookingSortActive('total_price') }" @click="toggleBookingSort('total_price')">Montant <i :class="bookingSortIconClass('total_price')"></i></button></th>
@@ -238,6 +245,7 @@
                     <div class="skeleton-line skeleton-w-50"></div>
                   </div>
                 </td>
+                <td><div class="skeleton-line skeleton-w-40"></div></td>
                 <td><div class="skeleton-line skeleton-w-60"></div></td>
                 <td><div class="skeleton-line skeleton-w-50"></div></td>
                 <td class="date-cell">
@@ -256,8 +264,14 @@
               <td class="customer-cell">
                 <div class="customer-name">{{ booking.customer_name }}</div>
                 <div class="customer-email">{{ booking.customer_email }}</div>
+                <div v-if="booking.booking_type === 'room'" class="customer-meta">{{ booking.guest_full_name || booking.customer_name }} • {{ guestIdSummary(booking) }}</div>
               </td>
-              <td>{{ booking.hall_name }}</td>
+              <td>
+                <span class="badge" :style="{ background: booking.booking_type === 'hall' ? '#eff6ff' : '#f0fdf4', color: booking.booking_type === 'hall' ? '#1e40af' : '#166534' }">
+                  {{ booking.booking_type === 'hall' ? 'Salle' : 'Chambre' }}
+                </span>
+              </td>
+              <td>{{ booking.booking_type === 'hall' ? booking.hall_name : booking.room_display }}</td>
               <td>{{ booking.event_type }}</td>
               <td class="date-cell">{{ formatDateRange(booking.start_date, booking.end_date) }}</td>
               <td class="amount-cell">{{ formatMoney(booking.total_price) }}</td>
@@ -305,60 +319,153 @@
     <!-- Modals -->
     <AdminAppModal v-model="showFormModal" :title="isEditing ? 'Modifier la réservation' : 'Nouvelle réservation'" width="600px">
       <form @submit.prevent="saveBooking" class="admin-form">
-        <div class="booking-total-banner">
-          <div class="booking-total-main">
-            <span class="booking-total-label">Montant total en direct</span>
-            <strong class="booking-total-value">{{ formatMoney(form.total_price || 0) }}</strong>
-            <small class="booking-total-hint">
-              Le total se met à jour automatiquement selon la salle, la période et les services ajoutés.
-            </small>
-          </div>
-          <div class="booking-total-meta">
-            <div class="booking-total-chip">
-              <span class="chip-label">Base</span>
-              <strong>{{ formatMoney(baseBookingAmount) }}</strong>
-            </div>
-            <div class="booking-total-chip">
-              <span class="chip-label">Services</span>
-              <strong>{{ selectedAddonsCount }} selection{{ selectedAddonsCount > 1 ? 's' : '' }}</strong>
-            </div>
-            <div class="booking-total-chip">
-              <span class="chip-label">Supplément</span>
-              <strong>{{ formatMoney(addonsTotal) }}</strong>
-            </div>
-            <div class="booking-total-chip">
-              <span class="chip-label">Durée</span>
-              <strong>{{ daysCount > 0 ? `${daysCount} jour(s)` : 'Non definie' }}</strong>
-            </div>
-          </div>
-        </div>
-
         <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">Prénom</label>
-            <input v-model="form.customer_first_name" type="text" class="form-input" placeholder="Prénom" required />
+          <div class="form-group full customer-lookup-card">
+            <div class="customer-lookup-head">
+              <div>
+                <label class="form-label">Client</label>
+                <small>Rechercher par nom ou téléphone, puis sélectionner ou créer rapidement.</small>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" @click="toggleQuickCustomerForm">
+                <i class="fas fa-user-plus"></i>
+                {{ showQuickCustomerForm ? 'Fermer' : 'Nouveau client' }}
+              </button>
+            </div>
+            <div class="customer-search-shell">
+              <i class="fas fa-search customer-search-icon"></i>
+              <input
+                v-model="customerSearch"
+                type="text"
+                class="form-input customer-search-input"
+                placeholder="Rechercher par nom ou téléphone"
+                @focus="openCustomerResults"
+              />
+            </div>
+            <div v-if="customerResultsOpen" class="customer-results-list">
+              <button
+                v-for="customer in customerSearchResults"
+                :key="customer.id"
+                type="button"
+                class="customer-result-item"
+                @click="selectCustomer(customer)"
+              >
+                <strong>{{ customer.full_name || `${customer.first_name || ''} ${customer.last_name || ''}`.trim() }}</strong>
+                <span>{{ customer.phone || '-' }}<template v-if="customer.email"> • {{ customer.email }}</template></span>
+              </button>
+              <div v-if="loadingCustomers" class="customer-results-empty">Recherche des clients...</div>
+              <div v-else-if="!customerSearchResults.length" class="customer-results-empty">
+                Aucun client trouvé. Utilisez <strong>Nouveau client</strong>.
+              </div>
+            </div>
+            <div v-if="selectedCustomer" class="selected-customer-card">
+              <div class="selected-customer-main">
+                <strong>{{ selectedCustomer.full_name || `${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim() }}</strong>
+                <span>{{ selectedCustomer.phone || '-' }}<template v-if="selectedCustomer.email"> • {{ selectedCustomer.email }}</template></span>
+                <span v-if="selectedCustomer.identity_number">{{ customerIdentitySummary(selectedCustomer) }}</span>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" @click="clearSelectedCustomer">Changer</button>
+            </div>
           </div>
+
+          <div v-if="showQuickCustomerForm" class="form-group full quick-customer-card">
+            <div class="quick-customer-head">
+              <strong>Nouveau client</strong>
+              <span>Création rapide en moins de 30 secondes</span>
+            </div>
+            <div class="form-grid quick-customer-grid">
+              <div class="form-group">
+                <label class="form-label">Nom</label>
+                <input v-model="quickCustomerForm.last_name" type="text" class="form-input" placeholder="Nom" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Prénom</label>
+                <input v-model="quickCustomerForm.first_name" type="text" class="form-input" placeholder="Prénom" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Téléphone</label>
+                <input v-model="quickCustomerForm.phone" type="text" class="form-input" placeholder="Ex: 79 00 00 00" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email</label>
+                <input v-model="quickCustomerForm.email" type="email" class="form-input" placeholder="email@exemple.com" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Type de pièce</label>
+                <select v-model="quickCustomerForm.identity_type" class="form-select">
+                  <option value="">Sélectionner</option>
+                  <option v-for="option in guestIdTypeOptions" :key="`quick-${option.value}`" :value="option.value">{{ option.label }}</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">ID / Passeport</label>
+                <input v-model="quickCustomerForm.identity_number" type="text" class="form-input" placeholder="Numéro de pièce" />
+              </div>
+              <div class="form-group full">
+                <label class="form-label">Adresse</label>
+                <input v-model="quickCustomerForm.address" type="text" class="form-input" placeholder="Adresse (optionnel)" />
+              </div>
+              <div class="form-group full">
+                <label class="form-label">Notes</label>
+                <textarea v-model="quickCustomerForm.notes" class="form-textarea" rows="2" placeholder="Notes utiles (optionnel)"></textarea>
+              </div>
+            </div>
+            <div class="quick-customer-actions">
+              <small v-if="form.booking_type === 'room'">Pour une réservation de chambre, la pièce d'identité est obligatoire.</small>
+              <button type="button" class="btn btn-primary btn-sm" :class="{ 'is-loading': savingCustomer }" :disabled="savingCustomer" @click="createQuickCustomer">
+                Enregistrer et sélectionner
+              </button>
+            </div>
+          </div>
+
           <div class="form-group">
             <label class="form-label">Nom</label>
             <input v-model="form.customer_last_name" type="text" class="form-input" placeholder="Nom" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Prénom</label>
+            <input v-model="form.customer_first_name" type="text" class="form-input" placeholder="Prénom" required />
           </div>
           <div class="form-group full">
             <label class="form-label">Email</label>
             <input v-model="form.customer_email" type="email" class="form-input" placeholder="email@exemple.com" />
           </div>
+          <div class="form-group full">
+            <label class="form-label">Téléphone</label>
+            <input v-model="form.customer_phone" type="text" class="form-input" placeholder="Ex: 79 00 00 00" />
+          </div>
           <div class="form-group">
+            <label class="form-label">Type de réservation</label>
+            <select v-model="form.booking_type" class="form-select" @change="onBookingTypeChange">
+              <option value="hall">Salle</option>
+              <option value="room">Chambre</option>
+            </select>
+          </div>
+          <div v-if="form.booking_type === 'hall'" class="form-group">
             <label class="form-label">Salle</label>
-            <select v-model="form.hall" class="form-select" required @change="calculatePrice">
+            <select v-model="form.hall" class="form-select" required @change="onItemChange">
               <option v-for="h in halls" :key="h.id" :value="h.id">{{ h.name }}</option>
             </select>
           </div>
-          <div class="form-group">
+          <div v-if="form.booking_type === 'room'" class="form-group">
+            <label class="form-label">Chambre</label>
+            <select v-model="form.room" class="form-select" required @change="onItemChange">
+              <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.room_number }} - {{ r.name }} ({{ roomTypeLabel(r.room_type) }})</option>
+            </select>
+          </div>
+          <div v-if="form.booking_type === 'room' && selectedRoom" class="form-group full room-booking-note">
+            <div class="room-booking-note-head">
+              <strong>{{ selectedRoom.room_number }} - {{ selectedRoom.name }}</strong>
+              <span :class="['status-pill', `status-${selectedRoom.status || 'available'}`]">{{ roomStatusLabel(selectedRoom.status) }}</span>
+            </div>
+            <small>Pour une chambre, sélectionnez ou créez d'abord le client. La pièce d'identité est obligatoire pour finaliser la réservation.</small>
+          </div>
+          <div v-if="form.booking_type === 'hall'" class="form-group">
             <label class="form-label">Type d'événement</label>
             <select v-model="form.event_type" class="form-select" required>
               <option v-for="eventOption in eventTypeOptions" :key="eventOption" :value="eventOption">{{ eventOption }}</option>
             </select>
           </div>
-          <div v-if="isOtherEventType" class="form-group full">
+          <div v-if="form.booking_type === 'hall' && isOtherEventType" class="form-group full">
             <label class="form-label">Détails de l'événement</label>
             <textarea
               v-model="form.event_type_other"
@@ -368,14 +475,31 @@
               placeholder="Précisez le type d'événement"
             ></textarea>
           </div>
-          <div class="form-group">
-            <label class="form-label">Date Début</label>
-            <input :value="form.start_date" type="text" class="form-input" placeholder="YYYY-MM-DD" readonly required />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Date Fin</label>
-            <input :value="form.end_date" type="text" class="form-input" placeholder="YYYY-MM-DD" readonly required />
-          </div>
+          <template v-if="form.booking_type === 'room'">
+            <div class="form-group">
+              <label class="form-label">Type de pièce</label>
+              <select v-model="form.guest_id_type" class="form-select" required>
+                <option v-for="option in guestIdTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Numéro de pièce</label>
+              <input v-model="form.guest_id_number" type="text" class="form-input" placeholder="Passeport ou carte d'identité" required />
+            </div>
+            <div v-if="formStayHistory.length" class="form-group full stay-history-card">
+              <div class="stay-history-head">
+                <strong>Historique de séjour</strong>
+                <span>{{ formStayHistory.length }} séjour(s)</span>
+              </div>
+              <div class="stay-history-list compact">
+                <div v-for="stay in formStayHistory" :key="`form-stay-${stay.id}`" class="stay-history-item">
+                  <strong>{{ stay.room_display || '-' }}</strong>
+                  <span>{{ stay.start_date }} → {{ stay.end_date }}</span>
+                  <span>{{ getStatusTranslation(stay.status) }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
           <div class="form-group full">
             <div class="calendar-top">
               <strong>{{ calendarMonthLabel }}</strong>
@@ -419,14 +543,19 @@
               <span><i class="dot selected"></i> Début/Fin</span>
               <span><i class="dot range"></i> Période</span>
             </div>
+            <div class="selected-period-card">
+              <div class="selected-period-label">Période sélectionnée</div>
+              <div class="selected-period-value">{{ selectedPeriodLabel }}</div>
+              <div class="selected-period-hint">{{ selectedPeriodHint }}</div>
+            </div>
           </div>
-          <div v-if="hallAdditionalServices.length" class="form-group full addons-section">
+          <div v-if="itemAdditionalServices.length" class="form-group full addons-section">
             <div class="addons-head">
               <strong>Services additionnels</strong>
               <span v-if="addonsTotal > 0" class="addons-total">+ {{ formatMoney(addonsTotal) }}</span>
             </div>
             <div class="addons-list">
-              <div v-for="service in hallAdditionalServices" :key="service.name" class="addon-item">
+              <div v-for="service in itemAdditionalServices" :key="service.name" class="addon-item">
                 <div v-if="!service.has_subservices" class="addon-line">
                   <label :class="['addon-toggle', { 'is-active': isServiceSelected(service.name) }]">
                     <input
@@ -485,8 +614,36 @@
               :readonly="!isEditing"
               required
             />
-            <small class="form-hint" v-if="daysCount > 0">{{ daysCount }} jour(s) à {{ formatMoney(pricePerDay) }}/jour</small>
+            <small class="form-hint" v-if="daysCount > 0">{{ daysCount }} {{ form.booking_type === 'hall' ? 'jour(s)' : 'nuit(s)' }} à {{ formatMoney(pricePerUnit) }}/{{ form.booking_type === 'hall' ? 'jour' : 'nuit' }}</small>
             <small class="form-hint" v-if="!isEditing">Montant calcule automatiquement selon la salle et la periode.</small>
+          </div>
+        </div>
+
+        <div class="booking-total-banner booking-total-banner-bottom">
+          <div class="booking-total-main">
+            <span class="booking-total-label">Résumé du montant</span>
+            <strong class="booking-total-value">{{ formatMoney(form.total_price || 0) }}</strong>
+            <small class="booking-total-hint">
+              Le total se met à jour automatiquement selon la salle, la période et les services ajoutés.
+            </small>
+          </div>
+          <div class="booking-total-meta">
+            <div class="booking-total-chip">
+              <span class="chip-label">Base</span>
+              <strong>{{ formatMoney(baseBookingAmount) }}</strong>
+            </div>
+            <div class="booking-total-chip">
+              <span class="chip-label">Services</span>
+              <strong>{{ selectedAddonsCount }} selection{{ selectedAddonsCount > 1 ? 's' : '' }}</strong>
+            </div>
+            <div class="booking-total-chip">
+              <span class="chip-label">Supplément</span>
+              <strong>{{ formatMoney(addonsTotal) }}</strong>
+            </div>
+            <div class="booking-total-chip">
+              <span class="chip-label">Durée</span>
+              <strong>{{ daysCount > 0 ? `${daysCount} ${form.booking_type === 'room' ? 'nuit(s)' : 'jour(s)'}` : 'Non definie' }}</strong>
+            </div>
           </div>
         </div>
       </form>
@@ -504,7 +661,7 @@
           <div class="entity-view-main">
             <div class="entity-view-code">{{ getBookingDisplayId(selectedBooking) }}</div>
             <h3>{{ selectedBooking.customer_name }}</h3>
-            <p>{{ selectedBooking.hall_name }} • {{ selectedBooking.event_type }}</p>
+            <p>{{ selectedBooking.booking_type === 'hall' ? selectedBooking.hall_name : selectedBooking.room_display }} • {{ selectedBooking.event_type }}</p>
           </div>
           <div class="entity-view-badges">
             <span :class="['badge', getBadgeClass(selectedBooking.status)]">{{ getStatusTranslation(selectedBooking.status) }}</span>
@@ -517,7 +674,9 @@
             <div class="entity-view-card-title">Réservation</div>
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Email</span><span class="entity-view-value">{{ selectedBooking.customer_email || '-' }}</span></div>
-              <div class="entity-view-item"><span class="entity-view-label">Salle</span><span class="entity-view-value">{{ selectedBooking.hall_name }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Téléphone</span><span class="entity-view-value">{{ selectedBooking.customer_phone || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">{{ selectedBooking.booking_type === 'hall' ? 'Salle' : 'Chambre' }}</span><span class="entity-view-value">{{ selectedBooking.booking_type === 'hall' ? selectedBooking.hall_name : selectedBooking.room_display || 'N/A' }}</span></div>
+              <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Statut chambre</span><span class="entity-view-value">{{ roomStatusLabel(selectedBooking.room_status) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Événement</span><span class="entity-view-value">{{ selectedBooking.event_type }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedBooking.start_date, selectedBooking.end_date) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Montant total</span><span class="entity-view-value">{{ formatMoney(selectedBooking.total_price) }}</span></div>
@@ -529,9 +688,25 @@
             <div class="entity-view-card-title">Suivi administratif</div>
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ getStatusTranslation(selectedBooking.status) }}</span></div>
+              <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Client hébergé</span><span class="entity-view-value">{{ selectedBooking.guest_full_name || selectedBooking.customer_name }}</span></div>
+              <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Pièce</span><span class="entity-view-value">{{ guestIdSummary(selectedBooking) }}</span></div>
+              <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-in</span><span class="entity-view-value">{{ selectedBooking.checked_in_at ? formatDisplayDate(selectedBooking.checked_in_at) : 'Non effectué' }}</span></div>
+              <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-out</span><span class="entity-view-value">{{ selectedBooking.checked_out_at ? formatDisplayDate(selectedBooking.checked_out_at) : 'Non effectué' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé le</span><span class="entity-view-value">{{ formatDisplayDate(selectedBooking.created_at) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedBooking.created_by_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedBooking.updated_by_name || selectedBooking.created_by_name || '-' }}</span></div>
+            </div>
+          </section>
+
+          <section v-if="selectedBooking.booking_type === 'room'" class="entity-view-card entity-view-card-full">
+            <div class="entity-view-card-title">Historique de séjour</div>
+            <div v-if="!selectedBooking.stay_history?.length" class="entity-view-empty">Aucun séjour précédent trouvé</div>
+            <div v-else class="stay-history-list">
+              <div v-for="stay in selectedBooking.stay_history" :key="`stay-${stay.id}`" class="stay-history-item">
+                <strong>{{ stay.room_display || '-' }}</strong>
+                <span>{{ stay.start_date }} → {{ stay.end_date }}</span>
+                <span>{{ getStatusTranslation(stay.status) }}</span>
+              </div>
             </div>
           </section>
 
@@ -578,7 +753,6 @@ import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useDateFormat } from '~/composables/useDateFormat'
-import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
 import { useDocumentBranding } from '~/composables/useDocumentBranding'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
@@ -588,10 +762,34 @@ definePageMeta({ layout: 'admin' })
 const route = useRoute()
 const { formatMoney, formatNumberSpaces, moneyInputModel, parseMoney } = useMoney()
 const { formatDateRange, formatDisplayDate } = useDateFormat()
-const { buildMonthlySequenceMap } = useDisplayIds()
 const { documentBranding, documentLogoUrl, escapeHtml } = useDocumentBranding()
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
+// #region debug-point A:booking-debug-reporter
+const reportBookingDebug = (hypothesisId, msg, data = {}) => {
+  try {
+    fetch('http://127.0.0.1:7777/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'post-broken-pipe',
+        runId: 'pre-fix',
+        hypothesisId,
+        location: 'pages/admin/bookings.vue',
+        msg: `[DEBUG] ${msg}`,
+        data,
+        ts: Date.now(),
+      }),
+    }).catch(() => {})
+  } catch {
+  }
+}
+// #endregion
 const eventTypeOptions = ['Mariage', 'Séminaire', 'Gala', 'Anniversaire', 'Réunion', 'Autres']
+const guestIdTypeOptions = [
+  { value: 'passport', label: 'Passeport' },
+  { value: 'id_card', label: 'Carte d’identité' },
+  { value: 'driving_license', label: 'Permis de conduire' },
+]
 
 const search = ref('')
 const statusFilter = ref('')
@@ -656,13 +854,16 @@ const resolvePreset = (value) => {
 const activeRange = computed(() => resolvePreset(preset.value))
 const rangeStartYmd = computed(() => activeRange.value.start)
 const rangeEndYmd = computed(() => activeRange.value.end)
-
-const dateOverlapsRange = (start, end, rangeStart, rangeEnd) => {
-  const s = String(start || '').slice(0, 10)
-  const e = String(end || '').slice(0, 10)
+const activeRangeNotice = computed(() => {
+  if (!rangeStartYmd.value || !rangeEndYmd.value) return 'Aucune limite de période sur la date de création.'
+  if (preset.value === 'custom') return `Date de création personnalisée: du ${rangeStartYmd.value} au ${rangeEndYmd.value}.`
+  return `Date de création calculée jusqu'à aujourd'hui: du ${rangeStartYmd.value} au ${rangeEndYmd.value}.`
+})
+const inRangeYmd = (ymd, rangeStart, rangeEnd) => {
+  const v = String(ymd || '').slice(0, 10)
   if (!rangeStart || !rangeEnd) return true
-  if (!s || !e) return false
-  return s <= rangeEnd && e >= rangeStart
+  if (!v) return false
+  return v >= rangeStart && v <= rangeEnd
 }
 const showFormModal = ref(false)
 const showViewModal = ref(false)
@@ -678,9 +879,19 @@ const actionBookingId = ref(null)
 const actionType = ref('')
 const loadingBookings = ref(false)
 const loadingHalls = ref(false)
+const rooms = ref([])
+const loadingRooms = ref(false)
+const customers = ref([])
+const loadingCustomers = ref(false)
+const savingCustomer = ref(false)
 const isMobile = ref(false)
 const filtersOpen = ref(false)
 const openActionsId = ref(null)
+const customerSearch = ref('')
+const customerResultsOpen = ref(false)
+const selectedCustomer = ref(null)
+const showQuickCustomerForm = ref(false)
+let customerSearchTimer = null
 
 const calendarRanges = ref([])
 const calendarViewMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
@@ -785,12 +996,15 @@ const onAdminCalendarDayClick = (date) => {
 }
 
 const fetchCalendarRanges = async () => {
-  if (!form.value?.hall) {
+  if ((form.value.booking_type === 'hall' && !form.value.hall) || (form.value.booking_type === 'room' && !form.value.room)) {
     calendarRanges.value = []
     return
   }
   try {
-    const res = await api.get('bookings/calendar/', { params: { hall: form.value.hall } })
+    const params = form.value.booking_type === 'hall' 
+      ? { hall: form.value.hall } 
+      : { room: form.value.room }
+    const res = await api.get('bookings/calendar/', { params })
     calendarRanges.value = Array.isArray(res.data) ? res.data : []
   } catch {
     calendarRanges.value = []
@@ -832,12 +1046,19 @@ const exportPdf = async () => {
   }, 350)
 }
 
-const form = ref({
+const createEmptyBookingForm = () => ({
   id: null,
+  customer: null,
   customer_first_name: '',
   customer_last_name: '',
   customer_email: '',
+  customer_phone: '',
+  booking_type: 'hall',
   hall: '',
+  room: '',
+  guest_full_name: '',
+  guest_id_type: 'passport',
+  guest_id_number: '',
   event_type: 'Mariage',
   event_type_other: '',
   start_date: '',
@@ -846,6 +1067,19 @@ const form = ref({
   total_price: 0,
   status: 'pending'
 })
+const createEmptyQuickCustomerForm = () => ({
+  first_name: '',
+  last_name: '',
+  phone: '',
+  email: '',
+  identity_type: '',
+  identity_number: '',
+  address: '',
+  notes: '',
+})
+
+const form = ref(createEmptyBookingForm())
+const quickCustomerForm = ref(createEmptyQuickCustomerForm())
 const isOtherEventType = computed(() => form.value.event_type === 'Autres')
 const totalPriceInput = moneyInputModel(form, 'total_price')
 const minAmountInput = computed({
@@ -863,6 +1097,11 @@ const maxAmountInput = computed({
 
 const bookings = ref([])
 const halls = ref([])
+
+const customerSearchResults = computed(() => {
+  const selectedId = Number(selectedCustomer.value?.id || 0)
+  return (customers.value || []).filter((customer) => Number(customer?.id || 0) !== selectedId)
+})
 
 const fetchBookings = async () => {
   loadingBookings.value = true
@@ -891,6 +1130,35 @@ const fetchHalls = async () => {
   }
 }
 
+const fetchRooms = async () => {
+  loadingRooms.value = true
+  try {
+    const response = await api.get('rooms/')
+    rooms.value = response.data
+    if (rooms.value.length > 0 && !form.value.room && form.value.booking_type === 'room') {
+      form.value.room = rooms.value[0].id
+    }
+  } catch (error) {
+    notify('Erreur lors du chargement des chambres', 'danger')
+  } finally {
+    loadingRooms.value = false
+  }
+}
+
+const fetchCustomers = async (searchTerm = '') => {
+  loadingCustomers.value = true
+  try {
+    const params = { limit: searchTerm ? 8 : 6 }
+    if (searchTerm) params.search = searchTerm
+    const response = await api.get('customers/', { params })
+    customers.value = Array.isArray(response.data) ? response.data : []
+  } catch {
+    customers.value = []
+  } finally {
+    loadingCustomers.value = false
+  }
+}
+
 const updateResponsiveState = () => {
   if (!process.client) return
   const nextIsMobile = window.innerWidth <= 992
@@ -904,6 +1172,7 @@ const updateResponsiveState = () => {
 
 const closeActionsOnDocumentClick = () => {
   openActionsId.value = null
+  customerResultsOpen.value = false
 }
 
 const openBookingFromQuery = () => {
@@ -919,9 +1188,20 @@ watch(() => `${route.query.view || ''}:${route.query.focus || ''}:${bookings.val
   openBookingFromQuery()
 })
 
+watch(customerSearch, (value) => {
+  if (!showFormModal.value) return
+  customerResultsOpen.value = true
+  if (customerSearchTimer) {
+    clearTimeout(customerSearchTimer)
+  }
+  customerSearchTimer = setTimeout(() => {
+    fetchCustomers(String(value || '').trim())
+  }, 180)
+})
+
 onMounted(async () => {
   currentUser.value = getStoredUser()
-  await Promise.all([fetchBookings(), fetchHalls()])
+  await Promise.all([fetchBookings(), fetchHalls(), fetchRooms(), fetchCustomers()])
   openBookingFromQuery()
   if (process.client) {
     updateResponsiveState()
@@ -934,6 +1214,10 @@ onBeforeUnmount(() => {
   if (!process.client) return
   window.removeEventListener('resize', updateResponsiveState)
   document.removeEventListener('click', closeActionsOnDocumentClick)
+  if (customerSearchTimer) {
+    window.clearTimeout(customerSearchTimer)
+    customerSearchTimer = null
+  }
 })
 
 const toggleActions = (id) => {
@@ -956,12 +1240,49 @@ const resetFilters = () => {
   maxAmount.value = null
 }
 
-const pricePerDay = ref(0)
+const pricePerUnit = ref(0)
 const daysCount = ref(0)
 
 const selectedHall = computed(() => halls.value.find(h => String(h.id) === String(form.value.hall)) || null)
-const hallAdditionalServices = computed(() => Array.isArray(selectedHall.value?.additional_services) ? selectedHall.value.additional_services : [])
-const baseBookingAmount = computed(() => Number(daysCount.value || 0) * Number(pricePerDay.value || 0))
+const selectedRoom = computed(() => rooms.value.find(r => String(r.id) === String(form.value.room)) || null)
+const selectedItem = computed(() => form.value.booking_type === 'hall' ? selectedHall.value : selectedRoom.value)
+const itemAdditionalServices = computed(() => Array.isArray(selectedItem.value?.additional_services) ? selectedItem.value.additional_services : [])
+const customerFullName = computed(() => `${String(form.value.customer_first_name || '').trim()} ${String(form.value.customer_last_name || '').trim()}`.trim())
+const selectedPeriodLabel = computed(() => {
+  if (!form.value.start_date || !form.value.end_date) return 'Aucune période sélectionnée'
+  return formatDateRange(form.value.start_date, form.value.end_date)
+})
+const selectedPeriodHint = computed(() => {
+  if (!form.value.start_date || !form.value.end_date) return 'Choisissez la période directement dans le calendrier.'
+  return `${daysCount.value || 0} ${form.value.booking_type === 'room' ? 'nuit(s)' : 'jour(s)'} sélectionné(s)`
+})
+const roomTypeLabel = (roomType) => ({
+  single: 'Simple',
+  double: 'Double',
+  twin: 'Twin',
+  suite: 'Suite',
+  family: 'Familiale',
+  Single: 'Simple',
+  Double: 'Double',
+  Twin: 'Twin',
+  Suite: 'Suite',
+  Family: 'Familiale',
+}[String(roomType || '')] || String(roomType || ''))
+const roomStatusLabel = (status) => ({
+  available: 'Disponible',
+  reserved: 'Réservée',
+  occupied: 'Occupée',
+  cleaning: 'Nettoyage',
+  maintenance: 'Maintenance',
+}[String(status || 'available')] || String(status || 'available'))
+const customerIdentitySummary = (customer) => {
+  const type = String(customer?.identity_type || '').trim()
+  const number = String(customer?.identity_number || '').trim()
+  if (!type && !number) return '-'
+  const label = guestIdTypeOptions.find(option => option.value === type)?.label || type || 'Pièce'
+  return [label, number].filter(Boolean).join(' • ')
+}
+const baseBookingAmount = computed(() => Number(daysCount.value || 0) * Number(pricePerUnit.value || 0))
 const selectedAddonsCount = computed(() => {
   const selected = Array.isArray(form.value.additional_services_selected) ? form.value.additional_services_selected : []
   let count = 0
@@ -973,7 +1294,7 @@ const selectedAddonsCount = computed(() => {
 })
 
 const addonsTotal = computed(() => {
-  const services = hallAdditionalServices.value
+  const services = itemAdditionalServices.value
   const selected = Array.isArray(form.value.additional_services_selected) ? form.value.additional_services_selected : []
   if (!services.length || !selected.length) return 0
 
@@ -996,19 +1317,46 @@ const addonsTotal = computed(() => {
   return total
 })
 
+const onBookingTypeChange = () => {
+  clearCalendarDates()
+  form.value.hall = null
+  form.value.room = null
+  form.value.additional_services_selected = []
+  form.value.event_type_other = ''
+  form.value.event_type = form.value.booking_type === 'room' ? 'Séjour' : 'Mariage'
+  if (form.value.booking_type === 'hall' && halls.value.length > 0) {
+    form.value.hall = halls.value[0].id
+  } else if (form.value.booking_type === 'room' && rooms.value.length > 0) {
+    form.value.room = rooms.value[0].id
+  }
+  if (form.value.booking_type === 'room' && selectedCustomer.value) {
+    form.value.guest_id_type = String(selectedCustomer.value.identity_type || form.value.guest_id_type || 'passport').trim()
+    form.value.guest_id_number = String(selectedCustomer.value.identity_number || form.value.guest_id_number || '').trim()
+  }
+  fetchCalendarRanges()
+  calculatePrice()
+}
+
+const onItemChange = () => {
+  form.value.additional_services_selected = []
+  clearCalendarDates()
+  fetchCalendarRanges()
+  calculatePrice()
+}
+
 const calculatePrice = () => {
-  if (form.value.start_date && form.value.end_date && form.value.hall) {
+  if (form.value.start_date && form.value.end_date && selectedItem.value) {
     const start = new Date(form.value.start_date)
     const end = new Date(form.value.end_date)
     const diffTime = Math.abs(end - start)
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
     daysCount.value = diffDays
-    
-    const hall = halls.value.find(h => h.id === form.value.hall)
-    if (hall) {
-      pricePerDay.value = hall.price_per_day
-      form.value.total_price = (diffDays * Number(hall.price_per_day || 0)) + Number(addonsTotal.value || 0)
-    }
+
+    const itemPrice = form.value.booking_type === 'hall'
+      ? Number(selectedItem.value.price_per_day || 0)
+      : Number(selectedItem.value.price_per_night || 0)
+    pricePerUnit.value = itemPrice
+    form.value.total_price = (diffDays * itemPrice) + Number(addonsTotal.value || 0)
   }
 }
 
@@ -1083,27 +1431,153 @@ const toggleSubservice = (serviceName, subName) => {
   }
 }
 
+const resetQuickCustomerState = () => {
+  customerSearch.value = ''
+  customerResultsOpen.value = false
+  selectedCustomer.value = null
+  showQuickCustomerForm.value = false
+  quickCustomerForm.value = createEmptyQuickCustomerForm()
+}
+
+const syncQuickCustomerFormFromBooking = () => {
+  quickCustomerForm.value = {
+    ...createEmptyQuickCustomerForm(),
+    first_name: String(form.value.customer_first_name || '').trim(),
+    last_name: String(form.value.customer_last_name || '').trim(),
+    phone: String(form.value.customer_phone || '').trim(),
+    email: String(form.value.customer_email || '').trim(),
+    identity_type: String(form.value.guest_id_type || '').trim(),
+    identity_number: String(form.value.guest_id_number || '').trim(),
+  }
+}
+
+const openCustomerResults = async () => {
+  customerResultsOpen.value = true
+  await fetchCustomers(String(customerSearch.value || '').trim())
+}
+
+const selectCustomer = (customer) => {
+  if (!customer) return
+  selectedCustomer.value = customer
+  form.value.customer = customer.id
+  form.value.customer_first_name = String(customer.first_name || '').trim()
+  form.value.customer_last_name = String(customer.last_name || '').trim()
+  form.value.customer_phone = String(customer.phone || '').trim()
+  form.value.customer_email = String(customer.email || '').trim()
+  if (form.value.booking_type === 'room') {
+    form.value.guest_id_type = String(customer.identity_type || form.value.guest_id_type || 'passport').trim()
+    form.value.guest_id_number = String(customer.identity_number || '').trim()
+  }
+  customerSearch.value = customer.full_name || `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || customer.phone || ''
+  customerResultsOpen.value = false
+  showQuickCustomerForm.value = false
+}
+
+const clearSelectedCustomer = () => {
+  selectedCustomer.value = null
+  form.value.customer = null
+  customerSearch.value = ''
+  customerResultsOpen.value = true
+}
+
+const toggleQuickCustomerForm = () => {
+  showQuickCustomerForm.value = !showQuickCustomerForm.value
+  if (showQuickCustomerForm.value) {
+    syncQuickCustomerFormFromBooking()
+  }
+}
+
+const createQuickCustomer = async () => {
+  if (savingCustomer.value) return
+  if (!String(quickCustomerForm.value.first_name || '').trim() && !String(quickCustomerForm.value.last_name || '').trim()) {
+    notify('Le nom du client est requis', 'warning')
+    return
+  }
+  if (!String(quickCustomerForm.value.phone || '').trim()) {
+    notify('Le téléphone du client est requis', 'warning')
+    return
+  }
+  if (form.value.booking_type === 'room' && (!String(quickCustomerForm.value.identity_type || '').trim() || !String(quickCustomerForm.value.identity_number || '').trim())) {
+    notify('Pour une chambre, la pièce d’identité du client est obligatoire', 'warning')
+    return
+  }
+
+  savingCustomer.value = true
+  try {
+    const payload = {
+      first_name: String(quickCustomerForm.value.first_name || '').trim(),
+      last_name: String(quickCustomerForm.value.last_name || '').trim(),
+      phone: String(quickCustomerForm.value.phone || '').trim(),
+      email: String(quickCustomerForm.value.email || '').trim(),
+      identity_type: String(quickCustomerForm.value.identity_type || '').trim(),
+      identity_number: String(quickCustomerForm.value.identity_number || '').trim(),
+      address: String(quickCustomerForm.value.address || '').trim(),
+      notes: String(quickCustomerForm.value.notes || '').trim(),
+    }
+    const response = await api.post('customers/', payload)
+    const createdCustomer = response?.data || null
+    if (createdCustomer) {
+      customers.value = [createdCustomer, ...customers.value.filter(item => Number(item?.id) !== Number(createdCustomer.id))]
+      selectCustomer(createdCustomer)
+      notify('Client créé et sélectionné', 'success')
+    }
+  } catch (error) {
+    const data = error?.response?.data || {}
+    notify(data.phone || data.first_name || data.detail || 'Impossible de créer le client', 'danger')
+  } finally {
+    savingCustomer.value = false
+  }
+}
+
 const filteredBookings = computed(() => {
   return bookings.value.filter(b => {
     const q = search.value.toLowerCase().trim()
     const matchesSearch = q === '' ||
       String(b.customer_name || '').toLowerCase().includes(q) ||
       String(b.customer_email || '').toLowerCase().includes(q) ||
-      String(b.hall_name || '').toLowerCase().includes(q)
+      String(b.hall_name || '').toLowerCase().includes(q) ||
+      String(b.room_display || '').toLowerCase().includes(q)
     const matchesStatus = statusFilter.value === '' || b.status === statusFilter.value
-    const matchesHall = hallFilter.value === '' || String(b.hall) === String(hallFilter.value) || String(b.hall_id) === String(hallFilter.value)
+    const matchesType = hallFilter.value === '' || (
+      (hallFilter.value === 'hall' && b.booking_type === 'hall') || (hallFilter.value === 'room' && b.booking_type === 'room')
+    )
     const matchesEventType = eventTypeFilter.value === '' || (eventTypeFilter.value === 'Autres'
       ? String(b.event_type || '').startsWith('Autres: ')
       : b.event_type === eventTypeFilter.value)
 
-    const matchesDate = dateOverlapsRange(b.start_date, b.end_date, rangeStartYmd.value, rangeEndYmd.value)
+    const matchesDate = inRangeYmd(b.created_at, rangeStartYmd.value, rangeEndYmd.value)
 
     const amount = Number(b.total_price || 0)
     const minOk = minAmount.value == null || minAmount.value === '' || amount >= Number(minAmount.value)
     const maxOk = maxAmount.value == null || maxAmount.value === '' || amount <= Number(maxAmount.value)
 
-    return matchesSearch && matchesStatus && matchesHall && matchesEventType && matchesDate && minOk && maxOk
+    return matchesSearch && matchesStatus && matchesType && matchesEventType && matchesDate && minOk && maxOk
   })
+})
+const formStayHistory = computed(() => {
+  if (form.value.booking_type !== 'room') return []
+  const guestName = customerFullName.value.toLowerCase()
+  const guestIdNumber = String(form.value.guest_id_number || '').trim().toLowerCase()
+  const customerEmail = String(form.value.customer_email || '').trim().toLowerCase()
+  return bookings.value
+    .filter((booking) => {
+      if (booking.booking_type !== 'room') return false
+      if (Number(booking.id) === Number(form.value.id || 0)) return false
+      const sameId = guestIdNumber && String(booking.guest_id_number || '').trim().toLowerCase() === guestIdNumber
+      const sameGuest = guestName && String(booking.guest_full_name || '').trim().toLowerCase() === guestName
+      const sameEmail = customerEmail && String(booking.customer_email || '').trim().toLowerCase() === customerEmail
+      return sameId || sameGuest || sameEmail
+    })
+    .slice()
+    .sort((a, b) => new Date(b.start_date || 0) - new Date(a.start_date || 0))
+    .slice(0, 5)
+    .map(booking => ({
+      id: booking.id,
+      room_display: booking.room_display,
+      start_date: booking.start_date,
+      end_date: booking.end_date,
+      status: booking.status,
+    }))
 })
 
 const {
@@ -1120,6 +1594,13 @@ const {
 })
 
 const getBookingDisplayId = (booking) => booking?.code || 'LBR00000001'
+const guestIdSummary = (booking) => {
+  const type = String(booking?.guest_id_type || '').trim()
+  const number = String(booking?.guest_id_number || '').trim()
+  if (!type && !number) return '-'
+  const label = guestIdTypeOptions.find(option => option.value === type)?.label || type || 'Pièce'
+  return [label, number].filter(Boolean).join(' • ')
+}
 
 const {
   paginatedItems: paginatedBookings,
@@ -1136,19 +1617,50 @@ const saveBooking = async () => {
   savingBooking.value = true
   try {
     const payload = buildBookingPayload()
+    // #region debug-point A:booking-submit
+    reportBookingDebug('A', 'saveBooking submit', {
+      isEditing: isEditing.value,
+      bookingType: payload.booking_type,
+      hasEmail: Boolean(payload.customer_email),
+      room: payload.room || null,
+      hall: payload.hall || null,
+      startDate: payload.start_date || null,
+      endDate: payload.end_date || null,
+    })
+    // #endregion
     if (isEditing.value) {
       await api.put(`bookings/${form.value.id}/`, payload)
       notify('Réservation mise à jour avec succès', 'success')
     } else {
       const response = await api.post('bookings/', payload)
+      // #region debug-point B:booking-post-success
+      reportBookingDebug('B', 'booking post success before refresh', {
+        responseId: response?.data?.id ?? null,
+        responseKeys: Object.keys(response?.data || {}),
+        emailSent: response?.data?.email_sent ?? null,
+      })
+      // #endregion
       await fetchBookings()
       const createdBooking = bookings.value.find(booking => booking.id === response.data?.id) || response.data
+      // #region debug-point D:booking-after-refresh
+      reportBookingDebug('D', 'booking refresh completed', {
+        fetchedCount: bookings.value.length,
+        createdBookingFound: Boolean(createdBooking),
+        createdBookingId: createdBooking?.id ?? null,
+      })
+      // #endregion
       if (payload.customer_email) {
         notify(response.data?.email_sent ? 'Nouvelle réservation créée et email envoyé' : 'Nouvelle réservation créée, mais email non envoyé', response.data?.email_sent ? 'success' : 'warning')
       } else {
         notify('Nouvelle réservation créée', 'success')
       }
       if (createdBooking) {
+        // #region debug-point E:booking-before-print
+        reportBookingDebug('E', 'booking about to print jeton', {
+          createdBookingId: createdBooking?.id ?? null,
+          responseId: response?.data?.id ?? null,
+        })
+        // #endregion
         printReservationJeton(createdBooking, Boolean(response.data?.email_sent))
       }
     }
@@ -1158,6 +1670,13 @@ const saveBooking = async () => {
     }
   } catch (error) {
     const data = error?.response?.data || {}
+    // #region debug-point C:booking-submit-error
+    reportBookingDebug('C', 'saveBooking catch', {
+      message: error?.message || null,
+      status: error?.response?.status ?? null,
+      data,
+    })
+    // #endregion
     notify(data.additional_services_selected || data.dates || data.detail || 'Erreur lors de l\'enregistrement', 'danger')
   } finally {
     savingBooking.value = false
@@ -1241,23 +1760,15 @@ const getBadgeClass = (status) => {
 const openAddModal = () => {
   isEditing.value = false
   form.value = {
-    id: null,
-    customer_first_name: '',
-    customer_last_name: '',
-    customer_email: '',
-    hall: halls.value[0]?.id || '',
-    event_type: 'Mariage',
-    event_type_other: '',
-    start_date: '',
-    end_date: '',
-    additional_services_selected: [],
-    total_price: 0,
-    status: 'pending',
+    ...createEmptyBookingForm(),
+    hall: halls.value[0]?.id || null,
   }
+  resetQuickCustomerState()
   daysCount.value = 0
   calendarViewMonth.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   calendarRangeStart.value = null
   calendarRangeEnd.value = null
+  fetchCustomers()
   fetchCalendarRanges()
   showFormModal.value = true
 }
@@ -1266,6 +1777,21 @@ const editBooking = (booking) => {
   closeActions()
   isEditing.value = true
   form.value = mapBookingToForm(booking)
+  selectedCustomer.value = booking?.customer
+    ? {
+      id: booking.customer,
+      first_name: form.value.customer_first_name,
+      last_name: form.value.customer_last_name,
+      full_name: booking.customer_full_name || `${form.value.customer_first_name} ${form.value.customer_last_name}`.trim(),
+      phone: booking.customer_profile_phone || booking.customer_phone || '',
+      email: booking.customer_profile_email || booking.customer_email || '',
+      identity_type: booking.customer_profile_identity_type || booking.guest_id_type || '',
+      identity_number: booking.customer_profile_identity_number || booking.guest_id_number || '',
+    }
+    : null
+  customerSearch.value = selectedCustomer.value?.full_name || ''
+  customerResultsOpen.value = false
+  showQuickCustomerForm.value = false
   if (form.value.start_date) {
     const d = new Date(form.value.start_date)
     if (!Number.isNaN(d.getTime())) {
@@ -1327,13 +1853,26 @@ const mapBookingToForm = (booking) => {
   const customer_first_name = nameParts[0] || ''
   const customer_last_name = nameParts.length > 1 ? nameParts.slice(1).join(' ') : ''
 
+  if (booking?.booking_type === 'room') {
+    return {
+      ...booking,
+      customer: booking?.customer || null,
+      customer_first_name,
+      customer_last_name,
+      additional_services_selected: booking?.additional_services_selected || [],
+      event_type: 'Séjour',
+      event_type_other: '',
+    }
+  }
+
   if (isKnown) {
-    return { ...booking, customer_first_name, customer_last_name, additional_services_selected: booking?.additional_services_selected || [], event_type_other: '' }
+    return { ...booking, customer: booking?.customer || null, customer_first_name, customer_last_name, additional_services_selected: booking?.additional_services_selected || [], event_type_other: '' }
   }
 
   const otherPrefix = 'Autres: '
   return {
     ...booking,
+    customer: booking?.customer || null,
     customer_first_name,
     customer_last_name,
     additional_services_selected: booking?.additional_services_selected || [],
@@ -1347,9 +1886,14 @@ const buildBookingPayload = () => {
   const fullName = `${String(customer_first_name || '').trim()} ${String(customer_last_name || '').trim()}`.trim()
   return {
     ...payload,
+    customer: payload.customer || null,
     customer_name: fullName,
     customer_email: String(payload.customer_email || '').trim(),
-    event_type: normalizeEventType(form.value.event_type, event_type_other),
+    customer_phone: String(payload.customer_phone || '').trim(),
+    guest_full_name: payload.booking_type === 'room' ? fullName : '',
+    guest_id_type: payload.booking_type === 'room' ? String(payload.guest_id_type || '').trim() : '',
+    guest_id_number: payload.booking_type === 'room' ? String(payload.guest_id_number || '').trim() : '',
+    event_type: payload.booking_type === 'room' ? 'Séjour' : normalizeEventType(form.value.event_type, event_type_other),
   }
 }
 
@@ -1376,6 +1920,8 @@ const printReservationJeton = (booking, emailSent = null) => {
   const displayId = getBookingDisplayId(booking)
   const printedBy = getCurrentPrintUserLabel()
   const reservationNumber = booking?.id || '-'
+  const bookedItemLabel = booking?.booking_type === 'room' ? 'Chambre' : 'Salle'
+  const bookedItemName = booking?.booking_type === 'room' ? (booking?.room_display || '') : (booking?.hall_name || '')
   let emailLine = `<div class="row"><span>Email client</span><strong>Non renseigne</strong></div>`
   if (booking.customer_email) {
     emailLine = `<div class="row"><span>Email client</span><strong>${escapeHtml(booking.customer_email)}</strong></div>`
@@ -1466,11 +2012,13 @@ const printReservationJeton = (booking, emailSent = null) => {
           </div>
           <div class="grid">
             <div class="row"><span>Client</span><strong>${escapeHtml(booking.customer_name)}</strong></div>
-            <div class="row"><span>Salle</span><strong>${escapeHtml(booking.hall_name || '')}</strong></div>
+            <div class="row"><span>${escapeHtml(bookedItemLabel)}</span><strong>${escapeHtml(bookedItemName)}</strong></div>
             <div class="row"><span>Evenement</span><strong>${escapeHtml(booking.event_type)}</strong></div>
             <div class="row"><span>Periode</span><strong>${escapeHtml(formatDateRange(booking.start_date, booking.end_date))}</strong></div>
             <div class="row"><span>Montant</span><strong>${escapeHtml(formatMoney(booking.total_price))}</strong></div>
             <div class="row"><span>Statut</span><strong>${escapeHtml(getStatusTranslation(booking.status))}</strong></div>
+            ${booking?.booking_type === 'room' ? `<div class="row"><span>Client heberge</span><strong>${escapeHtml(booking.guest_full_name || booking.customer_name || '')}</strong></div>` : ''}
+            ${booking?.booking_type === 'room' ? `<div class="row"><span>Piece</span><strong>${escapeHtml(guestIdSummary(booking))}</strong></div>` : ''}
             ${emailLine}
           </div>
           <div class="note">
@@ -1556,6 +2104,13 @@ const printReservationJeton = (booking, emailSent = null) => {
   flex-wrap: wrap;
   gap: var(--space-4);
   margin-top: var(--space-4);
+}
+
+.filter-range-note {
+  margin-top: 0.75rem;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 .filters-toggle {
@@ -1732,6 +2287,13 @@ const printReservationJeton = (booking, emailSent = null) => {
   font-weight: 500;
 }
 
+.customer-meta {
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
 .amount-cell {
   font-weight: 800;
   color: #0f172a;
@@ -1780,13 +2342,103 @@ const printReservationJeton = (booking, emailSent = null) => {
   gap: var(--space-4);
 }
 
+.customer-lookup-card,
+.quick-customer-card {
+  padding: 1rem;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.customer-lookup-head,
+.quick-customer-head,
+.quick-customer-actions,
+.selected-customer-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.customer-lookup-head small,
+.quick-customer-head span,
+.quick-customer-actions small {
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.customer-search-shell {
+  position: relative;
+  margin-top: 0.8rem;
+}
+
+.customer-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  transform: translateY(-50%);
+  color: #64748b;
+}
+
+.customer-search-input {
+  padding-left: 40px;
+}
+
+.customer-results-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+}
+
+.customer-result-item,
+.customer-results-empty,
+.selected-customer-card {
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.customer-result-item {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  transition: all 0.18s ease;
+}
+
+.customer-result-item strong,
+.selected-customer-main strong {
+  color: #0f172a;
+}
+
+.customer-result-item span,
+.selected-customer-main span {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.customer-result-item:hover {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.selected-customer-main {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.quick-customer-grid {
+  margin-top: 0.85rem;
+}
+
+.quick-customer-actions {
+  margin-top: 0.85rem;
+}
+
 .booking-total-banner {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   display: grid;
   gap: 14px;
-  margin-bottom: 18px;
   padding: 18px;
   border: 1px solid rgba(212, 175, 55, 0.28);
   border-radius: 22px;
@@ -1796,6 +2448,112 @@ const printReservationJeton = (booking, emailSent = null) => {
   isolation: isolate;
   -webkit-backdrop-filter: blur(18px) saturate(135%);
   backdrop-filter: blur(18px) saturate(135%);
+}
+
+.booking-total-banner-bottom {
+  margin-top: 18px;
+}
+
+.room-booking-note {
+  padding: 0.95rem 1rem;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 100%);
+  box-shadow: 0 10px 24px rgba(148, 163, 184, 0.12);
+}
+
+.room-booking-note strong {
+  color: #0f172a;
+}
+
+.room-booking-note small {
+  display: block;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.room-booking-note-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.status-available {
+  background: #ecfdf3;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.status-occupied {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.status-cleaning {
+  background: #ecfeff;
+  color: #0f766e;
+  border-color: #a5f3fc;
+}
+
+.status-maintenance {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.stay-history-card {
+  border: 1px solid var(--gray-200);
+  border-radius: 18px;
+  background: var(--gray-50);
+  padding: 1rem;
+}
+
+.stay-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  color: var(--gray-900);
+}
+
+.stay-history-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.stay-history-list.compact {
+  gap: 0.55rem;
+}
+
+.stay-history-item {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--gray-700);
+  font-size: 0.88rem;
+}
+
+.stay-history-item strong {
+  color: var(--gray-900);
 }
 
 .booking-total-main {
@@ -1974,6 +2732,37 @@ const printReservationJeton = (booking, emailSent = null) => {
 
 .calendar-legend .dot.range {
   background: rgba(212, 175, 55, 0.45);
+}
+
+.selected-period-card {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.selected-period-label {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.selected-period-value {
+  margin-top: 0.35rem;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.selected-period-hint {
+  margin-top: 0.35rem;
+  color: #64748b;
+  font-size: 0.85rem;
+  line-height: 1.45;
 }
 
 .addons-section {
@@ -2197,6 +2986,63 @@ html[data-admin-theme="dark"] .addon-toggle-copy small {
 html[data-admin-theme="dark"] .service-preview-item {
   border-color: rgba(51, 65, 85, 0.95);
   background: rgba(15, 23, 42, 0.7);
+}
+
+html[data-admin-theme="dark"] .room-booking-note {
+  border-color: rgba(59, 130, 246, 0.28);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.92) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 14px 28px rgba(2, 6, 23, 0.28);
+}
+
+html[data-admin-theme="dark"] .room-booking-note strong {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .room-booking-note small {
+  color: #cbd5e1;
+}
+
+html[data-admin-theme="dark"] .customer-lookup-card,
+html[data-admin-theme="dark"] .quick-customer-card,
+html[data-admin-theme="dark"] .customer-result-item,
+html[data-admin-theme="dark"] .customer-results-empty,
+html[data-admin-theme="dark"] .selected-customer-card {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: rgba(15, 23, 42, 0.82);
+}
+
+html[data-admin-theme="dark"] .customer-result-item strong,
+html[data-admin-theme="dark"] .selected-customer-main strong {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .customer-result-item span,
+html[data-admin-theme="dark"] .selected-customer-main span,
+html[data-admin-theme="dark"] .customer-lookup-head small,
+html[data-admin-theme="dark"] .quick-customer-head span,
+html[data-admin-theme="dark"] .quick-customer-actions small,
+html[data-admin-theme="dark"] .customer-search-icon {
+  color: #cbd5e1;
+}
+
+html[data-admin-theme="dark"] .customer-result-item:hover {
+  border-color: rgba(59, 130, 246, 0.38);
+  background: rgba(30, 41, 59, 0.95);
+}
+
+html[data-admin-theme="dark"] .selected-period-card {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(15, 23, 42, 0.82) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+html[data-admin-theme="dark"] .selected-period-label,
+html[data-admin-theme="dark"] .selected-period-hint {
+  color: #cbd5e1;
+}
+
+html[data-admin-theme="dark"] .selected-period-value {
+  color: #f8fafc;
 }
 
 @media (max-width: 640px) {
