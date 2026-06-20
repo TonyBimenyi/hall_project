@@ -167,6 +167,138 @@
       </div>
     </div>
 
+    <section class="reports-hero card">
+      <div class="reports-hero-copy">
+        <div class="reports-hero-badge">
+          <i class="fas fa-hotel"></i>
+          Pilotage hôtelier
+        </div>
+        <h2>Rapports de gestion plus lisibles pour l'hôtel et la réception</h2>
+        <p>
+          Suivez les séjours, l'occupation, la performance des chambres et la santé de l'encaissement
+          avec une lecture plus opérationnelle en complément des graphiques.
+        </p>
+      </div>
+      <div class="reports-hero-stats">
+        <div class="hero-stat">
+          <span>Occupation</span>
+          <strong>{{ displayOccupationRate.toFixed(1) }}%</strong>
+        </div>
+        <div class="hero-stat">
+          <span>Check-ins</span>
+          <strong>{{ hotelCheckInsCount }}</strong>
+        </div>
+        <div class="hero-stat">
+          <span>Check-outs</span>
+          <strong>{{ hotelCheckOutsCount }}</strong>
+        </div>
+        <div class="hero-stat">
+          <span>Reste chambres</span>
+          <strong>{{ formatMoney(roomBalanceDueRange) }}</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="hotel-insights-grid mb-8">
+      <article class="insight-card card">
+        <div class="insight-head">
+          <div>
+            <h3>Activité hôtel</h3>
+            <p>Vision rapide de l'exploitation des séjours sur la période.</p>
+          </div>
+          <span class="insight-chip">{{ hotelRoomBookingsCount }} séjour(s)</span>
+        </div>
+        <div class="insight-metrics">
+          <div class="insight-metric">
+            <span>En chambre</span>
+            <strong>{{ activeRoomStaysCount }}</strong>
+          </div>
+          <div class="insight-metric">
+            <span>Arrivées à traiter</span>
+            <strong>{{ pendingArrivalsCount }}</strong>
+          </div>
+          <div class="insight-metric">
+            <span>Séjours clôturés</span>
+            <strong>{{ completedRoomStaysCount }}</strong>
+          </div>
+          <div class="insight-metric">
+            <span>Durée moy.</span>
+            <strong>{{ averageStayDurationLabel }}</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="insight-card card accent">
+        <div class="insight-head">
+          <div>
+            <h3>Encaissement par activité</h3>
+            <p>Répartition des paiements entre chambres et événements.</p>
+          </div>
+          <span class="insight-chip">{{ averagePaymentTicketLabel }}</span>
+        </div>
+        <div class="split-bars">
+          <div class="split-bar-row">
+            <div class="split-bar-label">
+              <span>Chambres</span>
+              <strong>{{ formatMoney(roomRevenueRange) }}</strong>
+            </div>
+            <div class="split-bar-track">
+              <span class="split-bar-fill hotel" :style="{ width: roomRevenueShareWidth }"></span>
+            </div>
+          </div>
+          <div class="split-bar-row">
+            <div class="split-bar-label">
+              <span>Salles / événements</span>
+              <strong>{{ formatMoney(hallRevenueRange) }}</strong>
+            </div>
+            <div class="split-bar-track">
+              <span class="split-bar-fill events" :style="{ width: hallRevenueShareWidth }"></span>
+            </div>
+          </div>
+        </div>
+        <div class="insight-list">
+          <div class="insight-list-row">
+            <span>Paiements encaissés</span>
+            <strong>{{ paidPaymentsCount }}</strong>
+          </div>
+          <div class="insight-list-row">
+            <span>Paiements en attente</span>
+            <strong>{{ pendingPaymentsCount }}</strong>
+          </div>
+          <div class="insight-list-row">
+            <span>Revenu journalier moyen</span>
+            <strong>{{ averageDailyRevenueLabel }}</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="insight-card card">
+        <div class="insight-head">
+          <div>
+            <h3>Performance chambres</h3>
+            <p>Chambres les plus utilisées sur la période filtrée.</p>
+          </div>
+          <span class="insight-chip">{{ topRoomPerformance.length }} top</span>
+        </div>
+        <div v-if="topRoomPerformance.length" class="performance-list">
+          <div v-for="room in topRoomPerformance" :key="room.label" class="performance-row">
+            <div>
+              <div class="performance-title">{{ room.label }}</div>
+              <div class="performance-sub">{{ room.bookings }} séjour(s) · {{ room.nights }} nuit(s)</div>
+            </div>
+            <strong>{{ formatMoney(room.revenue) }}</strong>
+          </div>
+        </div>
+        <div v-else class="panel-empty compact">
+          <i class="fas fa-bed"></i>
+          <div>
+            <strong>Aucune donnée chambre</strong>
+            <div class="muted">Les réservations de chambre s'affichent ici.</div>
+          </div>
+        </div>
+      </article>
+    </section>
+
     <div class="charts-grid">
       <div class="chart-card card">
         <div class="card-header">
@@ -551,6 +683,148 @@ const bookingCounts = computed(() => {
     if (b.status === 'cancelled') counts.cancelled += 1
   }
   return counts
+})
+
+const roomBookingsInRange = computed(() => {
+  return (filteredBookings.value || []).filter(booking => String(booking.booking_type || '') === 'room')
+})
+
+const hallBookingsInRange = computed(() => {
+  return (filteredBookings.value || []).filter(booking => String(booking.booking_type || '') !== 'room')
+})
+
+const hotelRoomBookingsCount = computed(() => roomBookingsInRange.value.length)
+
+const activeRoomStaysCount = computed(() => {
+  return roomBookingsInRange.value.filter(booking => booking.checked_in_at && !booking.checked_out_at).length
+})
+
+const pendingArrivalsCount = computed(() => {
+  return roomBookingsInRange.value.filter((booking) => {
+    const status = String(booking.status || '')
+    return !booking.checked_in_at && ['pending', 'confirmed', 'paid'].includes(status)
+  }).length
+})
+
+const completedRoomStaysCount = computed(() => {
+  return roomBookingsInRange.value.filter(booking => booking.checked_out_at).length
+})
+
+const hotelCheckInsCount = computed(() => {
+  return roomBookingsInRange.value.filter(booking => booking.checked_in_at).length
+})
+
+const hotelCheckOutsCount = computed(() => {
+  return roomBookingsInRange.value.filter(booking => booking.checked_out_at).length
+})
+
+const roomBalanceDueRange = computed(() => {
+  return roomBookingsInRange.value.reduce((sum, booking) => {
+    const remaining = Number(booking.remaining_amount || 0)
+    return remaining > 0 ? sum + remaining : sum
+  }, 0)
+})
+
+const paidPaymentsCount = computed(() => {
+  return filteredPaymentsPaid.value.length
+})
+
+const pendingPaymentsCount = computed(() => {
+  return filteredPayments.value.filter(payment => String(payment.status || '') !== 'paid').length
+})
+
+const averagePaymentTicket = computed(() => {
+  const count = paidPaymentsCount.value
+  if (!count) return 0
+  return filteredPaymentsPaid.value.reduce((sum, payment) => sum + Number(payment.amount || 0), 0) / count
+})
+
+const averagePaymentTicketLabel = computed(() => formatMoney(averagePaymentTicket.value))
+
+const averageDailyRevenue = computed(() => {
+  const days = Number(rangeDays.value || 0)
+  if (!days) return 0
+  return Number(revenueInRange.value || 0) / days
+})
+
+const averageDailyRevenueLabel = computed(() => formatMoney(averageDailyRevenue.value))
+
+const averageStayDuration = computed(() => {
+  const stays = roomBookingsInRange.value || []
+  if (!stays.length) return 0
+  const totalNights = stays.reduce((sum, booking) => {
+    const start = new Date(`${String(booking.start_date || '').slice(0, 10)}T00:00:00`)
+    const end = new Date(`${String(booking.end_date || '').slice(0, 10)}T00:00:00`)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return sum
+    const diff = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000))
+    return sum + Math.max(1, diff)
+  }, 0)
+  return totalNights / stays.length
+})
+
+const averageStayDurationLabel = computed(() => `${averageStayDuration.value.toFixed(1)} nuit(s)`)
+
+const paidPaymentsByBookingId = computed(() => {
+  const map = new Map()
+  for (const payment of filteredPaymentsPaid.value || []) {
+    const bookingId = Number(payment.booking || payment.booking_id || payment.booking?.id || 0)
+    if (!bookingId) continue
+    map.set(bookingId, (map.get(bookingId) || 0) + Number(payment.amount || 0))
+  }
+  return map
+})
+
+const roomRevenueRange = computed(() => {
+  return roomBookingsInRange.value.reduce((sum, booking) => {
+    const bookingId = Number(booking.id || 0)
+    return sum + Number(paidPaymentsByBookingId.value.get(bookingId) || 0)
+  }, 0)
+})
+
+const hallRevenueRange = computed(() => {
+  return hallBookingsInRange.value.reduce((sum, booking) => {
+    const bookingId = Number(booking.id || 0)
+    return sum + Number(paidPaymentsByBookingId.value.get(bookingId) || 0)
+  }, 0)
+})
+
+const totalActivityRevenue = computed(() => Number(roomRevenueRange.value || 0) + Number(hallRevenueRange.value || 0))
+
+const roomRevenueShareWidth = computed(() => {
+  const total = Number(totalActivityRevenue.value || 0)
+  if (!total) return '0%'
+  return `${((Number(roomRevenueRange.value || 0) / total) * 100).toFixed(1)}%`
+})
+
+const hallRevenueShareWidth = computed(() => {
+  const total = Number(totalActivityRevenue.value || 0)
+  if (!total) return '0%'
+  return `${((Number(hallRevenueRange.value || 0) / total) * 100).toFixed(1)}%`
+})
+
+const topRoomPerformance = computed(() => {
+  const map = new Map()
+  for (const booking of roomBookingsInRange.value || []) {
+    const key = String(booking.room_display || booking.room_name || booking.room || 'Chambre')
+    const prev = map.get(key) || { label: key, bookings: 0, nights: 0, revenue: 0 }
+    const start = new Date(`${String(booking.start_date || '').slice(0, 10)}T00:00:00`)
+    const end = new Date(`${String(booking.end_date || '').slice(0, 10)}T00:00:00`)
+    const diff = (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()))
+      ? Math.max(1, Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)))
+      : 1
+    map.set(key, {
+      label: key,
+      bookings: prev.bookings + 1,
+      nights: prev.nights + diff,
+      revenue: prev.revenue + Number(booking.total_price || 0),
+    })
+  }
+  return Array.from(map.values())
+    .sort((a, b) => {
+      if (b.bookings !== a.bookings) return b.bookings - a.bookings
+      return b.revenue - a.revenue
+    })
+    .slice(0, 5)
 })
 
 const revenueInRange = computed(() => Number(stats.value.revenue_in_range || stats.value.revenue_last_28_days || 0))
@@ -1689,6 +1963,284 @@ onBeforeUnmount(() => {
   color: var(--gray-900);
 }
 
+.reports-hero {
+  margin-bottom: var(--space-8);
+  padding: var(--space-6);
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: var(--space-5);
+  border: 1px solid var(--gray-200);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.9), rgba(212, 175, 55, 0.22));
+  color: #ffffff;
+}
+
+.reports-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-weight: 800;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reports-hero h2 {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: 1.55rem;
+  line-height: 1.15;
+  color: #ffffff;
+}
+
+.reports-hero p {
+  margin: 0;
+  max-width: 680px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+}
+
+.reports-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hero-stat {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.hero-stat span {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.hero-stat strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.05rem;
+  font-weight: 950;
+  color: #ffffff;
+}
+
+.hotel-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.insight-card {
+  padding: var(--space-5);
+  border: 1px solid var(--gray-200);
+  border-radius: 24px;
+  background: var(--white);
+}
+
+.insight-card.accent {
+  background: var(--white);
+  border-color: var(--gray-300);
+}
+
+.insight-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.insight-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 900;
+  color: var(--gray-900);
+}
+
+.insight-head p {
+  margin: 6px 0 0;
+  color: var(--gray-500);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.insight-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 78px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  color: var(--gray-900);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.insight-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.insight-metric {
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+
+.insight-metric span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray-400);
+}
+
+.insight-metric strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--gray-900);
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.split-bars {
+  display: grid;
+  gap: 12px;
+  margin-bottom: var(--space-4);
+}
+
+.split-bar-row {
+  display: grid;
+  gap: 8px;
+}
+
+.split-bar-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--gray-500);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.split-bar-label strong {
+  color: var(--gray-900);
+}
+
+.split-bar-track {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--gray-100);
+  overflow: hidden;
+}
+
+.split-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.split-bar-fill.hotel {
+  background: linear-gradient(90deg, #22c55e, #0ea5e9);
+}
+
+.split-bar-fill.events {
+  background: linear-gradient(90deg, #d4af37, #f97316);
+}
+
+.insight-list,
+.performance-list {
+  display: grid;
+  gap: 10px;
+}
+
+.insight-list {
+  margin-top: var(--space-4);
+}
+
+.insight-list-row,
+.performance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 13px;
+  border-radius: 16px;
+  border: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+
+.insight-list-row {
+  color: var(--gray-600);
+  font-weight: 700;
+}
+
+.insight-list-row strong,
+.performance-row strong {
+  color: var(--gray-900);
+  font-weight: 900;
+}
+
+.performance-title {
+  color: var(--gray-900);
+  font-weight: 900;
+}
+
+.performance-sub {
+  margin-top: 4px;
+  color: var(--gray-500);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.panel-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 14px;
+  border: 1px dashed var(--gray-200);
+  border-radius: 16px;
+  color: var(--gray-500);
+  font-weight: 700;
+}
+
+.panel-empty i {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gray-100);
+  color: var(--gray-400);
+}
+
+.panel-empty.compact {
+  padding: 12px 14px;
+}
+
+.muted {
+  color: var(--gray-400);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
 .filters-group {
   display: flex;
   gap: var(--space-3);
@@ -1774,19 +2326,93 @@ onBeforeUnmount(() => {
 }
 
 :global(html[data-admin-theme="dark"]) .filters-panel {
-  background: rgba(15, 23, 42, 0.72);
-  border-color: rgba(30, 41, 59, 0.95);
+  background: var(--white);
+  border-color: var(--gray-200);
 }
 
 :global(html[data-admin-theme="dark"]) .filter-input-clean,
 :global(html[data-admin-theme="dark"]) .filter-select-clean {
-  background: rgba(15, 23, 42, 0.88);
-  border-color: rgba(30, 41, 59, 0.95);
+  background: var(--white);
+  border-color: var(--gray-200);
   color: var(--gray-700);
 }
 
 :global(html[data-admin-theme="dark"]) .filters-toggle {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--gray-50);
+}
+
+:global(html[data-admin-theme="dark"]) .summary-card,
+:global(html[data-admin-theme="dark"]) .chart-card,
+:global(html[data-admin-theme="dark"]) .insight-card,
+:global(html[data-admin-theme="dark"]) .insight-metric,
+:global(html[data-admin-theme="dark"]) .insight-list-row,
+:global(html[data-admin-theme="dark"]) .performance-row,
+:global(html[data-admin-theme="dark"]) .panel-empty {
+  background: var(--white);
+  border-color: var(--gray-200);
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.18);
+}
+
+:global(html[data-admin-theme="dark"]) .insight-card.accent {
+  background: var(--white);
+  border-color: var(--gray-300);
+}
+
+:global(html[data-admin-theme="dark"]) .header-actions h1,
+:global(html[data-admin-theme="dark"]) .range-pill,
+:global(html[data-admin-theme="dark"]) .value,
+:global(html[data-admin-theme="dark"]) .card-header,
+:global(html[data-admin-theme="dark"]) .doughnut-center-main,
+:global(html[data-admin-theme="dark"]) .legend-val,
+:global(html[data-admin-theme="dark"]) .range-note,
+:global(html[data-admin-theme="dark"]) .insight-head h3,
+:global(html[data-admin-theme="dark"]) .insight-metric strong,
+:global(html[data-admin-theme="dark"]) .split-bar-label strong,
+:global(html[data-admin-theme="dark"]) .insight-list-row strong,
+:global(html[data-admin-theme="dark"]) .performance-title,
+:global(html[data-admin-theme="dark"]) .performance-row strong {
+  color: var(--gray-700);
+}
+
+:global(html[data-admin-theme="dark"]) .subtitle,
+:global(html[data-admin-theme="dark"]) .label,
+:global(html[data-admin-theme="dark"]) .legend-label,
+:global(html[data-admin-theme="dark"]) .doughnut-center-sub,
+:global(html[data-admin-theme="dark"]) .empty-hbar,
+:global(html[data-admin-theme="dark"]) .insight-head p,
+:global(html[data-admin-theme="dark"]) .insight-metric span,
+:global(html[data-admin-theme="dark"]) .split-bar-label,
+:global(html[data-admin-theme="dark"]) .insight-list-row,
+:global(html[data-admin-theme="dark"]) .performance-sub,
+:global(html[data-admin-theme="dark"]) .muted {
+  color: var(--gray-400);
+}
+
+:global(html[data-admin-theme="dark"]) .summary-icon.success { background: rgba(34, 197, 94, 0.16); color: #4ade80; }
+:global(html[data-admin-theme="dark"]) .summary-icon.danger { background: rgba(239, 68, 68, 0.16); color: #f87171; }
+:global(html[data-admin-theme="dark"]) .summary-icon.primary { background: rgba(148, 163, 184, 0.16); color: #e2e8f0; }
+:global(html[data-admin-theme="dark"]) .summary-icon.info { background: rgba(14, 165, 233, 0.16); color: #38bdf8; }
+:global(html[data-admin-theme="dark"]) .summary-icon.warning { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+
+:global(html[data-admin-theme="dark"]) .insight-chip,
+:global(html[data-admin-theme="dark"]) .panel-empty i {
+  background: var(--gray-50);
+  border-color: var(--gray-200);
+  color: var(--gray-700);
+}
+
+:global(html[data-admin-theme="dark"]) .insight-metric,
+:global(html[data-admin-theme="dark"]) .insight-list-row,
+:global(html[data-admin-theme="dark"]) .performance-row,
+:global(html[data-admin-theme="dark"]) .filters-toggle.active {
+  background: var(--gray-50);
+  border-color: var(--gray-200);
+}
+
+:global(html[data-admin-theme="dark"]) .chart-card:hover,
+:global(html[data-admin-theme="dark"]) .summary-card:hover,
+:global(html[data-admin-theme="dark"]) .insight-card:hover {
+  background: var(--white);
 }
 
 @media (max-width: 992px) {
@@ -1814,6 +2440,15 @@ onBeforeUnmount(() => {
     gap: var(--space-6);
   }
 
+  .reports-hero {
+    grid-template-columns: 1fr;
+    padding: var(--space-5);
+  }
+
+  .hotel-insights-grid {
+    grid-template-columns: 1fr;
+  }
+
   .chart-card {
     padding: var(--space-5);
     min-height: auto;
@@ -1835,6 +2470,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-6);
+  background: var(--white);
 }
 
 .summary-icon {
@@ -1880,11 +2516,26 @@ onBeforeUnmount(() => {
   gap: var(--space-8);
 }
 
+@media (max-width: 680px) {
+  .reports-hero-stats,
+  .insight-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .split-bar-label,
+  .insight-list-row,
+  .performance-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 .chart-card {
   padding: var(--space-8);
   min-height: 450px;
   display: flex;
   flex-direction: column;
+  background: var(--white);
 }
 
 .card-header {

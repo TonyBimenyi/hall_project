@@ -43,8 +43,8 @@ export const getApiBaseUrl = () => {
   } catch {
   }
 
-  // return 'https://api.labertha-villa.com/api/'
-  return 'http://localhost:3000/api/'
+  return 'https://api.labertha-villa.com/api/'
+  // return 'http://127.0.0.1:8000/api/'
 }
 
 
@@ -55,6 +55,7 @@ export const getApiOrigin = () => {
 
 export const useAuth = () => {
   const user = computed(() => {
+    if (!process.client) return {}
     try {
       return JSON.parse(localStorage.getItem('user') || '{}')
     } catch {
@@ -62,7 +63,7 @@ export const useAuth = () => {
     }
   })
 
-  const token = computed(() => localStorage.getItem('access_token'))
+  const token = computed(() => process.client ? localStorage.getItem('access_token') : null)
 
   return { user, token }
 }
@@ -76,7 +77,7 @@ export const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     config.baseURL = getApiBaseUrl()
-    const token = localStorage.getItem('access_token')
+    const token = process.client ? localStorage.getItem('access_token') : null
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -114,19 +115,21 @@ api.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config
+    const responseStatus = error?.response?.status
+    const responseDetail = String(error?.response?.data?.detail || '')
     // #region debug-point C:response-error
     if (String(originalRequest?.method || '').toLowerCase() === 'post' && /(bookings|payments)\/?$/.test(String(originalRequest?.url || ''))) {
       reportPostDebug('C', 'axios response error', {
         url: originalRequest?.url,
-        status: error?.response?.status ?? null,
+        status: responseStatus ?? null,
         message: error?.message || null,
         responseData: error?.response?.data || null,
       })
     }
     // #endregion
-    if (error.response.status === 401 && !originalRequest._retry) {
+    if (responseStatus === 401 && !originalRequest._retry) {
       originalRequest._retry = true
-      const refreshToken = localStorage.getItem('refresh_token')
+      const refreshToken = process.client ? localStorage.getItem('refresh_token') : null
       if (refreshToken) {
         try {
           const response = await axios.post(`${getApiOrigin()}/api/token/refresh/`, {
@@ -137,15 +140,36 @@ api.interceptors.response.use(
           return api(originalRequest)
         } catch (refreshError) {
           // If refresh fails, log out user
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('refresh_token')
-          localStorage.removeItem('user')
-          window.location.href = '/login'
+          if (process.client) {
+            localStorage.removeItem('access_token')
+            localStorage.removeItem('refresh_token')
+            localStorage.removeItem('user')
+            window.location.href = '/login'
+          }
         }
       } else {
-        window.location.href = '/login'
+        if (process.client) window.location.href = '/login'
       }
     }
+
+    // Some DRF auth failures come back as 403 instead of 401.
+    if (
+      process.client &&
+      responseStatus === 403 &&
+      (
+        responseDetail.includes('Authentication credentials were not provided') ||
+        responseDetail.includes('Given token not valid') ||
+        responseDetail.includes('Token is invalid') ||
+        responseDetail.includes('Token is expired') ||
+        responseDetail.includes('User inactive or deleted')
+      )
+    ) {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+    }
+
     return Promise.reject(error)
   }
 )

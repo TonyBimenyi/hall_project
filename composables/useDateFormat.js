@@ -15,6 +15,13 @@ export const useDateFormat = () => {
     return `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()}`
   }
 
+  const formatDateTime = (value) => {
+    if (!value) return ''
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return String(value)
+    return `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  }
+
   const formatDateRange = (start, end, separator = ' au ') => {
     const startText = formatDisplayDate(start)
     const endText = formatDisplayDate(end)
@@ -26,6 +33,7 @@ export const useDateFormat = () => {
 
   return {
     formatDisplayDate,
+    formatDateTime,
     formatDateRange,
   }
 }

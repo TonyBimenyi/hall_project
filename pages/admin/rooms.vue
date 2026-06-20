@@ -104,19 +104,59 @@
       </button>
     </div>
 
-    <div v-if="activeDeskTab !== 'rooms'" class="frontdesk-grid">
+    <div v-if="activeDeskTab !== 'rooms'" class="frontdesk-controls card">
+      <div class="frontdesk-controls-top">
+        <div class="frontdesk-search-shell">
+          <i class="fas fa-search frontdesk-search-icon"></i>
+          <input
+            v-model="frontdeskSearch"
+            type="text"
+            class="frontdesk-search-input"
+            placeholder="Rechercher par client, chambre ou code"
+          />
+        </div>
+        <button class="btn btn-outline btn-sm frontdesk-reset-btn" @click="resetFrontdeskFilters">Réinitialiser</button>
+      </div>
+      <div class="frontdesk-filters-row">
+        <select v-model="frontdeskPaymentFilter" class="frontdesk-select">
+          <option value="all">Tous les paiements</option>
+          <option value="settled">Séjours soldés</option>
+          <option value="balance_due">Avec reste à payer</option>
+        </select>
+        <select v-model="frontdeskActivityWindow" class="frontdesk-select">
+          <option value="24h">Activité 24h</option>
+          <option value="72h">Activité 72h</option>
+          <option value="7d">Activité 7 jours</option>
+          <option value="all">Toute l’activité</option>
+        </select>
+      </div>
+    </div>
+
+    <div v-if="activeDeskTab !== 'rooms'" :class="['frontdesk-grid', `frontdesk-grid-${activeDeskTab}`]">
       <section v-if="activeDeskTab === 'checkin'" class="desk-panel card">
         <div class="desk-panel-head">
           <div>
             <h2>Arrivées / Check-in</h2>
             <p>Clients attendus ou réservations prêtes à accueillir.</p>
           </div>
-          <span class="desk-count">{{ pendingArrivalBookings.length }}</span>
+          <div class="desk-panel-tools">
+            <span class="desk-count">{{ pendingArrivalTotalItems }}</span>
+            <AdminAppTablePagination
+              :start="pendingArrivalStartIndex"
+              :end="pendingArrivalEndIndex"
+              :total="pendingArrivalTotalItems"
+              :can-prev="pendingArrivalCanPrev"
+              :can-next="pendingArrivalCanNext"
+              :disabled="deskLoading"
+              @prev="pendingArrivalPrevPage"
+              @next="pendingArrivalNextPage"
+            />
+          </div>
         </div>
         <div v-if="deskLoading" class="desk-empty">Chargement des séjours...</div>
-        <div v-else-if="pendingArrivalBookings.length === 0" class="desk-empty">Aucune arrivée en attente</div>
-        <div v-else class="desk-list">
-          <div v-for="booking in pendingArrivalBookings.slice(0, 6)" :key="`arrival-${booking.id}`" class="desk-item">
+        <div v-else-if="filteredPendingArrivalBookings.length === 0" class="desk-empty">Aucune arrivée en attente</div>
+        <div v-else class="desk-list desk-list-checkin">
+          <div v-for="booking in paginatedPendingArrivalBookings" :key="`arrival-${booking.id}`" class="desk-item">
             <div class="desk-item-main">
               <div class="desk-item-title">{{ booking.guest_full_name || booking.customer_name }}</div>
               <div class="desk-item-sub">{{ booking.room_display || '-' }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
@@ -141,15 +181,27 @@
             <h2>Séjours en cours</h2>
             <p>Clients présents dans l'hôtel et prêts au départ.</p>
           </div>
-          <span class="desk-count">{{ inHouseBookings.length }}</span>
+          <div class="desk-panel-tools">
+            <span class="desk-count">{{ inHouseTotalItems }}</span>
+            <AdminAppTablePagination
+              :start="inHouseStartIndex"
+              :end="inHouseEndIndex"
+              :total="inHouseTotalItems"
+              :can-prev="inHouseCanPrev"
+              :can-next="inHouseCanNext"
+              :disabled="deskLoading"
+              @prev="inHousePrevPage"
+              @next="inHouseNextPage"
+            />
+          </div>
         </div>
         <div v-if="deskLoading" class="desk-empty">Chargement des séjours...</div>
-        <div v-else-if="inHouseBookings.length === 0" class="desk-empty">Aucun client en chambre</div>
+        <div v-else-if="filteredInHouseBookings.length === 0" class="desk-empty">Aucun client en chambre</div>
         <div v-else class="desk-list">
-          <div v-for="booking in inHouseBookings.slice(0, 6)" :key="`stay-${booking.id}`" class="desk-item">
+          <div v-for="booking in paginatedInHouseBookings" :key="`stay-${booking.id}`" class="desk-item">
             <div class="desk-item-main">
               <div class="desk-item-title">{{ booking.guest_full_name || booking.customer_name }}</div>
-              <div class="desk-item-sub">{{ booking.room_display || '-' }} • Check-in {{ formatDeskDate(booking.checked_in_at) }}</div>
+              <div class="desk-item-sub">{{ booking.room_display || '-' }} • Check-in {{ formatDeskDateTime(booking.checked_in_at) }}</div>
               <div class="desk-item-meta">
                 <span :class="['status-pill', 'status-occupied']">Occupée</span>
                 <span class="desk-mini">{{ booking.code || '-' }}</span>
@@ -171,23 +223,119 @@
             <h2>Nettoyage / remise en service</h2>
             <p>Chambres libérées qui doivent être préparées avant la prochaine arrivée.</p>
           </div>
-          <span class="desk-count">{{ cleaningRoomsList.length }}</span>
+          <div class="desk-panel-tools">
+            <span class="desk-count">{{ cleaningTotalItems }}</span>
+            <AdminAppTablePagination
+              :start="cleaningStartIndex"
+              :end="cleaningEndIndex"
+              :total="cleaningTotalItems"
+              :can-prev="cleaningCanPrev"
+              :can-next="cleaningCanNext"
+              :disabled="deskLoading"
+              @prev="cleaningPrevPage"
+              @next="cleaningNextPage"
+            />
+          </div>
         </div>
         <div v-if="deskLoading" class="desk-empty">Chargement des chambres...</div>
-        <div v-else-if="cleaningRoomsList.length === 0" class="desk-empty">Aucune chambre en nettoyage</div>
+        <div v-else-if="filteredCleaningRoomsList.length === 0" class="desk-empty">Aucune chambre en nettoyage</div>
         <div v-else class="desk-list">
-          <div v-for="room in cleaningRoomsList.slice(0, 6)" :key="`clean-${room.id}`" class="desk-item">
+          <div v-for="room in paginatedCleaningRooms" :key="`clean-${room.id}`" class="desk-item">
             <div class="desk-item-main">
               <div class="desk-item-title">{{ room.room_number }} - {{ room.name }}</div>
               <div class="desk-item-sub">{{ roomTypeLabel(room.room_type) }} • {{ formatMoney(room.price_per_night) }}/nuit</div>
               <div class="desk-item-meta">
                 <span :class="['status-pill', 'status-cleaning']">Nettoyage</span>
+                <span class="desk-mini" v-if="lastCompletedStayForRoom(room.id)?.checked_out_at">Sortie: {{ formatDeskDateTime(lastCompletedStayForRoom(room.id).checked_out_at) }}</span>
                 <span class="desk-mini" v-if="nextReservationForRoom(room.id)">Prochaine arrivée: {{ nextReservationForRoom(room.id).guest_full_name || nextReservationForRoom(room.id).customer_name }}</span>
               </div>
             </div>
             <div class="desk-item-actions">
               <button class="btn btn-primary btn-sm" @click="setRoomStatus(room, 'available')">Marquer prête</button>
               <button v-if="nextReservationForRoom(room.id)" class="btn btn-outline btn-sm" @click="openBookingDetails(nextReservationForRoom(room.id))">Voir réservation</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="desk-activity card">
+        <div class="desk-panel-head desk-activity-head">
+          <div>
+            <h2>Activité récente</h2>
+            <p>Suivi rapide des dernières arrivées et sorties enregistrées.</p>
+          </div>
+          <div class="desk-activity-badges">
+            <span class="desk-mini">Entrées: {{ filteredRecentCheckIns.length }}</span>
+            <span class="desk-mini">Sorties: {{ filteredRecentCheckOuts.length }}</span>
+          </div>
+        </div>
+
+        <div class="desk-activity-grid">
+          <div class="activity-column">
+            <div class="activity-column-head">
+              <div>
+                <strong>Check-ins récents</strong>
+                <small>Derniers clients arrivés</small>
+              </div>
+              <div class="activity-column-tools">
+                <span class="status-pill status-occupied">Arrivées</span>
+                <AdminAppTablePagination
+                  :start="recentCheckInsStartIndex"
+                  :end="recentCheckInsEndIndex"
+                  :total="recentCheckInsTotalItems"
+                  :can-prev="recentCheckInsCanPrev"
+                  :can-next="recentCheckInsCanNext"
+                  :disabled="deskLoading"
+                  @prev="recentCheckInsPrevPage"
+                  @next="recentCheckInsNextPage"
+                />
+              </div>
+            </div>
+            <div v-if="deskLoading" class="desk-empty">Chargement des arrivées...</div>
+            <div v-else-if="filteredRecentCheckIns.length === 0" class="desk-empty">Aucun check-in récent</div>
+            <div v-else class="activity-list">
+              <div v-for="booking in paginatedRecentCheckIns" :key="`recent-checkin-${booking.id}`" class="activity-item">
+                <div class="activity-item-main">
+                  <div class="activity-title">{{ booking.guest_full_name || booking.customer_name }}</div>
+                  <div class="activity-sub">{{ booking.room_display || '-' }} • {{ booking.code || '-' }}</div>
+                  <div class="activity-time">Entrée le {{ formatDeskDateTime(booking.checked_in_at) }}</div>
+                </div>
+                <button class="btn btn-outline btn-sm" @click="openBookingDetails(booking)">Détails</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="activity-column">
+            <div class="activity-column-head">
+              <div>
+                <strong>Check-outs récents</strong>
+                <small>Derniers clients partis</small>
+              </div>
+              <div class="activity-column-tools">
+                <span class="status-pill status-cleaning">Départs</span>
+                <AdminAppTablePagination
+                  :start="recentCheckOutsStartIndex"
+                  :end="recentCheckOutsEndIndex"
+                  :total="recentCheckOutsTotalItems"
+                  :can-prev="recentCheckOutsCanPrev"
+                  :can-next="recentCheckOutsCanNext"
+                  :disabled="deskLoading"
+                  @prev="recentCheckOutsPrevPage"
+                  @next="recentCheckOutsNextPage"
+                />
+              </div>
+            </div>
+            <div v-if="deskLoading" class="desk-empty">Chargement des sorties...</div>
+            <div v-else-if="filteredRecentCheckOuts.length === 0" class="desk-empty">Aucun check-out récent</div>
+            <div v-else class="activity-list">
+              <div v-for="booking in paginatedRecentCheckOuts" :key="`recent-checkout-${booking.id}`" class="activity-item">
+                <div class="activity-item-main">
+                  <div class="activity-title">{{ booking.guest_full_name || booking.customer_name }}</div>
+                  <div class="activity-sub">{{ booking.room_display || '-' }} • {{ booking.code || '-' }}</div>
+                  <div class="activity-time">Sortie le {{ formatDeskDateTime(booking.checked_out_at) }}</div>
+                </div>
+                <button class="btn btn-outline btn-sm" @click="openBookingDetails(booking)">Détails</button>
+              </div>
             </div>
           </div>
         </div>
@@ -224,7 +372,7 @@
     </div>
 
     <div v-if="activeDeskTab === 'rooms'" class="table-container card">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom: var(--space-4);">
+      <div class="rooms-table-toolbar" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom: var(--space-4);">
         <h2 class="table-title" style="margin-bottom:0;">Toutes les chambres ({{ loadingRooms ? '...' : rooms.length }})</h2>
         <AdminAppTablePagination
           :start="roomsStartIndex"
@@ -517,6 +665,127 @@
       </template>
     </AdminAppModal>
 
+    <AdminAppModal v-model="showDeskBookingModal" title="Détails de la réservation" width="700px">
+      <div v-if="selectedDeskBooking" class="entity-view-modal">
+        <div class="entity-view-hero">
+          <div class="entity-view-avatar">{{ String(selectedDeskBooking.customer_name || 'RE').trim().slice(0, 2).toUpperCase() }}</div>
+          <div class="entity-view-main">
+            <div class="entity-view-code">{{ getBookingDisplayId(selectedDeskBooking) }}</div>
+            <h3>{{ selectedDeskBooking.customer_name }}</h3>
+            <p>{{ selectedDeskBooking.room_display || '-' }} • {{ selectedDeskBooking.event_type || 'Séjour' }}</p>
+          </div>
+          <div class="entity-view-badges">
+            <span :class="['badge', 'badge-info']">{{ getStatusTranslation(selectedDeskBooking.status) }}</span>
+            <span class="badge badge-success">{{ formatMoney(selectedDeskBooking.total_price) }}</span>
+          </div>
+        </div>
+
+        <div class="entity-view-grid">
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Réservation</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Client</span><span class="entity-view-value">{{ selectedDeskBooking.customer_name || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Téléphone</span><span class="entity-view-value">{{ selectedDeskBooking.customer_phone || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Email</span><span class="entity-view-value">{{ selectedDeskBooking.customer_email || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Chambre</span><span class="entity-view-value">{{ selectedDeskBooking.room_display || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedDeskBooking.start_date, selectedDeskBooking.end_date) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Montant total</span><span class="entity-view-value">{{ formatMoney(selectedDeskBooking.total_price) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Déjà payé</span><span class="entity-view-value">{{ formatMoney(selectedDeskBooking.paid_amount) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Reste</span><span class="entity-view-value">{{ formatMoney(selectedDeskBooking.remaining_amount) }}</span></div>
+            </div>
+          </section>
+
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Séjour</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Client hébergé</span><span class="entity-view-value">{{ selectedDeskBooking.guest_full_name || selectedDeskBooking.customer_name }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Pièce</span><span class="entity-view-value">{{ guestIdSummary(selectedDeskBooking) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Statut chambre</span><span class="entity-view-value">{{ roomStatusLabel(selectedDeskBooking.room_status || 'reserved') }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Check-in</span><span class="entity-view-value">{{ selectedDeskBooking.checked_in_at ? formatDeskDateTime(selectedDeskBooking.checked_in_at) : 'Non effectué' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Check-out</span><span class="entity-view-value">{{ selectedDeskBooking.checked_out_at ? formatDeskDateTime(selectedDeskBooking.checked_out_at) : 'Non effectué' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedDeskBooking.created_by_name || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedDeskBooking.updated_by_name || selectedDeskBooking.created_by_name || '-' }}</span></div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <template #footer>
+        <button
+          v-if="selectedDeskBooking && Number(selectedDeskBooking.remaining_amount || 0) > 0"
+          class="btn btn-outline"
+          @click="openPaymentForBooking(selectedDeskBooking)"
+        >
+          Enregistrer un paiement
+        </button>
+        <button class="btn btn-primary" @click="showDeskBookingModal = false">Fermer</button>
+      </template>
+    </AdminAppModal>
+
+    <AdminAppModal v-model="showDeskPaymentModal" title="Enregistrer un paiement" width="560px">
+      <form class="admin-form" @submit.prevent="saveDeskPayment">
+        <div v-if="selectedDeskBooking" class="booking-summary">
+          <div><strong>Réservation:</strong> {{ getBookingDisplayId(selectedDeskBooking) }}</div>
+          <div><strong>Client:</strong> {{ selectedDeskBooking.customer_name }}</div>
+          <div><strong>Chambre:</strong> {{ selectedDeskBooking.room_display || '-' }}</div>
+          <div><strong>Total:</strong> {{ formatMoney(selectedDeskBooking.total_price) }}</div>
+          <div><strong>Déjà payé:</strong> {{ formatMoney(selectedDeskBooking.paid_amount) }}</div>
+          <div><strong>Reste:</strong> {{ formatMoney(selectedDeskBooking.remaining_amount) }}</div>
+          <div><strong>Pièce:</strong> {{ guestIdSummary(selectedDeskBooking) }}</div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Type de paiement</label>
+            <select v-model="deskPaymentForm.kind" class="form-select" @change="onDeskPaymentKindChange">
+              <option value="advance">Avance</option>
+              <option value="full">Paiement total</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Montant (Fbu)</label>
+            <input v-model="deskPaymentAmountInput" inputmode="numeric" type="text" class="form-input" placeholder="0" required />
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input v-model="deskPaymentForm.date" type="date" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Méthode</label>
+            <select v-model="deskPaymentForm.method" class="form-select" required>
+              <option value="Virement">Virement</option>
+              <option value="Espèces">Espèces</option>
+              <option value="Carte">Carte</option>
+              <option value="Mobile Money">Mobile Money</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Référence</label>
+          <input v-model="deskPaymentForm.reference" type="text" class="form-input" required />
+        </div>
+
+        <div v-if="selectedDeskBooking" class="form-group">
+          <label class="form-label">Gestion du séjour</label>
+          <select v-model="deskPaymentForm.room_action" class="form-select">
+            <option value="none">Aucune action</option>
+            <option v-if="!selectedDeskBooking.checked_in_at" value="check_in">Valider le check-in</option>
+            <option v-if="selectedDeskBooking.checked_in_at && !selectedDeskBooking.checked_out_at" value="check_out">Valider le check-out</option>
+          </select>
+          <small class="form-hint">Le check-in exige un paiement marqué comme payé et une pièce d'identité déjà renseignée.</small>
+        </div>
+      </form>
+      <template #footer>
+        <button class="btn btn-outline" @click="showDeskPaymentModal = false">Annuler</button>
+        <button class="btn btn-primary" :class="{ 'is-loading': savingDeskPayment }" :disabled="savingDeskPayment" @click="saveDeskPayment">
+          Enregistrer
+        </button>
+      </template>
+    </AdminAppModal>
+
     <AdminAppModal v-model="showViewModal" title="Détails de la chambre" width="620px">
       <div v-if="selectedRoom" class="entity-view-modal">
         <div class="entity-view-hero">
@@ -599,10 +868,14 @@ import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useTableSort } from '~/composables/useTableSort'
 import { useDateFormat } from '~/composables/useDateFormat'
+import { useDocumentBranding } from '~/composables/useDocumentBranding'
+import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
 
 definePageMeta({ layout: 'admin' })
 const { formatMoney, moneyInputModel, parseMoney, formatNumberSpaces } = useMoney()
-const { formatDateRange, formatDisplayDate } = useDateFormat()
+const { formatDateRange, formatDateTime } = useDateFormat()
+const { escapeHtml } = useDocumentBranding()
+const { buildPdfDocumentHtml, openPrintPreviewHtml } = useAdminExportDocuments()
 
 const rooms = ref([])
 const bookings = ref([])
@@ -611,12 +884,19 @@ const loadingBookings = ref(false)
 const showFormModal = ref(false)
 const showViewModal = ref(false)
 const showDeleteModal = ref(false)
+const showDeskBookingModal = ref(false)
+const showDeskPaymentModal = ref(false)
 const isEditing = ref(false)
 const selectedRoom = ref(null)
+const selectedDeskBooking = ref(null)
 const openActionsId = ref(null)
 const isMobile = ref(false)
+const frontdeskSearch = ref('')
+const frontdeskPaymentFilter = ref('all')
+const frontdeskActivityWindow = ref('24h')
 const savingRoom = ref(false)
 const deletingRoom = ref(false)
+const savingDeskPayment = ref(false)
 const stayActionLoadingId = ref(null)
 const stayActionType = ref('')
 const activeDeskTab = ref('checkin')
@@ -647,6 +927,17 @@ const form = ref({
   additional_services: [],
 })
 const pricePerNightInput = moneyInputModel(form, 'price_per_night')
+const deskPaymentForm = ref({
+  booking: null,
+  date: new Date().toISOString().split('T')[0],
+  reference: '',
+  amount: 0,
+  method: 'Virement',
+  kind: 'full',
+  status: 'paid',
+  room_action: 'none',
+})
+const deskPaymentAmountInput = moneyInputModel(deskPaymentForm, 'amount')
 const defaultRoomServiceOptions = ['Petit-déjeuner', 'Minibar', 'Service en chambre', 'Parking', 'WiFi premium', 'Autre']
 const {
   sortedItems: sortedRooms,
@@ -701,8 +992,156 @@ const inHouseBookings = computed(() => roomBookings.value
   .filter((booking) => booking?.checked_in_at && !booking?.checked_out_at)
   .slice()
   .sort((a, b) => new Date(a?.start_date || 0) - new Date(b?.start_date || 0)))
+const recentCheckIns = computed(() => roomBookings.value
+  .filter((booking) => booking?.checked_in_at)
+  .slice()
+  .sort((a, b) => new Date(b?.checked_in_at || 0) - new Date(a?.checked_in_at || 0)))
+const recentCheckOuts = computed(() => roomBookings.value
+  .filter((booking) => booking?.checked_out_at)
+  .slice()
+  .sort((a, b) => new Date(b?.checked_out_at || 0) - new Date(a?.checked_out_at || 0)))
 const cleaningRoomsList = computed(() => rooms.value.filter(room => room?.status === 'cleaning'))
+const latestCompletedStayByRoomId = computed(() => {
+  const map = new Map()
+  for (const booking of roomBookings.value) {
+    if (!booking?.room || !booking?.checked_out_at) continue
+    const roomId = Number(booking.room)
+    const existing = map.get(roomId)
+    const currentTime = new Date(booking.checked_out_at).getTime()
+    const existingTime = existing?.checked_out_at ? new Date(existing.checked_out_at).getTime() : 0
+    if (!existing || currentTime > existingTime) {
+      map.set(roomId, booking)
+    }
+  }
+  return map
+})
 const deskLoading = computed(() => loadingRooms.value || loadingBookings.value)
+const frontdeskSearchText = computed(() => String(frontdeskSearch.value || '').trim().toLowerCase())
+
+const matchesFrontdeskPaymentFilter = (booking) => {
+  const remaining = Number(booking?.remaining_amount || 0)
+  if (frontdeskPaymentFilter.value === 'settled') return remaining <= 0
+  if (frontdeskPaymentFilter.value === 'balance_due') return remaining > 0
+  return true
+}
+
+const matchesFrontdeskBookingSearch = (booking) => {
+  const q = frontdeskSearchText.value
+  if (!q) return true
+  return [
+    booking?.guest_full_name,
+    booking?.customer_name,
+    booking?.room_display,
+    booking?.code,
+    booking?.guest_id_number,
+    booking?.customer_phone,
+  ].some(value => String(value || '').toLowerCase().includes(q))
+}
+
+const matchesFrontdeskRoomSearch = (room) => {
+  const q = frontdeskSearchText.value
+  if (!q) return true
+  const nextBooking = nextReservationForRoom(room?.id)
+  const lastBooking = lastCompletedStayForRoom(room?.id)
+  return [
+    room?.name,
+    room?.room_number,
+    roomTypeLabel(room?.room_type),
+    nextBooking?.guest_full_name,
+    nextBooking?.customer_name,
+    lastBooking?.guest_full_name,
+    lastBooking?.customer_name,
+  ].some(value => String(value || '').toLowerCase().includes(q))
+}
+
+const matchesActivityWindow = (value) => {
+  if (frontdeskActivityWindow.value === 'all') return true
+  const timestamp = new Date(value || '').getTime()
+  if (!timestamp) return false
+  const now = Date.now()
+  const hoursMap = {
+    '24h': 24,
+    '72h': 72,
+    '7d': 24 * 7,
+  }
+  const limitHours = hoursMap[frontdeskActivityWindow.value] || 24
+  return now - timestamp <= limitHours * 60 * 60 * 1000
+}
+
+const filteredPendingArrivalBookings = computed(() => pendingArrivalBookings.value.filter((booking) => {
+  return matchesFrontdeskBookingSearch(booking) && matchesFrontdeskPaymentFilter(booking)
+}))
+
+const filteredInHouseBookings = computed(() => inHouseBookings.value.filter((booking) => {
+  return matchesFrontdeskBookingSearch(booking) && matchesFrontdeskPaymentFilter(booking)
+}))
+
+const filteredCleaningRoomsList = computed(() => cleaningRoomsList.value.filter((room) => {
+  return matchesFrontdeskRoomSearch(room)
+}))
+
+const filteredRecentCheckIns = computed(() => recentCheckIns.value.filter((booking) => {
+  return matchesFrontdeskBookingSearch(booking) && matchesFrontdeskPaymentFilter(booking) && matchesActivityWindow(booking?.checked_in_at)
+}))
+
+const filteredRecentCheckOuts = computed(() => recentCheckOuts.value.filter((booking) => {
+  return matchesFrontdeskBookingSearch(booking) && matchesFrontdeskPaymentFilter(booking) && matchesActivityWindow(booking?.checked_out_at)
+}))
+
+const {
+  paginatedItems: paginatedPendingArrivalBookings,
+  totalItems: pendingArrivalTotalItems,
+  startIndex: pendingArrivalStartIndex,
+  endIndex: pendingArrivalEndIndex,
+  canPrev: pendingArrivalCanPrev,
+  canNext: pendingArrivalCanNext,
+  prevPage: pendingArrivalPrevPage,
+  nextPage: pendingArrivalNextPage,
+} = usePagination(filteredPendingArrivalBookings, 6)
+
+const {
+  paginatedItems: paginatedInHouseBookings,
+  totalItems: inHouseTotalItems,
+  startIndex: inHouseStartIndex,
+  endIndex: inHouseEndIndex,
+  canPrev: inHouseCanPrev,
+  canNext: inHouseCanNext,
+  prevPage: inHousePrevPage,
+  nextPage: inHouseNextPage,
+} = usePagination(filteredInHouseBookings, 6)
+
+const {
+  paginatedItems: paginatedCleaningRooms,
+  totalItems: cleaningTotalItems,
+  startIndex: cleaningStartIndex,
+  endIndex: cleaningEndIndex,
+  canPrev: cleaningCanPrev,
+  canNext: cleaningCanNext,
+  prevPage: cleaningPrevPage,
+  nextPage: cleaningNextPage,
+} = usePagination(filteredCleaningRoomsList, 6)
+
+const {
+  paginatedItems: paginatedRecentCheckIns,
+  totalItems: recentCheckInsTotalItems,
+  startIndex: recentCheckInsStartIndex,
+  endIndex: recentCheckInsEndIndex,
+  canPrev: recentCheckInsCanPrev,
+  canNext: recentCheckInsCanNext,
+  prevPage: recentCheckInsPrevPage,
+  nextPage: recentCheckInsNextPage,
+} = usePagination(filteredRecentCheckIns, 6)
+
+const {
+  paginatedItems: paginatedRecentCheckOuts,
+  totalItems: recentCheckOutsTotalItems,
+  startIndex: recentCheckOutsStartIndex,
+  endIndex: recentCheckOutsEndIndex,
+  canPrev: recentCheckOutsCanPrev,
+  canNext: recentCheckOutsCanNext,
+  prevPage: recentCheckOutsPrevPage,
+  nextPage: recentCheckOutsNextPage,
+} = usePagination(filteredRecentCheckOuts, 6)
 
 const displayTotalRooms = ref(0)
 const displayTotalCapacity = ref(0)
@@ -809,14 +1248,202 @@ const roomStatusLabel = (status) => {
   return roomStatusOptions.find(item => item.value === value)?.label || value
 }
 
-const formatDeskDate = (value) => value ? formatDisplayDate(value) : '-'
+const getBookingDisplayId = (booking) => booking?.code || `Reservation #${booking?.id || '-'}`
+
+const getStatusTranslation = (status) => ({
+  pending: 'En attente',
+  confirmed: 'Confirmée',
+  completed: 'Terminée',
+  cancelled: 'Annulée',
+  checked_in: 'Check-in effectué',
+  checked_out: 'Check-out effectué',
+}[status] || status || '-')
+
+const guestIdSummary = (booking) => {
+  const type = String(booking?.guest_id_type || booking?.booking_guest_id_type || '').trim()
+  const number = String(booking?.guest_id_number || booking?.booking_guest_id_number || '').trim()
+  const typeLabels = {
+    passport: 'Passeport',
+    id_card: "Carte d'identité",
+    driving_license: 'Permis de conduire',
+    other: 'Autre pièce',
+  }
+  if (!type && !number) return 'Non renseignée'
+  return [typeLabels[type] || type || 'Pièce', number || '-'].join(' • ')
+}
+
+const resetFrontdeskFilters = () => {
+  frontdeskSearch.value = ''
+  frontdeskPaymentFilter.value = 'all'
+  frontdeskActivityWindow.value = '24h'
+}
+
+const formatDeskDateTime = (value) => value ? formatDateTime(value) : '-'
 const paymentStateLabel = (booking) => Number(booking?.remaining_amount || 0) > 0
   ? `Reste: ${formatMoney(booking?.remaining_amount || 0)}`
   : 'Séjour soldé'
 const nextReservationForRoom = (roomId) => pendingArrivalBookings.value.find((booking) => Number(booking?.room) === Number(roomId))
+const lastCompletedStayForRoom = (roomId) => latestCompletedStayByRoomId.value.get(Number(roomId)) || null
 
-const openPaymentForBooking = (booking) => navigateTo(`/admin/payments?booking=${booking.id}`)
-const openBookingDetails = (booking) => navigateTo(`/admin/bookings?view=${booking.id}`)
+const syncSelectedDeskBooking = () => {
+  if (!selectedDeskBooking.value?.id) return
+  const fresh = bookings.value.find(item => Number(item?.id) === Number(selectedDeskBooking.value.id))
+  if (fresh) selectedDeskBooking.value = fresh
+}
+
+watch(bookings, () => {
+  syncSelectedDeskBooking()
+}, { deep: true })
+
+const resetDeskPaymentForm = (booking = null) => {
+  const remaining = Number(booking?.remaining_amount || 0)
+  deskPaymentForm.value = {
+    booking: booking?.id || null,
+    date: new Date().toISOString().split('T')[0],
+    reference: '',
+    amount: remaining > 0 ? remaining : 0,
+    method: 'Virement',
+    kind: 'full',
+    status: 'paid',
+    room_action: 'none',
+  }
+}
+
+const syncDeskPaymentKindWithAmount = () => {
+  const booking = selectedDeskBooking.value
+  if (!booking) return
+  const remaining = Number(booking?.remaining_amount || 0)
+  const amount = Number(deskPaymentForm.value.amount || 0)
+  if (remaining <= 0) {
+    deskPaymentForm.value.kind = 'full'
+    return
+  }
+  deskPaymentForm.value.kind = amount === remaining ? 'full' : 'advance'
+}
+
+const onDeskPaymentKindChange = () => {
+  const booking = selectedDeskBooking.value
+  if (!booking) return
+  if (deskPaymentForm.value.kind === 'full') {
+    deskPaymentForm.value.amount = Number(booking?.remaining_amount || 0)
+  }
+  syncDeskPaymentKindWithAmount()
+}
+
+watch(() => deskPaymentForm.value.amount, () => {
+  syncDeskPaymentKindWithAmount()
+})
+
+const openPaymentForBooking = (booking) => {
+  if (!booking?.id) return
+  selectedDeskBooking.value = booking
+  resetDeskPaymentForm(booking)
+  showDeskBookingModal.value = false
+  showDeskPaymentModal.value = true
+}
+
+const openBookingDetails = (booking) => {
+  if (!booking?.id) return
+  selectedDeskBooking.value = booking
+  showDeskBookingModal.value = true
+}
+
+const getDeskPaymentDisplayId = (payment) => payment?.code || (payment?.id ? `Paiement #${payment.id}` : 'Paiement')
+const deskPaymentBookingItemLabel = (payment) => payment?.booking_type === 'room'
+  ? (payment?.booking_room_display || '-')
+  : (payment?.booking_hall_name || '-')
+
+const buildDeskPaymentPrintHtml = (payment) => {
+  const paymentCode = getDeskPaymentDisplayId(payment)
+  const reservationCode = String(payment?.booking_code || '').trim() || getBookingDisplayId(selectedDeskBooking.value)
+  const paymentTypeLabel = payment?.kind === 'full' ? 'Paiement total' : 'Avance'
+  const reservationTypeLabel = payment?.booking_type === 'room' ? 'Chambre' : 'Salle'
+  const periodLabel = formatDateRange(payment?.booking_start_date, payment?.booking_end_date)
+  const detailRows = [
+    ['Paiement', paymentCode],
+    ['Réservation', reservationCode],
+    ['Date', payment?.date || '-'],
+    ['Client', payment?.booking_customer_name || '-'],
+    ['Email client', payment?.booking_customer_email || '-'],
+    ['Référence', payment?.reference || '-'],
+    ['Méthode', payment?.method || '-'],
+    ['Type', paymentTypeLabel],
+    ['Type de réservation', reservationTypeLabel],
+    [reservationTypeLabel, deskPaymentBookingItemLabel(payment) || '-'],
+    ['Période', periodLabel || '-'],
+    ['Montant payé', formatMoney(payment?.amount)],
+    ['Total réservation', formatMoney(payment?.booking_total_price)],
+    ['Reste à payer', formatMoney(payment?.booking_remaining_amount)],
+  ]
+
+  return buildPdfDocumentHtml({
+    title: 'Facture de paiement',
+    documentTitle: `Facture ${paymentCode}`,
+    subtitle: 'Facture generee automatiquement apres enregistrement du paiement.',
+    typeLabel: 'Facture à imprimer',
+    tableTitle: 'Détails du paiement',
+    tableTitles: ['Détails du paiement'],
+    periodLabel,
+    contentHtml: `
+      <div class="summary-cards">
+        <div class="summary-card">
+          <div>
+            <div class="label">Code paiement</div>
+            <div class="value">${escapeHtml(paymentCode)}</div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div>
+            <div class="label">Réservation</div>
+            <div class="value">${escapeHtml(reservationCode)}</div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div>
+            <div class="label">Montant payé</div>
+            <div class="value">${escapeHtml(formatMoney(payment?.amount))}</div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div>
+            <div class="label">Reste à payer</div>
+            <div class="value">${escapeHtml(formatMoney(payment?.booking_remaining_amount))}</div>
+          </div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><h2>Détails du paiement</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Information</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${detailRows.map(([label, value]) => `
+              <tr>
+                <td>${escapeHtml(label)}</td>
+                <td>${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `,
+  })
+}
+
+const printDeskPaymentInvoice = (payment) => {
+  const html = buildDeskPaymentPrintHtml(payment)
+  const ok = openPrintPreviewHtml({
+    html,
+    title: `Facture ${getDeskPaymentDisplayId(payment)}`,
+  })
+  if (!ok) {
+    notify('Impossible d’ouvrir l’aperçu d’impression de la facture', 'warning')
+  }
+}
 
 const setRoomStatus = async (room, status) => {
   if (!room?.id || !status) return
@@ -844,6 +1471,74 @@ const manageStay = async (booking, action) => {
   } finally {
     stayActionLoadingId.value = null
     stayActionType.value = ''
+  }
+}
+
+const saveDeskPayment = async () => {
+  const booking = selectedDeskBooking.value
+  if (!booking?.id || savingDeskPayment.value) return
+  const remaining = Number(booking?.remaining_amount || 0)
+  const amount = Number(deskPaymentForm.value.amount || 0)
+
+  if (amount <= 0) {
+    notify('Montant invalide', 'warning')
+    return
+  }
+  if (amount > remaining) {
+    notify('Le montant dépasse le reste à payer', 'warning')
+    return
+  }
+
+  savingDeskPayment.value = true
+  try {
+    const payload = {
+      booking: booking.id,
+      date: deskPaymentForm.value.date,
+      reference: String(deskPaymentForm.value.reference || '').trim(),
+      amount,
+      method: deskPaymentForm.value.method,
+      kind: deskPaymentForm.value.kind,
+      status: deskPaymentForm.value.status,
+      room_action: deskPaymentForm.value.room_action,
+    }
+    const { data } = await api.post('payments/', payload)
+    notify('Paiement enregistré avec succès', 'success')
+    showDeskPaymentModal.value = false
+    await Promise.all([fetchRooms(), fetchBookings()])
+    syncSelectedDeskBooking()
+    await nextTick()
+    const refreshedBooking = bookings.value.find(item => Number(item?.id) === Number(booking.id)) || booking
+    printDeskPaymentInvoice({
+      ...data,
+      amount,
+      date: payload.date,
+      reference: payload.reference,
+      method: payload.method,
+      kind: payload.kind,
+      status: payload.status,
+      booking: booking.id,
+      booking_code: booking.code || getBookingDisplayId(booking),
+      booking_customer_name: booking.customer_name,
+      booking_customer_email: booking.customer_email,
+      booking_type: booking.booking_type,
+      booking_room_display: booking.room_display,
+      booking_hall_name: booking.hall_name,
+      booking_start_date: booking.start_date,
+      booking_end_date: booking.end_date,
+      booking_total_price: booking.total_price,
+      booking_remaining_amount: Number(refreshedBooking?.remaining_amount ?? Math.max(0, remaining - amount)),
+      booking_guest_full_name: booking.guest_full_name,
+      booking_guest_id_type: booking.guest_id_type,
+      booking_guest_id_number: booking.guest_id_number,
+      booking_room_status: refreshedBooking?.room_status || booking.room_status,
+      booking_checked_in_at: refreshedBooking?.checked_in_at || booking.checked_in_at,
+      booking_checked_out_at: refreshedBooking?.checked_out_at || booking.checked_out_at,
+    })
+  } catch (error) {
+    const data = error?.response?.data || {}
+    notify(data.room_action || data.amount || data.booking || data.detail || 'Erreur lors de l\'enregistrement du paiement', 'danger')
+  } finally {
+    savingDeskPayment.value = false
   }
 }
 
@@ -1073,6 +1768,82 @@ const deleteRoom = async () => {
   box-shadow: none;
 }
 
+.frontdesk-controls {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.2rem;
+  margin-bottom: var(--space-6);
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+  background: var(--white);
+}
+
+.frontdesk-controls-top,
+.frontdesk-filters-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.frontdesk-controls-top {
+  justify-content: space-between;
+}
+
+.frontdesk-filters-row {
+  padding-top: 0.15rem;
+}
+
+.frontdesk-search-shell {
+  flex: 1 1 320px;
+  position: relative;
+}
+
+.frontdesk-search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.frontdesk-search-input,
+.frontdesk-select {
+  width: 100%;
+  padding: 0.72rem 1rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.frontdesk-search-input {
+  padding-left: 2.55rem;
+}
+
+.frontdesk-select {
+  flex: 1 1 220px;
+  cursor: pointer;
+}
+
+.frontdesk-reset-btn {
+  min-height: 44px;
+  padding-inline: 1rem;
+  flex-shrink: 0;
+}
+
+.frontdesk-search-input:focus,
+.frontdesk-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.12);
+}
+
 .desk-tab-btn {
   display: inline-flex;
   align-items: center;
@@ -1080,22 +1851,22 @@ const deleteRoom = async () => {
   padding: 0.8rem 1rem;
   border-radius: 14px;
   border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #475569;
+  background: var(--white);
+  color: var(--gray-700);
   font-weight: 800;
   transition: all 0.2s ease;
 }
 
 .desk-tab-btn:hover {
   border-color: #cbd5e1;
-  color: #0f172a;
-  background: #f8fafc;
+  color: var(--gray-700);
+  background: var(--gray-400);
 }
 
 .desk-tab-btn.active {
   border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
+  color: var(--gray-700);
+  background: var(--gray-400);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 
@@ -1106,16 +1877,30 @@ const deleteRoom = async () => {
   margin-bottom: var(--space-8);
 }
 
+.frontdesk-grid-checkin {
+  grid-template-columns: 1fr;
+}
+
+.frontdesk-grid-checkin .desk-panel {
+  grid-column: 1 / -1;
+}
+
+.frontdesk-grid-checkout {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .desk-panel,
-.desk-guide {
+.desk-guide,
+.desk-activity {
   padding: 1.2rem;
   border: 1px solid #e2e8f0;
   box-shadow: none;
 }
 
-.desk-guide {
+.desk-guide,
+.desk-activity {
   grid-column: 1 / -1;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: var(--white)
 }
 
 .desk-panel-head,
@@ -1125,6 +1910,14 @@ const deleteRoom = async () => {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.desk-panel-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .desk-panel-head h2,
@@ -1161,6 +1954,25 @@ const deleteRoom = async () => {
   gap: 0.9rem;
 }
 
+.desk-list-checkin {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.desk-list-checkin .desk-item {
+  flex-direction: column;
+  align-items: stretch;
+  height: 100%;
+}
+
+.desk-list-checkin .desk-item-main {
+  min-width: 0;
+}
+
+.desk-list-checkin .desk-item-actions {
+  justify-content: flex-start;
+  margin-top: auto;
+}
+
 .desk-item {
   display: flex;
   justify-content: space-between;
@@ -1168,7 +1980,7 @@ const deleteRoom = async () => {
   padding: 1rem;
   border: 1px solid #e2e8f0;
   border-radius: 18px;
-  background: #f8fafc;
+  background: var(--white);
 }
 
 .desk-item-main {
@@ -1177,12 +1989,12 @@ const deleteRoom = async () => {
 }
 
 .desk-item-title {
-  color: #0f172a;
+  color: var(--gray-900);
   font-weight: 800;
 }
 
 .desk-item-sub {
-  color: #475569;
+  color: var(--gray-700);
   font-size: 0.88rem;
 }
 
@@ -1198,7 +2010,7 @@ const deleteRoom = async () => {
   align-items: center;
   padding: 0.3rem 0.6rem;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--gray-200);
   border: 1px solid #e2e8f0;
   color: #475569;
   font-size: 0.78rem;
@@ -1217,10 +2029,102 @@ const deleteRoom = async () => {
   padding: 1.1rem;
   border: 1px dashed #cbd5e1;
   border-radius: 18px;
-  background: #f8fafc;
+  background: var(--gray-200);
   color: #64748b;
   text-align: center;
   font-weight: 700;
+}
+
+.desk-activity-head {
+  margin-bottom: 1.2rem;
+}
+
+.desk-activity-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.desk-activity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.activity-column {
+  border: 2px solid var(--gray-300);
+  border-radius: 20px;
+  background: var(--white);
+  padding: 1rem;
+}
+
+.activity-column-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.activity-column-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.activity-column-head strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.96rem;
+  font-weight: 800;
+}
+
+.activity-column-head small {
+  display: block;
+  margin-top: 0.25rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.activity-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  background: var(--white);
+  border: 1px solid var(--gray-400);
+}
+
+.activity-item-main {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.activity-title {
+  color: var(--gray-900);
+  font-weight: 800;
+}
+
+.activity-sub {
+  color: var(--gray-700);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.activity-time {
+  color: var(--gray-500);
+  font-size: 0.82rem;
 }
 
 .desk-guide-grid {
@@ -1235,11 +2139,13 @@ const deleteRoom = async () => {
   padding: 1rem;
   border: 1px solid #e2e8f0;
   border-radius: 18px;
-  background: #ffffff;
+  /* background: #ffffff; */
+  background: var(--white)
 }
 
 .guide-step strong {
-  color: #0f172a;
+  /* color: #0f172a; */
+  color: var(--gray-700);
 }
 
 .guide-step span {
@@ -1293,19 +2199,19 @@ const deleteRoom = async () => {
 }
 
 .status-reserved {
-  background: #fffbeb;
-  color: #b45309;
+  background: var(--white);
+  color: var(--gray-700);
   border-color: #fde68a;
 }
 
 .status-occupied {
-  background: #eff6ff;
+  background: var(--gray-300);
   color: #1d4ed8;
   border-color: #bfdbfe;
 }
 
 .status-cleaning {
-  background: #ecfeff;
+  background: var(--gray-300);
   color: #0f766e;
   border-color: #a5f3fc;
 }
@@ -1396,28 +2302,366 @@ const deleteRoom = async () => {
   color: #1e293b;
 }
 
+.rooms-table-toolbar :deep(.table-pagination),
+.desk-panel-tools :deep(.table-pagination),
+.activity-column-tools :deep(.table-pagination) {
+  margin-left: 0;
+}
+
 @media (max-width: 1200px) {
   .frontdesk-grid {
     grid-template-columns: 1fr;
   }
 
+  .desk-list-checkin {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .frontdesk-grid-checkout {
+    grid-template-columns: 1fr;
+  }
+
+  .desk-panel-tools {
+    justify-content: flex-start;
+  }
+
+  .activity-column-tools {
+    justify-content: flex-start;
+  }
+
+  .desk-activity-grid,
   .desk-guide-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+@media (max-width: 900px) {
+  .page-title h1 {
+    font-size: 1.45rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+
+  .desk-tabs {
+    gap: 0.6rem;
+    padding: 0.75rem;
+  }
+
+  .desk-tab-btn {
+    flex: 1 1 calc(50% - 0.3rem);
+    justify-content: center;
+  }
+
+  .frontdesk-controls,
+  .desk-panel,
+  .desk-guide,
+  .desk-activity {
+    padding: 1rem;
+  }
+
+  .frontdesk-controls {
+    gap: 0.75rem;
+  }
+
+  .frontdesk-controls-top,
+  .frontdesk-filters-row,
+  .desk-panel-head,
+  .desk-guide-head,
+  .desk-activity-head,
+  .activity-column-head,
+  .rooms-table-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .frontdesk-search-shell,
+  .frontdesk-select,
+  .desk-panel-tools,
+  .activity-column-tools {
+    width: 100%;
+  }
+
+  .frontdesk-filters-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid var(--gray-200);
+  }
+
+  .frontdesk-reset-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .desk-panel-tools,
+  .activity-column-tools,
+  .desk-activity-badges {
+    justify-content: space-between;
+  }
+
+  .desk-item {
+    align-items: stretch;
+  }
+
+  .desk-item-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .desk-item-actions .btn {
+    flex: 1 1 calc(50% - 0.25rem);
+    justify-content: center;
+  }
+
+  .activity-column {
+    padding: 0.9rem;
+  }
+
+  .activity-item {
+    align-items: flex-start;
+  }
+
+  .activity-item .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .actions-menu {
+    min-width: min(220px, calc(100vw - 48px));
+  }
+
+  .entity-view-modal {
+    gap: 14px;
+  }
+
+  .entity-view-hero {
+    padding: 16px;
+  }
+
+  .entity-view-card,
+  .booking-summary,
+  .service-card {
+    padding: 14px;
+  }
+}
+
 @media (max-width: 640px) {
+  .frontdesk-controls {
+    padding: 0.85rem;
+    gap: 0.65rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .desk-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .desk-tab-btn {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .frontdesk-controls-top,
+  .frontdesk-filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .frontdesk-search-shell {
+    flex-basis: auto;
+  }
+
+  .frontdesk-search-input,
+  .frontdesk-select,
+  .frontdesk-reset-btn {
+    min-height: 46px;
+  }
+
+  .frontdesk-filters-row {
+    gap: 0.55rem;
+    padding-top: 0.7rem;
+  }
+
   .desk-item {
     flex-direction: column;
+  }
+
+  .desk-list-checkin {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-item {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .desk-item-actions {
     justify-content: flex-start;
   }
 
+  .desk-item-actions .btn {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .desk-panel-tools {
+    width: 100%;
+  }
+
+  .activity-column-tools {
+    width: 100%;
+  }
+
+  .rooms-table-toolbar {
+    align-items: stretch;
+  }
+
+  .rooms-table-toolbar :deep(.table-pagination),
+  .desk-panel-tools :deep(.table-pagination),
+  .activity-column-tools :deep(.table-pagination) {
+    width: 100%;
+  }
+
+  .desk-panel,
+  .desk-guide,
+  .desk-activity,
+  .frontdesk-controls,
+  .activity-column {
+    padding: 0.85rem;
+  }
+
+  .desk-panel-head h2,
+  .desk-guide-head h2,
+  .activity-column-head strong {
+    font-size: 0.95rem;
+  }
+
+  .desk-item,
+  .activity-item {
+    padding: 0.85rem;
+  }
+
+  .desk-activity-grid,
   .desk-guide-grid {
     grid-template-columns: 1fr;
   }
+
+  .desk-activity-badges {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .activity-column-tools,
+  .desk-panel-tools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .desk-count {
+    align-self: flex-start;
+  }
+
+  .entity-view-hero {
+    padding: 14px;
+  }
+
+  .entity-view-avatar {
+    width: 56px;
+    height: 56px;
+  }
+
+  .entity-view-main h3 {
+    font-size: 1rem;
+  }
+}
+
+:global(html[data-admin-theme="dark"]) .desk-tabs,
+:global(html[data-admin-theme="dark"]) .frontdesk-controls,
+:global(html[data-admin-theme="dark"]) .desk-panel,
+:global(html[data-admin-theme="dark"]) .desk-guide,
+:global(html[data-admin-theme="dark"]) .desk-activity,
+:global(html[data-admin-theme="dark"]) .stat-card,
+:global(html[data-admin-theme="dark"]) .actions-menu {
+  background: rgba(15, 23, 42, 0.78);
+  border-color: rgba(30, 41, 59, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .desk-tab-btn,
+:global(html[data-admin-theme="dark"]) .frontdesk-search-input,
+:global(html[data-admin-theme="dark"]) .frontdesk-select,
+:global(html[data-admin-theme="dark"]) .desk-item,
+:global(html[data-admin-theme="dark"]) .activity-column,
+:global(html[data-admin-theme="dark"]) .activity-item,
+:global(html[data-admin-theme="dark"]) .guide-step,
+:global(html[data-admin-theme="dark"]) .booking-summary,
+:global(html[data-admin-theme="dark"]) .entity-view-card,
+:global(html[data-admin-theme="dark"]) .entity-view-item,
+:global(html[data-admin-theme="dark"]) .entity-view-empty {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(51, 65, 85, 0.9);
+}
+
+:global(html[data-admin-theme="dark"]) .frontdesk-search-input,
+:global(html[data-admin-theme="dark"]) .frontdesk-select,
+:global(html[data-admin-theme="dark"]) .desk-item-sub,
+:global(html[data-admin-theme="dark"]) .activity-sub,
+:global(html[data-admin-theme="dark"]) .activity-time,
+:global(html[data-admin-theme="dark"]) .desk-panel-head p,
+:global(html[data-admin-theme="dark"]) .desk-guide-head p,
+:global(html[data-admin-theme="dark"]) .page-title p {
+  color: #cbd5e1;
+}
+
+:global(html[data-admin-theme="dark"]) .page-title h1,
+:global(html[data-admin-theme="dark"]) .desk-panel-head h2,
+:global(html[data-admin-theme="dark"]) .desk-guide-head h2,
+:global(html[data-admin-theme="dark"]) .activity-column-head strong,
+:global(html[data-admin-theme="dark"]) .activity-title,
+:global(html[data-admin-theme="dark"]) .booking-summary strong,
+:global(html[data-admin-theme="dark"]) .entity-view-value,
+:global(html[data-admin-theme="dark"]) .table-title,
+:global(html[data-admin-theme="dark"]) .stat-value {
+  color: #f8fafc;
+}
+
+:global(html[data-admin-theme="dark"]) .frontdesk-search-input:focus,
+:global(html[data-admin-theme="dark"]) .frontdesk-select:focus {
+  background: rgba(15, 23, 42, 0.98);
+}
+
+:global(html[data-admin-theme="dark"]) .frontdesk-search-icon,
+:global(html[data-admin-theme="dark"]) .stat-label,
+:global(html[data-admin-theme="dark"]) .activity-column-head small,
+:global(html[data-admin-theme="dark"]) .entity-view-card-title,
+:global(html[data-admin-theme="dark"]) .entity-view-label {
+  color: #94a3b8;
+}
+
+:global(html[data-admin-theme="dark"]) .desk-mini,
+:global(html[data-admin-theme="dark"]) .desk-empty,
+:global(html[data-admin-theme="dark"]) .btn-icon {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(51, 65, 85, 0.9);
+  color: #cbd5e1;
+}
+
+:global(html[data-admin-theme="dark"]) .desk-count {
+  background: rgba(37, 99, 235, 0.22);
+  color: #bfdbfe;
+}
+
+:global(html[data-admin-theme="dark"]) .booking-summary,
+:global(html[data-admin-theme="dark"]) .form-hint,
+:global(html[data-admin-theme="dark"]) .entity-view-empty {
+  color: #cbd5e1;
 }
 
 .btn-icon {
@@ -1459,6 +2703,30 @@ const deleteRoom = async () => {
 .entity-view-label { color: #64748b; font-size: .82rem; font-weight: 700; }
 .entity-view-value { color: #0f172a; font-size: .9rem; font-weight: 700; text-align: right; word-break: break-word; }
 .entity-view-empty { padding: 1rem; border: 1px dashed #cbd5e1; border-radius: 14px; color: #64748b; font-weight: 600; background: #f8fafc; }
+
+.booking-summary {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #334155;
+  font-size: 0.9rem;
+}
+
+.booking-summary strong {
+  color: #0f172a;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 0.5rem;
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
 
 .services-section {
   margin-top: 1rem;

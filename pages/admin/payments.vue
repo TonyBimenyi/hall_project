@@ -327,7 +327,7 @@
                     <i class="fas fa-eye"></i> Voir
                   </button>
                   <button class="actions-item" @click="printPaymentInvoice(payment)">
-                    <i class="fas fa-print"></i> Imprimer la facture
+                    <i class="fas fa-file-arrow-down"></i> Télécharger la facture
                   </button>
                   <button class="actions-item danger" @click="confirmDelete(payment)">
                     <i class="fas fa-trash-alt"></i> Supprimer
@@ -412,7 +412,7 @@
                       <i class="fas fa-eye"></i> Voir
                     </button>
                     <button class="actions-item" @click="printPaymentInvoice(payment)">
-                      <i class="fas fa-print"></i> Imprimer la facture
+                      <i class="fas fa-file-arrow-down"></i> Télécharger la facture
                     </button>
                     <button class="actions-item danger" @click="confirmDelete(payment)">
                       <i class="fas fa-trash-alt"></i> Supprimer
@@ -541,8 +541,8 @@
               <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Client hébergé</span><span class="entity-view-value">{{ selectedPayment.booking_guest_full_name || selectedPayment.booking_customer_name }}</span></div>
               <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Pièce</span><span class="entity-view-value">{{ guestIdSummary({ guest_id_type: selectedPayment.booking_guest_id_type, guest_id_number: selectedPayment.booking_guest_id_number }) }}</span></div>
               <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Statut chambre</span><span class="entity-view-value">{{ roomStatusLabel(selectedPayment.booking_room_status) }}</span></div>
-              <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-in</span><span class="entity-view-value">{{ selectedPayment.booking_checked_in_at ? formatDisplayDate(selectedPayment.booking_checked_in_at) : 'Non effectué' }}</span></div>
-              <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-out</span><span class="entity-view-value">{{ selectedPayment.booking_checked_out_at ? formatDisplayDate(selectedPayment.booking_checked_out_at) : 'Non effectué' }}</span></div>
+              <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-in</span><span class="entity-view-value">{{ selectedPayment.booking_checked_in_at ? formatDateTime(selectedPayment.booking_checked_in_at) : 'Non effectué' }}</span></div>
+              <div v-if="selectedPayment.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-out</span><span class="entity-view-value">{{ selectedPayment.booking_checked_out_at ? formatDateTime(selectedPayment.booking_checked_out_at) : 'Non effectué' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé le</span><span class="entity-view-value">{{ formatDisplayDate(selectedPayment.created_at) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedPayment.created_by_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedPayment.updated_by_name || selectedPayment.created_by_name || '-' }}</span></div>
@@ -552,7 +552,7 @@
         </div>
       </div>
       <template #footer>
-        <button class="btn btn-outline" @click="printPaymentInvoice(selectedPayment)">Imprimer la facture</button>
+        <button class="btn btn-outline" @click="printPaymentInvoice(selectedPayment)">Télécharger la facture</button>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
       </template>
     </AdminAppModal>
@@ -581,10 +581,10 @@ import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
 
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
-const { documentBranding, documentLogoUrl, escapeHtml } = useDocumentBranding()
-const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
+const { escapeHtml } = useDocumentBranding()
+const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName, openPrintPreviewHtml } = useAdminExportDocuments()
 const { formatMoney, moneyInputModel } = useMoney()
-const { formatDateRange, formatDisplayDate } = useDateFormat()
+const { formatDateRange, formatDisplayDate, formatDateTime } = useDateFormat()
 
 const payments = ref([])
 const bookings = ref([])
@@ -725,281 +725,100 @@ const exportPdf = async () => {
   }, 350)
 }
 
-const buildInvoiceHtml = (payment) => {
-  const typeLabel = payment?.kind === 'full' ? 'Paiement total' : 'Avance'
-  const reservationCode = String(payment?.booking_code || '').trim() || `Reservation #${payment?.booking || '-'}`
+const buildPaymentPdfFileName = (prefix, identifier) => {
+  const normalizedIdentifier = String(identifier || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return normalizedIdentifier
+    ? `${prefix}-${normalizedIdentifier}.pdf`
+    : buildExportFileName(prefix, 'pdf')
+}
+
+const buildInvoicePdfHtml = (payment) => {
   const paymentCode = getPaymentDisplayId(payment)
+  const reservationCode = String(payment?.booking_code || '').trim() || `Reservation #${payment?.booking || '-'}`
+  const paymentTypeLabel = payment?.kind === 'full' ? 'Paiement total' : 'Avance'
+  const reservationTypeLabel = payment?.booking_type === 'room' ? 'Chambre' : 'Salle'
+  const periodLabel = formatDateRange(payment?.booking_start_date, payment?.booking_end_date)
+  const detailRows = [
+    ['Paiement', paymentCode],
+    ['Réservation', reservationCode],
+    ['Date', formatDisplayDate(payment?.date)],
+    ['Client', payment?.booking_customer_name || 'Client'],
+    ['Email client', payment?.booking_customer_email || '-'],
+    ['Référence', payment?.reference || '-'],
+    ['Méthode', payment?.method || '-'],
+    ['Type', paymentTypeLabel],
+    ['Type de réservation', reservationTypeLabel],
+    [reservationTypeLabel, paymentBookingItemLabel(payment) || '-'],
+    ['Période', periodLabel || '-'],
+    ['Statut', translateStatus(payment?.status)],
+    ['Montant payé', formatMoney(payment?.amount)],
+    ['Total réservation', formatMoney(payment?.booking_total_price)],
+    ['Reste à payer', formatMoney(payment?.booking_remaining_amount)],
+  ]
 
-  return `<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Facture ${escapeHtml(paymentCode)}</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --paper-width: 80mm;
-      --text: #111827;
-      --muted: #6b7280;
-      --line: #d1d5db;
-      --soft: #f9fafb;
-      --brand: #111827;
-    }
-    @page {
-      size: 80mm auto;
-      margin: 4mm;
-    }
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      margin: 0;
-      padding: 12px;
-      font-family: Inter, Arial, sans-serif;
-      font-size: 12px;
-      line-height: 1.45;
-      color: var(--text);
-      background: #eef2f7;
-    }
-    .receipt {
-      width: 100%;
-      max-width: var(--paper-width);
-      margin: 0 auto;
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 14px 12px 16px;
-      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-    }
-    .center {
-      text-align: center;
-    }
-    .brand-logo {
-      width: 52px;
-      height: 52px;
-      object-fit: contain;
-      display: block;
-      margin: 0 auto 8px;
-    }
-    .brand-name {
-      font-size: 15px;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-    .brand-title {
-      margin: 6px 0 0;
-      font-size: 16px;
-      font-weight: 700;
-    }
-    .brand-subtitle {
-      margin: 2px 0 0;
-      color: var(--muted);
-      font-size: 11px;
-    }
-    .divider {
-      margin: 12px 0;
-      border-top: 1px dashed var(--line);
-    }
-    .meta {
-      display: grid;
-      gap: 6px;
-    }
-    .meta-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: flex-start;
-    }
-    .meta-row strong:last-child,
-    .meta-row span:last-child {
-      text-align: right;
-      word-break: break-word;
-    }
-    .section-label {
-      display: block;
-      margin-bottom: 8px;
-      color: var(--brand);
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .block {
-      margin-bottom: 12px;
-    }
-    .soft {
-      padding: 10px;
-      border-radius: 10px;
-      background: var(--soft);
-      border: 1px solid #e5e7eb;
-    }
-    .muted {
-      color: var(--muted);
-    }
-    .totals {
-      display: block;
-    }
-    .total-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 4px 0;
-    }
-    .total-row.grand-total {
-      margin-top: 6px;
-      padding-top: 8px;
-      border-top: 1px dashed var(--line);
-      font-size: 14px;
-      font-weight: 800;
-    }
-    .footer-note {
-      margin-top: 10px;
-      text-align: center;
-      color: var(--muted);
-      font-size: 11px;
-    }
-    .footer-contact {
-      margin-top: 10px;
-      text-align: center;
-      font-size: 11px;
-      line-height: 1.55;
-    }
-    .footer-contact strong {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-    @media print {
-      body {
-        padding: 0;
-        background: #ffffff;
-      }
-      .receipt {
-        width: 72mm;
-        max-width: 72mm;
-        border: none;
-        border-radius: 0;
-        box-shadow: none;
-        padding: 0;
-      }
-    }
-  </style>
-</head>
-<body>
-  <main class="receipt">
-    <section class="center">
-      <img src="${escapeHtml(documentLogoUrl)}" alt="${escapeHtml(documentBranding.name)}" class="brand-logo" />
-      <div class="brand-name">${escapeHtml(documentBranding.name)}</div>
-      <div class="brand-title">${escapeHtml(documentBranding.tagline)}</div>
-      <div class="brand-subtitle">${escapeHtml(documentBranding.documents?.invoiceTitle || 'Recu de paiement')}</div>
-    </section>
-
-    <div class="divider"></div>
-
-    <section class="block meta">
-      <div class="meta-row">
-        <span class="muted">Paiement</span>
-        <strong>${escapeHtml(paymentCode)}</strong>
+  return buildPdfDocumentHtml({
+    title: 'Facture de paiement',
+    documentTitle: `Facture ${paymentCode}`,
+    subtitle: 'Facture generee automatiquement apres enregistrement du paiement.',
+    typeLabel: 'Facture PDF',
+    tableTitle: 'Détails du paiement',
+    tableTitles: ['Détails du paiement'],
+    periodLabel,
+    showMeta: false,
+    contentHtml: `
+      <div class="section-card">
+        <div class="section-header"><h2>Détails du paiement</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Information</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${detailRows.map(([label, value]) => `
+              <tr>
+                <td>${escapeHtml(label)}</td>
+                <td>${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       </div>
-      <div class="meta-row">
-        <span class="muted">Reservation</span>
-        <strong>${escapeHtml(reservationCode)}</strong>
-      </div>
-      <div class="meta-row">
-        <span class="muted">Date</span>
-        <strong>${escapeHtml(formatDisplayDate(payment?.date))}</strong>
-      </div>
-      <div class="meta-row">
-        <span class="muted">Edition</span>
-        <strong>${escapeHtml(formatDisplayDate(new Date().toISOString()))}</strong>
-      </div>
-    </section>
+    `,
+  })
+}
 
-    <div class="divider"></div>
-
-    <section class="block soft">
-      <span class="section-label">Client</span>
-      <div><strong>${escapeHtml(payment?.booking_customer_name || 'Client')}</strong></div>
-      <div class="muted">${escapeHtml(payment?.booking_customer_email || '-')}</div>
-      <div>${escapeHtml(paymentBookingItemLabel(payment) || '-')}</div>
-      <div class="muted">Periode: ${escapeHtml(formatDateRange(payment?.booking_start_date, payment?.booking_end_date))}</div>
-    </section>
-
-    <section class="block">
-      <span class="section-label">Details</span>
-      <div class="meta">
-        <div class="meta-row">
-          <span class="muted">Reference</span>
-          <strong>${escapeHtml(payment?.reference || '-')}</strong>
-        </div>
-        <div class="meta-row">
-          <span class="muted">Methode</span>
-          <strong>${escapeHtml(payment?.method || '-')}</strong>
-        </div>
-        <div class="meta-row">
-          <span class="muted">Type</span>
-          <strong>${escapeHtml(typeLabel)}</strong>
-        </div>
-        <div class="meta-row">
-          <span class="muted">${escapeHtml(payment?.booking_type === 'room' ? 'Chambre' : 'Salle')}</span>
-          <strong>${escapeHtml(paymentBookingItemLabel(payment) || '-')}</strong>
-        </div>
-      </div>
-    </section>
-
-    <div class="divider"></div>
-
-    <section class="block totals">
-      <div class="total-row">
-        <span class="muted">Montant paye</span>
-        <strong>${escapeHtml(formatMoney(payment?.amount))}</strong>
-      </div>
-      <div class="total-row">
-        <span class="muted">Total reservation</span>
-        <strong>${escapeHtml(formatMoney(payment?.booking_total_price))}</strong>
-      </div>
-      <div class="total-row grand-total">
-        <span>Reste a payer</span>
-        <span>${escapeHtml(formatMoney(payment?.booking_remaining_amount))}</span>
-      </div>
-    </section>
-
-    <div class="divider"></div>
-
-    <section class="footer-contact">
-      <strong>Adresse et contact</strong>
-      <div>${escapeHtml(documentBranding.address)}</div>
-      <div>${escapeHtml(documentBranding.contacts.join(' • '))}</div>
-    </section>
-
-    <div class="footer-note">
-      Merci pour votre confiance.
-    </div>
-  </main>
-</body>
-</html>`
+const openPaymentInvoicePrintPreview = (payment) => {
+  if (!payment || !process.client) return
+  closeActions()
+  const html = buildInvoicePdfHtml(payment)
+  const ok = openPrintPreviewHtml({
+    html,
+    title: `Facture ${getPaymentDisplayId(payment)}`,
+  })
+  if (!ok) {
+    notify('Impossible d’ouvrir l’aperçu d’impression de la facture', 'warning')
+  }
 }
 
 const printPaymentInvoice = async (payment) => {
   if (!payment || !process.client) return
   closeActions()
-  const html = buildInvoiceHtml(payment)
-  const win = window.open('', '_blank')
-  if (!win) {
-    notify('Impossible d\'ouvrir la fenetre d\'impression', 'warning')
-    return
+  const html = buildInvoicePdfHtml(payment)
+  const ok = await downloadPdfHtml({
+    html,
+    fileName: buildPaymentPdfFileName('facture-paiement', getPaymentDisplayId(payment)),
+  })
+  if (!ok) {
+    notify('Impossible de télécharger la facture PDF', 'warning')
   }
-  win.document.write(html)
-  win.document.close()
-  win.focus()
-  setTimeout(() => {
-    win.print()
-  }, 250)
 }
 
 const showFormModal = ref(false)
@@ -1236,11 +1055,27 @@ const resetForm = () => {
   }
 }
 
+const syncPaymentKindWithAmount = () => {
+  const booking = selectedBookingForForm.value
+  if (!booking) return
+
+  const remaining = toNumber(booking.remaining_amount)
+  const amount = toNumber(form.value.amount)
+
+  if (remaining <= 0) {
+    form.value.kind = 'full'
+    return
+  }
+
+  form.value.kind = amount === remaining ? 'full' : 'advance'
+}
+
 const onKindChange = () => {
   if (!selectedBookingForForm.value) return
   if (form.value.kind === 'full') {
     form.value.amount = toNumber(selectedBookingForForm.value.remaining_amount)
   }
+  syncPaymentKindWithAmount()
 }
 
 const onBookingChange = () => {
@@ -1251,7 +1086,16 @@ const onBookingChange = () => {
   } else if (form.value.amount <= 0) {
     form.value.amount = Math.min(100000, toNumber(selectedBookingForForm.value.remaining_amount))
   }
+  syncPaymentKindWithAmount()
 }
+
+watch(() => form.value.amount, () => {
+  syncPaymentKindWithAmount()
+})
+
+watch(selectedBookingForForm, () => {
+  syncPaymentKindWithAmount()
+})
 
 const manageStay = async (booking, action) => {
   if (!booking?.id || stayActionLoadingId.value) return
@@ -1336,7 +1180,7 @@ const savePayment = async () => {
       responseId: data?.id ?? null,
     })
     // #endregion
-    printPaymentInvoice(createdPayment)
+    openPaymentInvoicePrintPreview(createdPayment)
   } catch (error) {
     const data = error?.response?.data || {}
     // #region debug-point C:payment-submit-error

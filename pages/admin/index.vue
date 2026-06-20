@@ -6,9 +6,9 @@
           <i class="fas fa-gauge-high"></i>
           Tableau de bord
         </div>
-        <h1 class="hero-title">Aperçu de l'administration</h1>
+        <h1 class="hero-title">Pilotage hôtelier et administratif</h1>
         <p class="hero-subtitle">
-          Suivez les réservations, paiements, stock et alertes dans une interface claire et moderne.
+          Supervisez la réception, l'occupation des chambres, les encaissements et les alertes clés dans un tableau de bord plus propre et plus moderne.
         </p>
 
         <div class="hero-actions">
@@ -42,9 +42,19 @@
           <div class="kpi-hint">{{ displayBookingsToday }} réservations</div>
         </div>
         <div class="kpi">
-          <div class="kpi-label">Non lues</div>
-          <div class="kpi-value">{{ unreadCount }}</div>
-          <div class="kpi-hint">Notifications</div>
+          <div class="kpi-label">Arrivées hôtel</div>
+          <div class="kpi-value">{{ todayPendingArrivals }}</div>
+          <div class="kpi-hint">Clients attendus</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Séjours en cours</div>
+          <div class="kpi-value">{{ inHouseGuestsCount }}</div>
+          <div class="kpi-hint">Clients hébergés</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Encaissement jour</div>
+          <div class="kpi-value">{{ formatMoney(revenueTodayAmount) }}</div>
+          <div class="kpi-hint">{{ unreadCount }} notification(s)</div>
         </div>
       </div>
     </section>
@@ -128,6 +138,127 @@
           <span class="stat-label">Dépenses du mois</span>
           <strong class="stat-value">{{ formatMoney(monthlyExpensesAmount) }}</strong>
           <div class="stat-meta">Mois en cours</div>
+        </div>
+      </article>
+    </section>
+
+    <section class="hotel-overview-grid">
+      <article class="focus-card card">
+        <div class="focus-head">
+          <div>
+            <h2>Réception du jour</h2>
+            <p>Vue rapide pour l'accueil, les arrivées et les départs.</p>
+          </div>
+          <NuxtLink to="/admin/rooms" class="btn btn-outline btn-sm admin-head-btn">
+            <i class="fas fa-arrow-right"></i>
+            <span class="btn-label">Front desk</span>
+          </NuxtLink>
+        </div>
+        <div class="focus-metrics three">
+          <div class="focus-metric">
+            <span>Arrivées attendues</span>
+            <strong>{{ todayPendingArrivals }}</strong>
+          </div>
+          <div class="focus-metric">
+            <span>Check-ins</span>
+            <strong>{{ todaysCheckInsFormatted }}</strong>
+          </div>
+          <div class="focus-metric">
+            <span>Check-outs</span>
+            <strong>{{ todaysCheckOutsFormatted }}</strong>
+          </div>
+        </div>
+        <div class="focus-list">
+          <div class="focus-list-row">
+            <span>Séjours en cours</span>
+            <strong>{{ inHouseGuestsCount }}</strong>
+          </div>
+          <div class="focus-list-row">
+            <span>Notifications à traiter</span>
+            <strong>{{ unreadCount }}</strong>
+          </div>
+          <div class="focus-list-row">
+            <span>Paiements en attente</span>
+            <strong>{{ pendingPaymentsFormatted }}</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="focus-card card accent">
+        <div class="focus-head">
+          <div>
+            <h2>Capacité chambres</h2>
+            <p>Disponibilité, occupation et rotation ménage / maintenance.</p>
+          </div>
+          <span class="focus-badge">{{ roomOccupancyRateLabel }}</span>
+        </div>
+        <div class="occupancy-progress">
+          <div class="occupancy-track">
+            <span class="occupancy-fill" :style="{ width: occupancyProgressWidth }"></span>
+          </div>
+          <div class="occupancy-caption">
+            <span>{{ occupiedRoomsTodayCount }} occupée(s)</span>
+            <strong>{{ activeRoomsCount }} chambre(s) active(s)</strong>
+          </div>
+        </div>
+        <div class="status-chip-grid">
+          <div class="status-chip">
+            <span>Disponible</span>
+            <strong>{{ roomStatusCounts.available || 0 }}</strong>
+          </div>
+          <div class="status-chip info">
+            <span>Réservée</span>
+            <strong>{{ roomStatusCounts.reserved || 0 }}</strong>
+          </div>
+          <div class="status-chip success">
+            <span>Occupée</span>
+            <strong>{{ roomStatusCounts.occupied || 0 }}</strong>
+          </div>
+          <div class="status-chip warning">
+            <span>Nettoyage</span>
+            <strong>{{ roomStatusCounts.cleaning || 0 }}</strong>
+          </div>
+          <div class="status-chip danger">
+            <span>Maintenance</span>
+            <strong>{{ roomStatusCounts.maintenance || 0 }}</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="focus-card card">
+        <div class="focus-head">
+          <div>
+            <h2>Encaissement & relance</h2>
+            <p>Suivi des entrées de caisse et des soldes ouverts.</p>
+          </div>
+          <NuxtLink to="/admin/payments" class="btn btn-outline btn-sm admin-head-btn">
+            <i class="fas fa-credit-card"></i>
+            <span class="btn-label">Paiements</span>
+          </NuxtLink>
+        </div>
+        <div class="focus-metrics">
+          <div class="focus-metric">
+            <span>Aujourd'hui</span>
+            <strong>{{ formatMoney(revenueTodayAmount) }}</strong>
+          </div>
+          <div class="focus-metric">
+            <span>7 derniers jours</span>
+            <strong>{{ formatMoney(revenueWeekAmount) }}</strong>
+          </div>
+        </div>
+        <div class="focus-list">
+          <div class="focus-list-row">
+            <span>Reste à encaisser chambres</span>
+            <strong>{{ formatMoney(roomBalanceDueAmount) }}</strong>
+          </div>
+          <div class="focus-list-row">
+            <span>Revenu total encaissé</span>
+            <strong>{{ formatMoney(totalRevenueAmount) }}</strong>
+          </div>
+          <div class="focus-list-row">
+            <span>Stock critique à suivre</span>
+            <strong>{{ stockAlertsFormatted }}</strong>
+          </div>
         </div>
       </article>
     </section>
@@ -449,6 +580,13 @@ const pendingPaymentsFormatted = computed(() => pendingPaymentsCount.value.toLoc
 const todaysCheckInsFormatted = computed(() => todaysCheckInsCount.value.toLocaleString())
 const todaysCheckOutsFormatted = computed(() => todaysCheckOutsCount.value.toLocaleString())
 
+const addDays = (ymd, days) => {
+  const base = new Date(`${ymd}T00:00:00`)
+  if (Number.isNaN(base.getTime())) return ''
+  base.setDate(base.getDate() + days)
+  return toYmd(base)
+}
+
 const normalizeDate = (value) => String(value || '').slice(0, 10)
 
 const overlapsDate = (start, end, ymd) => {
@@ -461,6 +599,56 @@ const overlapsDate = (start, end, ymd) => {
 const displayBookingsToday = computed(() => {
   const t = todayYmd.value
   return (bookings.value || []).filter(b => overlapsDate(b.start_date, b.end_date, t)).length
+})
+
+const roomBookings = computed(() => {
+  const source = Array.isArray(bookings.value) ? bookings.value : []
+  return source.filter((booking) => String(booking.booking_type || '') === 'room' && String(booking.status || '') !== 'cancelled')
+})
+
+const todayPendingArrivals = computed(() => {
+  const t = todayYmd.value
+  return roomBookings.value.filter((booking) => {
+    const status = String(booking.status || '')
+    return normalizeDate(booking.start_date) === t
+      && !booking.checked_in_at
+      && ['pending', 'confirmed', 'paid'].includes(status)
+  }).length
+})
+
+const inHouseGuestsCount = computed(() => {
+  return roomBookings.value.filter(booking => booking.checked_in_at && !booking.checked_out_at).length
+})
+
+const revenueTodayAmount = computed(() => {
+  const t = todayYmd.value
+  return (payments.value || []).reduce((sum, payment) => {
+    if (String(payment.status || '') !== 'paid') return sum
+    return normalizeDate(payment.date || payment.created_at) === t ? sum + Number(payment.amount || 0) : sum
+  }, 0)
+})
+
+const revenueWeekAmount = computed(() => {
+  const end = todayYmd.value
+  const start = addDays(end, -6)
+  return (payments.value || []).reduce((sum, payment) => {
+    if (String(payment.status || '') !== 'paid') return sum
+    const ymd = normalizeDate(payment.date || payment.created_at)
+    return ymd >= start && ymd <= end ? sum + Number(payment.amount || 0) : sum
+  }, 0)
+})
+
+const roomBalanceDueAmount = computed(() => {
+  return roomBookings.value.reduce((sum, booking) => {
+    const remaining = Number(booking.remaining_amount || 0)
+    return remaining > 0 ? sum + remaining : sum
+  }, 0)
+})
+
+const occupancyProgressWidth = computed(() => {
+  const rate = Number(summary.value.room_occupancy_rate_today || 0)
+  const clamped = Math.min(100, Math.max(0, Number.isFinite(rate) ? rate : 0))
+  return `${clamped}%`
 })
 
 const recentBookings = computed(() => {
@@ -637,12 +825,12 @@ onMounted(() => {
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.88), rgba(212, 175, 55, 0.28));
   color: #ffffff;
   display: grid;
-  grid-template-columns: 1.35fr 0.65fr;
+  grid-template-columns: 1.5fr 0.9fr;
   gap: 0;
 }
 
 .hero-copy {
-  padding: var(--space-10);
+  padding: var(--space-6);
 }
 
 .hero-badge {
@@ -660,9 +848,9 @@ onMounted(() => {
 }
 
 .hero-title {
-  margin: var(--space-5) 0 var(--space-3);
+  margin: var(--space-3) 0 var(--space-2);
   color: #ffffff;
-  font-size: 1.9rem;
+  font-size: 1.55rem;
   font-weight: 900;
   line-height: 1.15;
 }
@@ -675,24 +863,26 @@ onMounted(() => {
 }
 
 .hero-actions {
-  margin-top: var(--space-6);
+  margin-top: var(--space-4);
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: 10px;
 }
 
 .hero-kpis {
-  padding: var(--space-10);
+  padding: var(--space-6);
   background: rgba(255, 255, 255, 0.06);
   border-left: 1px solid rgba(255, 255, 255, 0.14);
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
-  gap: var(--space-4);
+  gap: 10px;
 }
 
 .kpi {
-  padding: var(--space-6);
-  border-radius: 18px;
+  min-height: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
@@ -706,23 +896,217 @@ onMounted(() => {
 }
 
 .kpi-value {
-  margin-top: 10px;
-  font-size: 1.3rem;
+  margin-top: 8px;
+  font-size: 1.12rem;
   font-weight: 900;
   color: #ffffff;
 }
 
 .kpi-hint {
-  margin-top: 6px;
+  margin-top: 4px;
   color: rgba(255, 255, 255, 0.72);
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-6);
+}
+
+.hotel-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.focus-card {
+  padding: var(--space-5);
+  border-radius: 24px;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+}
+
+.focus-card.accent {
+  background: var(--white);
+  border-color: var(--gray-300);
+}
+
+.focus-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.focus-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: var(--gray-900);
+}
+
+.focus-head p {
+  margin: 6px 0 0;
+  color: var(--gray-500);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.focus-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 86px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  color: var(--gray-900);
+  font-weight: 900;
+  font-size: 0.9rem;
+}
+
+.focus-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: var(--space-4);
+}
+
+.focus-metrics.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.focus-metric {
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+
+.focus-metric span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+}
+
+.focus-metric strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--gray-900);
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.focus-list {
+  display: grid;
+  gap: 8px;
+}
+
+.focus-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border-radius: 16px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-100);
+  color: var(--gray-600);
+  font-weight: 700;
+}
+
+.focus-list-row strong {
+  color: var(--gray-900);
+  font-weight: 900;
+}
+
+.occupancy-progress {
+  display: grid;
+  gap: 10px;
+  margin-bottom: var(--space-4);
+}
+
+.occupancy-track {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--gray-100);
+  overflow: hidden;
+}
+
+.occupancy-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e 0%, #0ea5e9 55%, #d4af37 100%);
+}
+
+.occupancy-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--gray-500);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.occupancy-caption strong {
+  color: var(--gray-900);
+}
+
+.status-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.status-chip {
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+
+.status-chip span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+}
+
+.status-chip strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.05rem;
+  color: var(--gray-900);
+  font-weight: 950;
+}
+
+.status-chip.info {
+  border-color: rgba(14, 165, 233, 0.22);
+}
+
+.status-chip.success {
+  border-color: rgba(34, 197, 94, 0.22);
+}
+
+.status-chip.warning {
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+.status-chip.danger {
+  border-color: rgba(239, 68, 68, 0.22);
 }
 
 .stat-card {
@@ -739,6 +1123,7 @@ onMounted(() => {
 .stat-card:hover {
   transform: none;
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  background: var(--white);
 }
 
 .stat-icon {
@@ -928,7 +1313,7 @@ onMounted(() => {
 
 .row:hover {
   border-color: rgba(212, 175, 55, 0.45);
-  background: #fdfcf6;
+  background: var(--gray-50);
 }
 
 .row-main {
@@ -1110,6 +1495,76 @@ onMounted(() => {
   grid-column: span 2;
 }
 
+:global(html[data-admin-theme="dark"]) .stat-card,
+:global(html[data-admin-theme="dark"]) .focus-card,
+:global(html[data-admin-theme="dark"]) .panel,
+:global(html[data-admin-theme="dark"]) .row,
+:global(html[data-admin-theme="dark"]) .alert-card,
+:global(html[data-admin-theme="dark"]) .mini-row {
+  background: var(--white);
+  border-color: var(--gray-200);
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.2);
+}
+
+:global(html[data-admin-theme="dark"]) .focus-card.accent {
+  background: var(--white);
+  border-color: var(--gray-300);
+}
+
+:global(html[data-admin-theme="dark"]) .stat-label,
+:global(html[data-admin-theme="dark"]) .stat-meta,
+:global(html[data-admin-theme="dark"]) .panel-head p,
+:global(html[data-admin-theme="dark"]) .row-sub,
+:global(html[data-admin-theme="dark"]) .row-message,
+:global(html[data-admin-theme="dark"]) .muted,
+:global(html[data-admin-theme="dark"]) .focus-head p,
+:global(html[data-admin-theme="dark"]) .focus-metric span,
+:global(html[data-admin-theme="dark"]) .status-chip span,
+:global(html[data-admin-theme="dark"]) .focus-list-row,
+:global(html[data-admin-theme="dark"]) .occupancy-caption,
+:global(html[data-admin-theme="dark"]) .mini-sub {
+  color: var(--gray-400);
+}
+
+:global(html[data-admin-theme="dark"]) .stat-value,
+:global(html[data-admin-theme="dark"]) .panel-head h2,
+:global(html[data-admin-theme="dark"]) .row-title,
+:global(html[data-admin-theme="dark"]) .row-value,
+:global(html[data-admin-theme="dark"]) .alert-title,
+:global(html[data-admin-theme="dark"]) .alert-value,
+:global(html[data-admin-theme="dark"]) .mini-title,
+:global(html[data-admin-theme="dark"]) .mini-side,
+:global(html[data-admin-theme="dark"]) .focus-head h2,
+:global(html[data-admin-theme="dark"]) .focus-metric strong,
+:global(html[data-admin-theme="dark"]) .focus-list-row strong,
+:global(html[data-admin-theme="dark"]) .occupancy-caption strong,
+:global(html[data-admin-theme="dark"]) .status-chip strong {
+  color: var(--gray-700);
+}
+
+:global(html[data-admin-theme="dark"]) .stat-icon,
+:global(html[data-admin-theme="dark"]) .alert-icon,
+:global(html[data-admin-theme="dark"]) .panel-empty i,
+:global(html[data-admin-theme="dark"]) .mini-pill,
+:global(html[data-admin-theme="dark"]) .focus-badge,
+:global(html[data-admin-theme="dark"]) .focus-metric,
+:global(html[data-admin-theme="dark"]) .status-chip,
+:global(html[data-admin-theme="dark"]) .focus-list-row,
+:global(html[data-admin-theme="dark"]) .pill {
+  background: var(--gray-50);
+  border-color: var(--gray-200);
+}
+
+:global(html[data-admin-theme="dark"]) .panel-empty {
+  border-color: var(--gray-200);
+  background: var(--white);
+}
+
+:global(html[data-admin-theme="dark"]) .row:hover {
+  background: var(--gray-50);
+  border-color: rgba(212, 175, 55, 0.45);
+}
+
 @media (max-width: 1100px) {
   .hero {
     grid-template-columns: 1fr;
@@ -1123,6 +1578,10 @@ onMounted(() => {
 
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hotel-overview-grid {
+    grid-template-columns: 1fr;
   }
 
   .stat-card.wide {
@@ -1141,7 +1600,7 @@ onMounted(() => {
 @media (max-width: 520px) {
   .hero-copy,
   .hero-kpis {
-    padding: var(--space-7);
+    padding: var(--space-5);
   }
 
   .hero-kpis {
@@ -1150,6 +1609,19 @@ onMounted(() => {
 
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .focus-metrics,
+  .focus-metrics.three,
+  .status-chip-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-head,
+  .occupancy-caption,
+  .focus-list-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

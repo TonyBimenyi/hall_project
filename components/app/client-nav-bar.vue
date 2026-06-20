@@ -40,7 +40,7 @@
 
         <NuxtLink v-if="!isLoggedIn" :to="localePath('/login')" class="btn btn-outline btn-sm">{{ $t('nav.signIn') }}</NuxtLink>
         <template v-else>
-          <NuxtLink :to="localePath('/dashboard')" class="btn btn-outline btn-sm">{{ $t('nav.dashboard') }}</NuxtLink>
+          <NuxtLink :to="dashboardPath" class="btn btn-outline btn-sm">{{ $t('nav.dashboard') }}</NuxtLink>
           <button class="btn btn-danger btn-sm" @click="logout">{{ $t('nav.logout') }}</button>
         </template>
       </div>
@@ -66,7 +66,7 @@
             {{ $t('nav.signIn') }}
           </NuxtLink>
           <template v-else>
-            <NuxtLink :to="localePath('/dashboard')" class="btn btn-outline btn-sm" @click="isMenuOpen = false">
+            <NuxtLink :to="dashboardPath" class="btn btn-outline btn-sm" @click="isMenuOpen = false">
               {{ $t('nav.dashboard') }}
             </NuxtLink>
             <button class="btn btn-danger btn-sm" @click="logout">{{ $t('nav.logout') }}</button>
@@ -99,6 +99,8 @@
 </template>
 
 <script setup>
+import { canAccessAdmin, getDefaultAdminRoute, getStoredUser } from '~/composables/useRoleAccess'
+
 const route = useRoute()
 const router = useRouter()
 const { locale } = useI18n()
@@ -108,6 +110,7 @@ const switchLocalePath = useSwitchLocalePath()
 const isScrolled = ref(false)
 const isMenuOpen = ref(false)
 const isLoggedIn = ref(false)
+const currentUser = ref({})
 
 const navLinks = computed(() => [
   { key: 'nav.home', to: '/' },
@@ -130,8 +133,14 @@ const handleScroll = () => {
 }
 
 const checkLogin = () => {
+  currentUser.value = getStoredUser()
   isLoggedIn.value = !!localStorage.getItem('user')
 }
+
+const dashboardPath = computed(() => {
+  const user = currentUser.value || {}
+  return localePath(canAccessAdmin(user) ? getDefaultAdminRoute(user) : '/dashboard')
+})
 
 const logout = () => {
   localStorage.removeItem('user')
@@ -152,10 +161,12 @@ onMounted(() => {
   handleScroll()
   window.addEventListener('scroll', handleScroll)
   checkLogin()
+  window.addEventListener('storage', checkLogin)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('storage', checkLogin)
 })
 </script>
 

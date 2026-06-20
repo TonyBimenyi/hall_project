@@ -81,6 +81,7 @@ export const useAdminExportDocuments = () => {
     periodLabel = 'Toutes les dates',
     printedBy = getPrintedByLabel(),
     generatedAt = new Date().toLocaleString('fr-FR'),
+    showMeta = true,
   }) => {
     const metaItems = [
       { label: 'Période sélectionnée', value: periodLabel || 'Toutes les dates' },
@@ -374,13 +375,14 @@ export const useAdminExportDocuments = () => {
     <div class="body">
       <div class="doc-export-title" style="display:none;">${escapeHtml(title)}</div>
       <div class="doc-export-table-titles" style="display:none;">${normalizedTableTitles.map(value => `<span>${escapeHtml(value)}</span>`).join('')}</div>
+      ${showMeta ? `
       <div class="meta">
         ${metaItems.map(item => `
         <div class="meta-card">
           <strong>${escapeHtml(item.label)}</strong>
           <span class="${escapeHtml(item.valueClass || '')}">${escapeHtml(item.value)}</span>
         </div>`).join('')}
-      </div>
+      </div>` : ''}
       <div class="export-content">${contentHtml}</div>
       <div class="footer">
         <div class="footer-card">
@@ -838,6 +840,31 @@ export const useAdminExportDocuments = () => {
     return true
   }
 
+  const openPrintPreviewHtml = ({ html, title = 'Document' }) => {
+    if (!process.client || !html) return false
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=980,height=860')
+    if (!printWindow) return false
+
+    const safeTitle = escapeHtml(title || 'Document')
+    const preparedHtml = String(html)
+      .replace(/<title>[\s\S]*?<\/title>/i, `<title>${safeTitle}</title>`)
+      .replace('</body>', `
+        <script>
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              try { window.focus(); } catch (e) {}
+              try { window.print(); } catch (e) {}
+            }, 250);
+          });
+        </script>
+      </body>`)
+
+    printWindow.document.open()
+    printWindow.document.write(preparedHtml)
+    printWindow.document.close()
+    return true
+  }
+
   return {
     buildExportFileName,
     buildExportTimestamp,
@@ -846,5 +873,6 @@ export const useAdminExportDocuments = () => {
     buildPdfDocumentHtml,
     downloadHtmlAsXls,
     downloadPdfHtml,
+    openPrintPreviewHtml,
   }
 }

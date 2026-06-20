@@ -1057,9 +1057,6 @@ class BookingViewSet(viewsets.ModelViewSet):
             _refresh_room_reservation_state(serializer.instance.room)
 
     def create(self, request, *args, **kwargs):
-        # #region debug-point A:booking-create-entry
-        import json, urllib.request; _p='.dbg/post-broken-pipe.env'; _u,_s='http://127.0.0.1:7777/event','post-broken-pipe'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"A","location":"api/views.py:BookingViewSet.create","msg":"[DEBUG] booking create entry","data":{"keys":list((request.data or {}).keys()),"booking_type":(request.data or {}).get("booking_type"),"has_email":bool((request.data or {}).get("customer_email"))}}).encode(), headers={"Content-Type":"application/json"}), timeout=2).read()
-        # #endregion
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
@@ -1112,9 +1109,6 @@ class BookingViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         response_data = dict(serializer.data)
         response_data['email_sent'] = email_sent
-        # #region debug-point B:booking-create-response
-        import json, urllib.request; _p='.dbg/post-broken-pipe.env'; _u,_s='http://127.0.0.1:7777/event','post-broken-pipe'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"B","location":"api/views.py:BookingViewSet.create","msg":"[DEBUG] booking response ready","data":{"booking_id":getattr(booking,"id",None),"email_sent":email_sent,"response_keys":list(response_data.keys())}}).encode(), headers={"Content-Type":"application/json"}), timeout=2).read()
-        # #endregion
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny], url_path='guest')
@@ -1557,9 +1551,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
         _sync_room_status_for_booking(booking, room_action)
 
     def create(self, request, *args, **kwargs):
-        # #region debug-point A:payment-create-entry
-        import json, urllib.request; _p='.dbg/post-broken-pipe.env'; _u,_s='http://127.0.0.1:7777/event','post-broken-pipe'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"A","location":"api/views.py:PaymentViewSet.create","msg":"[DEBUG] payment create entry","data":{"keys":list((request.data or {}).keys()),"booking":(request.data or {}).get("booking"),"room_action":(request.data or {}).get("room_action")}}).encode(), headers={"Content-Type":"application/json"}), timeout=2).read()
-        # #endregion
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         payment = serializer.save(created_by=_actor(request), updated_by=_actor(request))
@@ -1592,9 +1583,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
         output = self.get_serializer(payment)
         response_data = dict(output.data)
         response_data['invoice_email_sent'] = invoice_email_sent
-        # #region debug-point B:payment-create-response
-        import json, urllib.request; _p='.dbg/post-broken-pipe.env'; _u,_s='http://127.0.0.1:7777/event','post-broken-pipe'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"B","location":"api/views.py:PaymentViewSet.create","msg":"[DEBUG] payment response ready","data":{"payment_id":getattr(payment,"id",None),"booking_id":getattr(getattr(payment,"booking",None),"id",None),"invoice_email_sent":invoice_email_sent,"response_keys":list(response_data.keys())}}).encode(), headers={"Content-Type":"application/json"}), timeout=2).read()
-        # #endregion
         return Response(response_data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):

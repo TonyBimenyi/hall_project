@@ -157,7 +157,7 @@
                     class="actions-item"
                     @click="printBookingJeton(booking)"
                   >
-                    <i class="fas fa-print"></i> Imprimer le jeton
+                    <i class="fas fa-file-arrow-down"></i> Télécharger le jeton
                   </button>
                   <button
                     v-if="booking.status === 'pending'"
@@ -264,7 +264,7 @@
               <td class="customer-cell">
                 <div class="customer-name">{{ booking.customer_name }}</div>
                 <div class="customer-email">{{ booking.customer_email }}</div>
-                <div v-if="booking.booking_type === 'room'" class="customer-meta">{{ booking.guest_full_name || booking.customer_name }} • {{ guestIdSummary(booking) }}</div>
+                <div v-if="booking.booking_type === 'room'" class="customer-meta">{{ guestIdSummary(booking) }}</div>
               </td>
               <td>
                 <span class="badge" :style="{ background: booking.booking_type === 'hall' ? '#eff6ff' : '#f0fdf4', color: booking.booking_type === 'hall' ? '#1e40af' : '#166534' }">
@@ -290,7 +290,7 @@
                       <i class="fas fa-coins"></i> Payer
                     </NuxtLink>
                     <button v-if="booking.status === 'pending'" class="actions-item" @click="printBookingJeton(booking)">
-                      <i class="fas fa-print"></i> Imprimer le jeton
+                      <i class="fas fa-file-arrow-down"></i> Télécharger le jeton
                     </button>
                     <button v-if="booking.status === 'pending'" class="actions-item" :class="{ 'is-loading': actionBookingId === booking.id && actionType === 'approve' }" :disabled="actionBookingId === booking.id" @click="approve(booking)">
                       <i class="fas fa-check-circle"></i> Approuver
@@ -496,6 +496,8 @@
                   <strong>{{ stay.room_display || '-' }}</strong>
                   <span>{{ stay.start_date }} → {{ stay.end_date }}</span>
                   <span>{{ getStatusTranslation(stay.status) }}</span>
+                  <span>Check-in: {{ stay.checked_in_at ? formatDateTime(stay.checked_in_at) : 'Non effectué' }}</span>
+                  <span>Check-out: {{ stay.checked_out_at ? formatDateTime(stay.checked_out_at) : 'Non effectué' }}</span>
                 </div>
               </div>
             </div>
@@ -690,8 +692,8 @@
               <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ getStatusTranslation(selectedBooking.status) }}</span></div>
               <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Client hébergé</span><span class="entity-view-value">{{ selectedBooking.guest_full_name || selectedBooking.customer_name }}</span></div>
               <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Pièce</span><span class="entity-view-value">{{ guestIdSummary(selectedBooking) }}</span></div>
-              <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-in</span><span class="entity-view-value">{{ selectedBooking.checked_in_at ? formatDisplayDate(selectedBooking.checked_in_at) : 'Non effectué' }}</span></div>
-              <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-out</span><span class="entity-view-value">{{ selectedBooking.checked_out_at ? formatDisplayDate(selectedBooking.checked_out_at) : 'Non effectué' }}</span></div>
+              <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-in</span><span class="entity-view-value">{{ selectedBooking.checked_in_at ? formatDateTime(selectedBooking.checked_in_at) : 'Non effectué' }}</span></div>
+              <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-out</span><span class="entity-view-value">{{ selectedBooking.checked_out_at ? formatDateTime(selectedBooking.checked_out_at) : 'Non effectué' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé le</span><span class="entity-view-value">{{ formatDisplayDate(selectedBooking.created_at) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedBooking.created_by_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedBooking.updated_by_name || selectedBooking.created_by_name || '-' }}</span></div>
@@ -706,6 +708,8 @@
                 <strong>{{ stay.room_display || '-' }}</strong>
                 <span>{{ stay.start_date }} → {{ stay.end_date }}</span>
                 <span>{{ getStatusTranslation(stay.status) }}</span>
+                <span>Check-in: {{ stay.checked_in_at ? formatDateTime(stay.checked_in_at) : 'Non effectué' }}</span>
+                <span>Check-out: {{ stay.checked_out_at ? formatDateTime(stay.checked_out_at) : 'Non effectué' }}</span>
               </div>
             </div>
           </section>
@@ -761,9 +765,9 @@ import { canDeleteBookings as canDeleteBookingsByRole, getStoredUser } from '~/c
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
 const { formatMoney, formatNumberSpaces, moneyInputModel, parseMoney } = useMoney()
-const { formatDateRange, formatDisplayDate } = useDateFormat()
-const { documentBranding, documentLogoUrl, escapeHtml } = useDocumentBranding()
-const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
+const { formatDateRange, formatDisplayDate, formatDateTime } = useDateFormat()
+const { escapeHtml } = useDocumentBranding()
+const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName, openPrintPreviewHtml } = useAdminExportDocuments()
 // #region debug-point A:booking-debug-reporter
 const reportBookingDebug = (hypothesisId, msg, data = {}) => {
   try {
@@ -1661,7 +1665,7 @@ const saveBooking = async () => {
           responseId: response?.data?.id ?? null,
         })
         // #endregion
-        printReservationJeton(createdBooking, Boolean(response.data?.email_sent))
+        openReservationJetonPrintPreview(createdBooking, Boolean(response.data?.email_sent))
       }
     }
     showFormModal.value = false
@@ -1834,9 +1838,9 @@ const confirmDelete = (booking) => {
   showDeleteModal.value = true
 }
 
-const printBookingJeton = (booking) => {
+const printBookingJeton = async (booking) => {
   closeActions()
-  printReservationJeton(booking)
+  await printReservationJeton(booking)
 }
 
 const normalizeEventType = (eventType, eventTypeOther = '') => {
@@ -1897,156 +1901,130 @@ const buildBookingPayload = () => {
   }
 }
 
-const getCurrentPrintUserLabel = () => {
-  if (!process.client) return 'Utilisateur'
+const buildPdfFileName = (prefix, identifier) => {
+  const normalizedIdentifier = String(identifier || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 
-  try {
-    const user = JSON.parse(localStorage.getItem('user') || '{}')
-    const first = String(user?.first_name || '').trim()
-    const last = String(user?.last_name || '').trim()
-    const full = `${first} ${last}`.trim()
-
-    return full || user?.full_name || user?.email || user?.username || 'Utilisateur'
-  } catch {
-    return 'Utilisateur'
-  }
+  return normalizedIdentifier
+    ? `${prefix}-${normalizedIdentifier}.pdf`
+    : buildExportFileName(prefix, 'pdf')
 }
 
-const printReservationJeton = (booking, emailSent = null) => {
-  if (!process.client) return
-  const win = window.open('', '_blank', 'width=900,height=700')
-  if (!win) return
-
+const buildReservationJetonPdfHtml = (booking, emailSent = null) => {
   const displayId = getBookingDisplayId(booking)
-  const printedBy = getCurrentPrintUserLabel()
   const reservationNumber = booking?.id || '-'
   const bookedItemLabel = booking?.booking_type === 'room' ? 'Chambre' : 'Salle'
   const bookedItemName = booking?.booking_type === 'room' ? (booking?.room_display || '') : (booking?.hall_name || '')
-  let emailLine = `<div class="row"><span>Email client</span><strong>Non renseigne</strong></div>`
-  if (booking.customer_email) {
-    emailLine = `<div class="row"><span>Email client</span><strong>${escapeHtml(booking.customer_email)}</strong></div>`
-    if (typeof emailSent === 'boolean') {
-      emailLine += `<div class="row"><span>Email envoye</span><strong>${emailSent ? 'Oui' : 'Non'}</strong></div>`
-    }
+  const emailValue = booking?.customer_email || 'Non renseigné'
+  const emailSentLabel = typeof emailSent === 'boolean' ? (emailSent ? 'Oui' : 'Non') : '-'
+  const periodLabel = formatDateRange(booking?.start_date, booking?.end_date)
+  const detailRows = [
+    ['Client', booking?.customer_name || '-'],
+    [bookedItemLabel, bookedItemName || '-'],
+    ['Evénement', booking?.event_type || '-'],
+    ['Période', periodLabel || '-'],
+    ['Montant', formatMoney(booking?.total_price)],
+    ['Statut', getStatusTranslation(booking?.status)],
+    ['Email client', emailValue],
+  ]
+
+  if (typeof emailSent === 'boolean') {
+    detailRows.push(['Email envoyé', emailSentLabel])
   }
 
-  win.document.write(`<!doctype html>
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <title>${escapeHtml(documentBranding.documents?.bookingTitle || 'Jeton de reservation')}</title>
-      <style>
-        body { font-family: Arial, sans-serif; background: #eef2f7; padding: 24px; color: #0f172a; }
-        .ticket { max-width: 820px; margin: 0 auto; background: #fff; border: 1px solid #dbe3ee; border-radius: 28px; overflow: hidden; box-shadow: 0 24px 50px rgba(15, 23, 42, 0.10); }
-        .head { padding: 28px 30px 24px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #8b6b12 100%); color: #fff; }
-        .brand { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
-        .brand-main { display: flex; align-items: center; gap: 16px; }
-        .logo-wrap { width: 76px; height: 76px; border-radius: 22px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.24); display: flex; align-items: center; justify-content: center; overflow: hidden; backdrop-filter: blur(4px); }
-        .logo-wrap img { width: 100%; height: 100%; object-fit: cover; }
-        .brand-copy small { display: block; text-transform: uppercase; letter-spacing: 0.28em; font-size: 11px; color: rgba(255,255,255,.72); margin-bottom: 8px; }
-        .brand-copy h1 { margin: 0; font-size: 30px; line-height: 1.05; }
-        .brand-copy p { margin: 8px 0 0; color: rgba(255,255,255,.84); max-width: 420px; }
-        .chip { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; border-radius: 999px; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.22); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; }
-        .body { padding: 28px 30px 16px; }
-        .top-meta { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 20px; }
-        .code-block { display: flex; flex-direction: column; gap: 8px; }
-        .code-label { color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; }
-        .code { display: inline-block; padding: 12px 16px; border-radius: 16px; background: linear-gradient(135deg, #eff6ff, #f8fafc); color: #1d4ed8; font-size: 24px; font-weight: 800; letter-spacing: 0.05em; border: 1px solid #bfdbfe; }
-        .meta-panel { min-width: 260px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 18px; padding: 16px; }
-        .meta-line { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 6px 0; }
-        .meta-line span { color: #64748b; font-weight: 700; }
-        .meta-line strong { color: #0f172a; text-align: right; }
-        .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
-        .row { display: flex; justify-content: space-between; gap: 12px; padding: 15px 16px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; }
-        .row span { color: #64748b; font-weight: 700; }
-        .row strong { text-align: right; }
-        .note { margin-top: 18px; padding: 16px 18px; border-radius: 16px; background: #fffaf0; border: 1px solid #fcd34d; color: #92400e; }
-        .footer { margin-top: 22px; padding: 18px 30px 22px; border-top: 1px solid #e2e8f0; background: #f8fafc; }
-        .footer-title { font-size: 13px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #475569; margin-bottom: 10px; }
-        .footer-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; }
-        .footer-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px 16px; }
-        .footer-card p { margin: 0; color: #334155; line-height: 1.6; }
-        .footer-card ul { list-style: none; padding: 0; margin: 0; }
-        .footer-card li { padding: 3px 0; color: #334155; }
-        @media (max-width: 720px) {
-          .brand, .top-meta, .footer-grid, .grid { grid-template-columns: 1fr; display: grid; }
-          .brand-main { align-items: flex-start; }
-          .meta-panel { min-width: 0; }
-          .row, .meta-line { flex-direction: column; }
-          .row strong, .meta-line strong { text-align: left; }
-        }
-        @media print {
-          body { background: #fff; padding: 0; }
-          .ticket { border: none; box-shadow: none; }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="ticket">
-        <div class="head">
-          <div class="brand">
-            <div class="brand-main">
-              <div class="logo-wrap">
-                <img src="${escapeHtml(documentLogoUrl)}" alt="Logo ${escapeHtml(documentBranding.name)}" />
-              </div>
-              <div class="brand-copy">
-                <small>${escapeHtml(documentBranding.tagline)}</small>
-                <h1>${escapeHtml(documentBranding.name)}</h1>
-                <p>${escapeHtml(documentBranding.documents?.bookingTitle || 'Jeton officiel de reservation a presenter pour le suivi et l\'accueil.')}</p>
-              </div>
-            </div>
-            <div class="chip">Reservation</div>
+  if (booking?.booking_type === 'room') {
+    detailRows.push(['Client hébergé', booking?.guest_full_name || booking?.customer_name || '-'])
+    detailRows.push(['Pièce', guestIdSummary(booking)])
+  }
+
+  return buildPdfDocumentHtml({
+    title: 'Jeton de réservation',
+    documentTitle: `Jeton ${displayId}`,
+    subtitle: 'Jeton officiel de reservation a presenter pour le suivi de votre dossier ou a l accueil.',
+    typeLabel: 'Jeton PDF',
+    tableTitle: 'Détails du jeton',
+    tableTitles: ['Détails du jeton'],
+    periodLabel,
+    contentHtml: `
+      <div class="summary-cards">
+        <div class="summary-card">
+          <div>
+            <div class="label">Code de réservation</div>
+            <div class="value">${escapeHtml(displayId)}</div>
           </div>
         </div>
-        <div class="body">
-          <div class="top-meta">
-            <div class="code-block">
-              <span class="code-label">Code de reservation</span>
-              <div class="code">${escapeHtml(displayId)}</div>
-            </div>
-            <div class="meta-panel">
-              <div class="meta-line"><span>Numero</span><strong>${escapeHtml(reservationNumber)}</strong></div>
-              <div class="meta-line"><span>Imprime par</span><strong>${escapeHtml(printedBy)}</strong></div>
-              <div class="meta-line"><span>Date d'impression</span><strong>${escapeHtml(new Date().toLocaleString('fr-FR'))}</strong></div>
-            </div>
-          </div>
-          <div class="grid">
-            <div class="row"><span>Client</span><strong>${escapeHtml(booking.customer_name)}</strong></div>
-            <div class="row"><span>${escapeHtml(bookedItemLabel)}</span><strong>${escapeHtml(bookedItemName)}</strong></div>
-            <div class="row"><span>Evenement</span><strong>${escapeHtml(booking.event_type)}</strong></div>
-            <div class="row"><span>Periode</span><strong>${escapeHtml(formatDateRange(booking.start_date, booking.end_date))}</strong></div>
-            <div class="row"><span>Montant</span><strong>${escapeHtml(formatMoney(booking.total_price))}</strong></div>
-            <div class="row"><span>Statut</span><strong>${escapeHtml(getStatusTranslation(booking.status))}</strong></div>
-            ${booking?.booking_type === 'room' ? `<div class="row"><span>Client heberge</span><strong>${escapeHtml(booking.guest_full_name || booking.customer_name || '')}</strong></div>` : ''}
-            ${booking?.booking_type === 'room' ? `<div class="row"><span>Piece</span><strong>${escapeHtml(guestIdSummary(booking))}</strong></div>` : ''}
-            ${emailLine}
-          </div>
-          <div class="note">
-            Merci de conserver ce jeton. Il peut vous etre demande lors du suivi de votre dossier ou a l'arrivee.
+        <div class="summary-card">
+          <div>
+            <div class="label">Numéro</div>
+            <div class="value">${escapeHtml(reservationNumber)}</div>
           </div>
         </div>
-        <div class="footer">
-          <div class="footer-title">Informations de contact</div>
-          <div class="footer-grid">
-            <div class="footer-card">
-              <p><strong>Adresse</strong><br />${escapeHtml(documentBranding.address)}</p>
-            </div>
-            <div class="footer-card">
-              <ul>
-                ${documentBranding.contacts.map(contact => `<li>${escapeHtml(contact)}</li>`).join('')}
-              </ul>
-            </div>
+        <div class="summary-card">
+          <div>
+            <div class="label">Type</div>
+            <div class="value">${escapeHtml(bookedItemLabel)}</div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div>
+            <div class="label">Montant</div>
+            <div class="value">${escapeHtml(formatMoney(booking?.total_price))}</div>
           </div>
         </div>
       </div>
-      <script>
-        window.onload = function () {
-          window.print();
-        };
-      <\/script>
-    </body>
-  </html>`)
-  win.document.close()
+      <div class="section-card">
+        <div class="section-header"><h2>Détails du jeton</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Information</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${detailRows.map(([label, value]) => `
+              <tr>
+                <td>${escapeHtml(label)}</td>
+                <td>${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><h2>Note</h2></div>
+        <p>Merci de conserver ce jeton. Il peut vous etre demande lors du suivi de votre dossier ou a l arrivee.</p>
+      </div>
+    `,
+  })
+}
+
+const openReservationJetonPrintPreview = (booking, emailSent = null) => {
+  if (!process.client || !booking) return
+  const html = buildReservationJetonPdfHtml(booking, emailSent)
+  const ok = openPrintPreviewHtml({
+    html,
+    title: `Jeton ${getBookingDisplayId(booking)}`,
+  })
+  if (!ok) {
+    notify('Impossible d’ouvrir l’aperçu d’impression du jeton', 'warning')
+  }
+}
+
+const printReservationJeton = async (booking) => {
+  if (!process.client || !booking) return
+  const html = buildReservationJetonPdfHtml(booking)
+  const ok = await downloadPdfHtml({
+    html,
+    fileName: buildPdfFileName('jeton-reservation', getBookingDisplayId(booking)),
+  })
+  if (!ok) {
+    notify('Impossible de télécharger le jeton PDF', 'warning')
+  }
 }
 </script>
 
