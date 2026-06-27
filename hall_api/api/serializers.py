@@ -239,6 +239,11 @@ class BookingSerializer(serializers.ModelSerializer):
     hall_name = serializers.ReadOnlyField(source='hall.name')
     room_display = serializers.SerializerMethodField()
     room_status = serializers.ReadOnlyField(source='room.status')
+    room_count = serializers.SerializerMethodField()
+    room_stays = serializers.SerializerMethodField()
+    pending_room_count = serializers.SerializerMethodField()
+    in_house_room_count = serializers.SerializerMethodField()
+    completed_room_count = serializers.SerializerMethodField()
     remaining_amount = serializers.SerializerMethodField()
     created_by = serializers.ReadOnlyField(source='created_by_id')
     created_by_name = serializers.SerializerMethodField()
@@ -253,33 +258,138 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_room_display(self, obj):
-        if obj.booking_type == 'room' and obj.room:
-            return str(obj.room)
+        if obj.booking_type == 'room':
+            return obj.room_display_summary or (str(obj.room) if obj.room else None)
         return None
+
+    def get_room_count(self, obj):
+        if obj.booking_type != 'room':
+            return 0
+        return len(obj.selected_room_ids)
+
+    def get_room_stays(self, obj):
+        if obj.booking_type != 'room':
+            return []
+        room_map = {room.id: room for room in obj.selected_rooms}
+        items = []
+        for stay in obj.normalized_room_stays:
+            room_id = stay.get('room_id')
+            room = room_map.get(room_id)
+            checked_in_at = stay.get('checked_in_at')
+            checked_out_at = stay.get('checked_out_at')
+            if checked_in_at and not checked_out_at:
+                stay_status = 'occupied'
+            elif checked_out_at:
+                stay_status = 'cleaning'
+            elif str(obj.status or '') == 'paid':
+                stay_status = 'reserved'
+            else:
+                stay_status = 'pending'
+            guests = stay.get('guests') or []
+            items.append({
+                'room_id': room_id,
+                'room_display': str(room) if room else '',
+                'room_number': getattr(room, 'room_number', ''),
+                'room_name': getattr(room, 'name', ''),
+                'room_type': getattr(room, 'room_type', ''),
+                'room_capacity': getattr(room, 'capacity', 0),
+                'room_status': getattr(room, 'status', ''),
+                'stay_status': stay_status,
+                'checked_in_at': checked_in_at,
+                'checked_out_at': checked_out_at,
+                'guest_count': len(guests),
+                'guests': guests,
+                'can_check_in': bool(str(obj.status or '') == 'paid' and not checked_in_at),
+                'can_check_out': bool(checked_in_at and not checked_out_at),
+            })
+        return items
+
+    def get_pending_room_count(self, obj):
+        if obj.booking_type != 'room':
+            return 0
+        return sum(1 for stay in obj.normalized_room_stays if not stay.get('checked_in_at'))
+
+    def get_in_house_room_count(self, obj):
+        if obj.booking_type != 'room':
+            return 0
+        return sum(1 for stay in obj.normalized_room_stays if stay.get('checked_in_at') and not stay.get('checked_out_at'))
+
+    def get_completed_room_count(self, obj):
+        if obj.booking_type != 'room':
+            return 0
+        return sum(1 for stay in obj.normalized_room_stays if stay.get('checked_out_at'))
 
     def validate(self, data):
         instance = getattr(self, 'instance', None)
         booking_type = data.get('booking_type', getattr(instance, 'booking_type', 'hall'))
+        customer_kind = str(data.get('customer_kind', getattr(instance, 'customer_kind', 'individual')) or 'individual').strip() or 'individual'
         hall = data.get('hall', getattr(instance, 'hall', None))
         room = data.get('room', getattr(instance, 'room', None))
+        raw_room_ids = data.get('room_ids', getattr(instance, 'room_ids', []))
+        organization_name = str(data.get('organization_name', getattr(instance, 'organization_name', '')) or '').strip()
+        organization_contact_name = str(data.get('organization_contact_name', getattr(instance, 'organization_contact_name', '')) or '').strip()
+
+        normalized_room_ids = []
+        if booking_type == 'room':
+            source_ids = raw_room_ids if isinstance(raw_room_ids, list) else []
+            for value in source_ids:
+                try:
+                    room_id = int(value)
+                except (TypeError, ValueError):
+                    continue
+                if room_id not in normalized_room_ids:
+                    normalized_room_ids.append(room_id)
+            if getattr(room, 'id', None) and room.id not in normalized_room_ids:
+                normalized_room_ids.insert(0, room.id)
+            if not normalized_room_ids and getattr(room, 'id', None):
+                normalized_room_ids = [room.id]
+        data['room_ids'] = normalized_room_ids
 
         if booking_type == 'hall' and not hall:
             raise serializers.ValidationError({'hall': 'Ce champ est obligatoire pour une réservation de salle'})
-        if booking_type == 'room' and not room:
-            raise serializers.ValidationError({'room': 'Ce champ est obligatoire pour une réservation de chambre'})
-        if booking_type == 'room' and room and getattr(room, 'status', '') == 'maintenance':
-            raise serializers.ValidationError({'room': 'Cette chambre est actuellement en maintenance'})
+        if booking_type == 'room' and not normalized_room_ids:
+            raise serializers.ValidationError({'room_ids': 'Choisissez au moins une chambre'})
+        if booking_type == 'room':
+            rooms = list(Room.objects.filter(id__in=normalized_room_ids))
+            rooms_map = {item.id: item for item in rooms}
+            missing_ids = [room_id for room_id in normalized_room_ids if room_id not in rooms_map]
+            if missing_ids:
+                raise serializers.ValidationError({'room_ids': 'Une ou plusieurs chambres sélectionnées sont introuvables'})
+            ordered_rooms = [rooms_map[room_id] for room_id in normalized_room_ids]
+            maintenance_room = next((item for item in ordered_rooms if getattr(item, 'status', '') == 'maintenance'), None)
+            if maintenance_room is not None:
+                raise serializers.ValidationError({'room_ids': f"La chambre {maintenance_room} est actuellement en maintenance"})
+            data['room'] = ordered_rooms[0]
+            start_date = data.get('start_date', getattr(instance, 'start_date', None))
+            end_date = data.get('end_date', getattr(instance, 'end_date', None))
+            if start_date and end_date:
+                overlapping_bookings = (
+                    Booking.objects
+                    .filter(booking_type='room', status__in=['pending', 'confirmed', 'paid'], start_date__lte=end_date, end_date__gte=start_date)
+                    .exclude(id=getattr(instance, 'id', None))
+                )
+                busy_room_ids = set()
+                for booking in overlapping_bookings:
+                    for booking_room_id in booking.selected_room_ids:
+                        busy_room_ids.add(int(booking_room_id))
+                conflicts = [rooms_map[room_id] for room_id in normalized_room_ids if room_id in busy_room_ids]
+                if conflicts:
+                    raise serializers.ValidationError({
+                        'room_ids': f"Ces chambres ne sont pas disponibles pour cette période: {', '.join(str(room) for room in conflicts)}"
+                    })
+            selected_services = data.get('additional_services_selected', getattr(instance, 'additional_services_selected', []))
+            if len(normalized_room_ids) != 1 and selected_services:
+                raise serializers.ValidationError({
+                    'additional_services_selected': 'Les services additionnels sont disponibles uniquement pour une réservation avec une seule chambre'
+                })
+
+        if customer_kind == 'organization' and not organization_name:
+            raise serializers.ValidationError({'organization_name': "Le nom de l'organisation est requis"})
 
         if booking_type == 'room':
             guest_full_name = str(data.get('guest_full_name', getattr(instance, 'guest_full_name', '')) or '').strip()
-            guest_id_type = str(data.get('guest_id_type', getattr(instance, 'guest_id_type', '')) or '').strip()
-            guest_id_number = str(data.get('guest_id_number', getattr(instance, 'guest_id_number', '')) or '').strip()
-            if not guest_full_name:
-                raise serializers.ValidationError({'guest_full_name': 'Le nom complet du client heberge est requis'})
-            if not guest_id_type:
-                raise serializers.ValidationError({'guest_id_type': 'Le type de piece est requis'})
-            if not guest_id_number:
-                raise serializers.ValidationError({'guest_id_number': 'Le numero de piece est requis'})
+            if customer_kind == 'organization' and organization_contact_name and not guest_full_name:
+                data['guest_full_name'] = organization_contact_name
 
         return data
 
@@ -362,7 +472,7 @@ class BookingSerializer(serializers.ModelSerializer):
             {
                 'id': stay.id,
                 'code': stay.code,
-                'room_display': str(stay.room) if stay.room else '',
+                'room_display': stay.room_display_summary or (str(stay.room) if stay.room else ''),
                 'start_date': stay.start_date.isoformat() if stay.start_date else None,
                 'end_date': stay.end_date.isoformat() if stay.end_date else None,
                 'status': stay.status,
@@ -376,10 +486,10 @@ class BookingSerializer(serializers.ModelSerializer):
         return len(self.get_stay_history(obj))
 
     def get_can_check_in(self, obj):
-        return bool(obj.booking_type == 'room' and not obj.checked_in_at and obj.status == 'paid')
+        return bool(obj.booking_type == 'room' and obj.status == 'paid' and any(not stay.get('checked_in_at') for stay in obj.normalized_room_stays))
 
     def get_can_check_out(self, obj):
-        return bool(obj.booking_type == 'room' and obj.checked_in_at and not obj.checked_out_at)
+        return bool(obj.booking_type == 'room' and any(stay.get('checked_in_at') and not stay.get('checked_out_at') for stay in obj.normalized_room_stays))
 
 class PersonnelSerializer(serializers.ModelSerializer):
     has_account = serializers.SerializerMethodField()
@@ -492,6 +602,7 @@ class PaymentSerializer(serializers.ModelSerializer):
     booking_hall_name = serializers.ReadOnlyField(source='booking.hall.name')
     booking_room_display = serializers.SerializerMethodField()
     booking_room_status = serializers.ReadOnlyField(source='booking.room.status')
+    booking_room_count = serializers.SerializerMethodField()
     booking_guest_full_name = serializers.ReadOnlyField(source='booking.guest_full_name')
     booking_guest_id_type = serializers.ReadOnlyField(source='booking.guest_id_type')
     booking_guest_id_number = serializers.ReadOnlyField(source='booking.guest_id_number')
@@ -526,9 +637,15 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     def get_booking_room_display(self, obj):
         booking = getattr(obj, 'booking', None)
-        if not booking or booking.booking_type != 'room' or not booking.room:
+        if not booking or booking.booking_type != 'room':
             return None
-        return str(booking.room)
+        return booking.room_display_summary or (str(booking.room) if booking.room else None)
+
+    def get_booking_room_count(self, obj):
+        booking = getattr(obj, 'booking', None)
+        if not booking or booking.booking_type != 'room':
+            return 0
+        return len(booking.selected_room_ids)
 
     def get_created_by_name(self, obj):
         return _user_label(getattr(obj, 'created_by', None))
@@ -561,22 +678,9 @@ class PaymentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'amount': 'Le montant dépasse le reste à payer'})
 
         if room_action != 'none':
-            if booking.booking_type != 'room':
-                raise serializers.ValidationError({'room_action': 'Cette action est réservée aux réservations de chambre'})
-            if status != 'paid':
-                raise serializers.ValidationError({'room_action': 'Le paiement doit être marqué comme payé pour gérer le séjour'})
-            if room_action == 'check_in':
-                if booking.checked_in_at:
-                    raise serializers.ValidationError({'room_action': 'Le check-in a déjà été effectué'})
-                if not str(booking.guest_full_name or '').strip() or not str(booking.guest_id_type or '').strip() or not str(booking.guest_id_number or '').strip():
-                    raise serializers.ValidationError({'room_action': 'Complétez le profil client et la pièce d’identité avant le check-in'})
-            if room_action == 'check_out':
-                if not booking.checked_in_at:
-                    raise serializers.ValidationError({'room_action': 'Le check-in doit être effectué avant le check-out'})
-                if booking.checked_out_at:
-                    raise serializers.ValidationError({'room_action': 'Le check-out a déjà été effectué'})
-                if amount is None or amount < remaining:
-                    raise serializers.ValidationError({'room_action': 'Le séjour doit être soldé avant le check-out'})
+            raise serializers.ValidationError({
+                'room_action': "Utilisez la gestion des chambres pour le check-in et le check-out par chambre"
+            })
 
         return attrs
 

@@ -5,13 +5,13 @@
         <h1>Gestion des Salles</h1>
         <p>Créer, modifier et suivre les capacités et tarifs des salles</p>
       </div>
-      <button class="btn btn-primary btn-sm admin-head-btn" @click="openAddModal">
+      <button v-if="canManageFacilitiesCatalog" class="btn btn-primary btn-sm admin-head-btn" @click="openAddModal">
         <i class="fas fa-plus"></i>
         <span class="btn-label">Ajouter une salle</span>
       </button>
     </div>
 
-    <div class="stats-grid mb-8">
+    <div v-if="showHallStats" class="stats-grid mb-8">
       <div class="stat-card card">
         <div class="stat-icon primary"><i class="fas fa-building"></i></div>
         <div class="stat-info">
@@ -54,7 +54,18 @@
       </div>
     </div>
 
-    <div class="table-container card">
+    <div class="hall-tabs card">
+      <button :class="['hall-tab-btn', { active: activeHallTab === 'halls' }]" @click="activeHallTab = 'halls'">
+        <i class="fas fa-building"></i>
+        <span>Salles</span>
+      </button>
+      <button :class="['hall-tab-btn', { active: activeHallTab === 'reservations' }]" @click="activeHallTab = 'reservations'">
+        <i class="fas fa-calendar-check"></i>
+        <span>Réservations salles</span>
+      </button>
+    </div>
+
+    <div v-if="activeHallTab === 'halls'" class="table-container card">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom: var(--space-4);">
         <h2 class="table-title" style="margin-bottom:0;">Toutes les salles ({{ loadingHalls ? '...' : halls.length }})</h2>
         <AdminAppTablePagination
@@ -100,10 +111,10 @@
                   <button class="actions-item" @click="viewHall(hall)">
                     <i class="fas fa-eye"></i> Voir
                   </button>
-                  <button class="actions-item" @click="editHall(hall)">
+                  <button v-if="canManageFacilitiesCatalog" class="actions-item" @click="editHall(hall)">
                     <i class="fas fa-edit"></i> Modifier
                   </button>
-                  <button class="actions-item danger" @click="confirmDelete(hall)">
+                  <button v-if="canManageFacilitiesCatalog" class="actions-item danger" @click="confirmDelete(hall)">
                     <i class="fas fa-trash-alt"></i> Supprimer
                   </button>
                 </div>
@@ -174,10 +185,10 @@
                     <button class="actions-item" @click="viewHall(hall)">
                       <i class="fas fa-eye"></i> Voir
                     </button>
-                    <button class="actions-item" @click="editHall(hall)">
+                    <button v-if="canManageFacilitiesCatalog" class="actions-item" @click="editHall(hall)">
                       <i class="fas fa-edit"></i> Modifier
                     </button>
-                    <button class="actions-item danger" @click="confirmDelete(hall)">
+                    <button v-if="canManageFacilitiesCatalog" class="actions-item danger" @click="confirmDelete(hall)">
                       <i class="fas fa-trash-alt"></i> Supprimer
                     </button>
                   </div>
@@ -187,6 +198,112 @@
           </template>
           <tr v-if="halls.length === 0">
             <td colspan="5" class="empty-cell">Aucune salle disponible</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div v-else class="table-container card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom: var(--space-4);">
+        <div>
+          <h2 class="table-title" style="margin-bottom:0;">Salles réservées et statut</h2>
+          <p class="hall-reservations-subtitle">Suivi des réservations de salles, des périodes et de leur état actuel.</p>
+        </div>
+        <AdminAppTablePagination
+          :start="hallReservationsStartIndex"
+          :end="hallReservationsEndIndex"
+          :total="hallReservationsTotalItems"
+          :can-prev="hallReservationsCanPrev"
+          :can-next="hallReservationsCanNext"
+          :disabled="loadingBookings"
+          @prev="hallReservationsPrevPage"
+          @next="hallReservationsNextPage"
+        />
+      </div>
+
+      <div v-if="isMobile" class="admin-cards">
+        <template v-if="loadingBookings">
+          <div v-for="n in 5" :key="`sk-hall-booking-${n}`" class="admin-card">
+            <div class="admin-card-head">
+              <div style="width: 100%;">
+                <div class="skeleton-line skeleton-w-70"></div>
+                <div style="margin-top: 8px;" class="skeleton-line skeleton-w-50"></div>
+              </div>
+            </div>
+            <div class="admin-card-body">
+              <div class="skeleton-line skeleton-w-60"></div>
+              <div class="skeleton-line skeleton-w-50"></div>
+              <div class="skeleton-line skeleton-w-40"></div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div v-for="booking in paginatedHallReservations" :key="`hall-booking-${booking.id}`" class="admin-card">
+            <div class="admin-card-head">
+              <div>
+                <div class="admin-card-title">{{ booking.hall_name || '-' }}</div>
+                <div class="admin-card-subtitle">{{ booking.customer_name || '-' }} • {{ booking.code || getBookingDisplayId(booking) }}</div>
+              </div>
+              <div class="admin-card-actions">
+                <button class="btn btn-outline btn-sm" @click="viewHallReservation(booking)">Détails</button>
+              </div>
+            </div>
+            <div class="admin-card-body">
+              <div class="admin-kv">
+                <span class="k">Période</span>
+                <span class="v">{{ formatDateRange(booking.start_date, booking.end_date) }}</span>
+              </div>
+              <div class="admin-kv">
+                <span class="k">Réservation</span>
+                <span class="v"><span :class="['badge', hallBookingBadgeClass(booking.status)]">{{ getStatusTranslation(booking.status) }}</span></span>
+              </div>
+              <div class="admin-kv">
+                <span class="k">État actuel</span>
+                <span class="v"><span :class="['badge', hallUsageBadgeClass(booking)]">{{ hallUsageLabel(booking) }}</span></span>
+              </div>
+            </div>
+          </div>
+        </template>
+        <div v-if="!loadingBookings && hallReservations.length === 0" class="empty-cell">Aucune réservation de salle</div>
+      </div>
+
+      <table v-else class="admin-table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Client</th>
+            <th>Salle</th>
+            <th>Période</th>
+            <th>Réservation</th>
+            <th>État actuel</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template v-if="loadingBookings">
+            <tr v-for="n in 5" :key="`sk-hall-reservation-${n}`">
+              <td><div class="skeleton-line skeleton-w-40"></div></td>
+              <td><div class="skeleton-line skeleton-w-50"></div></td>
+              <td><div class="skeleton-line skeleton-w-50"></div></td>
+              <td><div class="skeleton-line skeleton-w-60"></div></td>
+              <td><div class="skeleton-line skeleton-w-30"></div></td>
+              <td><div class="skeleton-line skeleton-w-30"></div></td>
+              <td><div class="skeleton-line skeleton-w-40"></div></td>
+            </tr>
+          </template>
+          <template v-else>
+            <tr v-for="booking in paginatedHallReservations" :key="booking.id">
+              <td><code>{{ booking.code || getBookingDisplayId(booking) }}</code></td>
+              <td>{{ booking.customer_name || '-' }}</td>
+              <td>{{ booking.hall_name || '-' }}</td>
+              <td>{{ formatDateRange(booking.start_date, booking.end_date) }}</td>
+              <td><span :class="['badge', hallBookingBadgeClass(booking.status)]">{{ getStatusTranslation(booking.status) }}</span></td>
+              <td><span :class="['badge', hallUsageBadgeClass(booking)]">{{ hallUsageLabel(booking) }}</span></td>
+              <td><button class="btn btn-outline btn-sm" @click="viewHallReservation(booking)">Détails</button></td>
+            </tr>
+          </template>
+          <tr v-if="!loadingBookings && hallReservations.length === 0">
+            <td colspan="7" class="empty-cell">Aucune réservation de salle</td>
           </tr>
         </tbody>
       </table>
@@ -352,7 +469,7 @@
       <p>Êtes-vous sûr de vouloir supprimer <strong>{{ selectedHall?.name }}</strong> ?</p>
       <template #footer>
         <button class="btn btn-outline" @click="showDeleteModal = false">Annuler</button>
-        <button class="btn btn-danger" :class="{ 'is-loading': deletingHall }" :disabled="deletingHall" @click="deleteHall">
+        <button v-if="canManageFacilitiesCatalog" class="btn btn-danger" :class="{ 'is-loading': deletingHall }" :disabled="deletingHall" @click="deleteHall">
           Supprimer
         </button>
       </template>
@@ -366,12 +483,18 @@ import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useTableSort } from '~/composables/useTableSort'
+import { useDateFormat } from '~/composables/useDateFormat'
+import { canManageFacilities, getRoleKey, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
 const { formatMoney, moneyInputModel, parseMoney, formatNumberSpaces } = useMoney()
+const { formatDateRange } = useDateFormat()
 
 const halls = ref([])
+const bookings = ref([])
+const currentUser = ref({})
 const loadingHalls = ref(false)
+const loadingBookings = ref(false)
 const showFormModal = ref(false)
 const showViewModal = ref(false)
 const showDeleteModal = ref(false)
@@ -381,6 +504,9 @@ const openActionsId = ref(null)
 const isMobile = ref(false)
 const savingHall = ref(false)
 const deletingHall = ref(false)
+const activeHallTab = ref('halls')
+const canManageFacilitiesCatalog = computed(() => canManageFacilities(currentUser.value))
+const showHallStats = computed(() => getRoleKey(currentUser.value) !== 'receptionniste')
 
 const form = ref({
   id: null,
@@ -415,6 +541,20 @@ const {
   prevPage: hallsPrevPage,
   nextPage: hallsNextPage,
 } = usePagination(sortedHalls, 50)
+const hallReservations = computed(() => (bookings.value || [])
+  .filter(booking => booking?.booking_type === 'hall' && String(booking?.status || '') !== 'cancelled')
+  .slice()
+  .sort((a, b) => new Date(b?.start_date || 0) - new Date(a?.start_date || 0)))
+const {
+  paginatedItems: paginatedHallReservations,
+  totalItems: hallReservationsTotalItems,
+  startIndex: hallReservationsStartIndex,
+  endIndex: hallReservationsEndIndex,
+  canPrev: hallReservationsCanPrev,
+  canNext: hallReservationsCanNext,
+  prevPage: hallReservationsPrevPage,
+  nextPage: hallReservationsNextPage,
+} = usePagination(hallReservations, 20)
 
 const totalCapacity = computed(() => halls.value.reduce((sum, hall) => sum + Number(hall.capacity || 0), 0))
 const averageDailyPrice = computed(() => {
@@ -479,8 +619,25 @@ const fetchHalls = async () => {
   }
 }
 
+const fetchBookings = async () => {
+  loadingBookings.value = true
+  try {
+    const response = await api.get('bookings/')
+    bookings.value = Array.isArray(response.data) ? response.data : []
+  } catch {
+    notify('Erreur lors du chargement des réservations de salles', 'danger')
+  } finally {
+    loadingBookings.value = false
+  }
+}
+
 onMounted(() => {
+  currentUser.value = getStoredUser()
+  if (!canManageFacilitiesCatalog.value) {
+    activeHallTab.value = 'reservations'
+  }
   fetchHalls()
+  fetchBookings()
   if (process.client) {
     const update = () => { isMobile.value = window.innerWidth <= 992 }
     update()
@@ -496,6 +653,43 @@ onMounted(() => {
 const toggleActions = (id) => {
   openActionsId.value = openActionsId.value === id ? null : id
 }
+
+const getBookingDisplayId = (booking) => {
+  const code = String(booking?.code || '').trim()
+  if (code) return code
+  return `LBR${String(booking?.id || '').padStart(6, '0')}`
+}
+
+const getStatusTranslation = (status) => ({
+  pending: 'En attente',
+  confirmed: 'Confirmée',
+  paid: 'Payée',
+  cancelled: 'Annulée',
+}[String(status || '')] || String(status || '-') || '-')
+
+const hallUsageLabel = (booking) => {
+  const today = new Date().toISOString().slice(0, 10)
+  const start = String(booking?.start_date || '').slice(0, 10)
+  const end = String(booking?.end_date || '').slice(0, 10)
+  if (!start || !end) return 'Planifiée'
+  if (start <= today && end >= today) return 'En cours'
+  if (start > today) return 'Réservée'
+  return 'Terminée'
+}
+
+const hallUsageBadgeClass = (booking) => ({
+  'Réservée': 'badge-info',
+  'En cours': 'badge-success',
+  'Terminée': 'badge-warning',
+  'Planifiée': 'badge-info',
+}[hallUsageLabel(booking)] || 'badge-info')
+
+const hallBookingBadgeClass = (status) => ({
+  pending: 'badge-warning',
+  confirmed: 'badge-info',
+  paid: 'badge-success',
+  cancelled: 'badge-danger',
+}[String(status || '')] || 'badge-info')
 
 const hallHasAdditionalServices = (hall) => Array.isArray(hall?.additional_services) && hall.additional_services.length > 0
 
@@ -602,6 +796,10 @@ const resetForm = () => {
 }
 
 const openAddModal = () => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation d'ajouter une salle", 'warning')
+    return
+  }
   isEditing.value = false
   resetForm()
   showFormModal.value = true
@@ -613,7 +811,21 @@ const viewHall = (hall) => {
   showViewModal.value = true
 }
 
+const viewHallReservation = (booking) => {
+  if (!booking?.hall) return
+  const hall = halls.value.find(item => Number(item?.id) === Number(booking.hall))
+  if (!hall) {
+    notify('Salle introuvable pour cette réservation', 'warning')
+    return
+  }
+  viewHall(hall)
+}
+
 const editHall = (hall) => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation de modifier une salle", 'warning')
+    return
+  }
   openActionsId.value = null
   isEditing.value = true
   form.value = {
@@ -626,12 +838,20 @@ const editHall = (hall) => {
 }
 
 const confirmDelete = (hall) => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation de supprimer une salle", 'warning')
+    return
+  }
   openActionsId.value = null
   selectedHall.value = hall
   showDeleteModal.value = true
 }
 
 const saveHall = async () => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation d'enregistrer une salle", 'warning')
+    return
+  }
   if (savingHall.value) return
   savingHall.value = true
   try {
@@ -659,6 +879,10 @@ const saveHall = async () => {
 }
 
 const deleteHall = async () => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation de supprimer une salle", 'warning')
+    return
+  }
   if (deletingHall.value || !selectedHall.value?.id) return
   deletingHall.value = true
   try {
@@ -707,6 +931,41 @@ const deleteHall = async () => {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--space-6);
   margin-bottom: var(--space-8);
+}
+
+.hall-tabs {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.hall-tab-btn {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.hall-tab-btn:hover,
+.hall-tab-btn.active {
+  border-color: rgba(59, 130, 246, 0.38);
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.hall-reservations-subtitle {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.92rem;
 }
 
 .stat-card {
@@ -852,6 +1111,23 @@ const deleteHall = async () => {
 .entity-view-label { color: #64748b; font-size: .82rem; font-weight: 700; }
 .entity-view-value { color: #0f172a; font-size: .9rem; font-weight: 700; text-align: right; word-break: break-word; }
 .entity-view-empty { padding: 1rem; border: 1px dashed #cbd5e1; border-radius: 14px; color: #64748b; font-weight: 600; background: #f8fafc; }
+
+html[data-admin-theme="dark"] .hall-tab-btn {
+  background: rgba(15, 23, 42, 0.82);
+  border-color: rgba(51, 65, 85, 0.9);
+  color: #cbd5e1;
+}
+
+html[data-admin-theme="dark"] .hall-tab-btn:hover,
+html[data-admin-theme="dark"] .hall-tab-btn.active {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(96, 165, 250, 0.4);
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .hall-reservations-subtitle {
+  color: #cbd5e1;
+}
 
 .services-section {
   margin-top: 1rem;

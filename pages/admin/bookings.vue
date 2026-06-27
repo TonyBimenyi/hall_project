@@ -12,7 +12,7 @@
           <i class="fas fa-file-pdf"></i>
           <span class="btn-label">Export PDF</span>
         </button>
-        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
+        <button v-if="canExportExcel" class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
           <i class="fas fa-file-excel"></i>
           <span class="btn-label">Export XLS</span>
         </button>
@@ -317,309 +317,416 @@
     </div>
 
     <!-- Modals -->
-    <AdminAppModal v-model="showFormModal" :title="isEditing ? 'Modifier la réservation' : 'Nouvelle réservation'" width="600px">
-      <form @submit.prevent="saveBooking" class="admin-form">
-        <div class="form-grid">
-          <div class="form-group full customer-lookup-card">
-            <div class="customer-lookup-head">
-              <div>
-                <label class="form-label">Client</label>
-                <small>Rechercher par nom ou téléphone, puis sélectionner ou créer rapidement.</small>
-              </div>
-              <button type="button" class="btn btn-outline btn-sm" @click="toggleQuickCustomerForm">
-                <i class="fas fa-user-plus"></i>
-                {{ showQuickCustomerForm ? 'Fermer' : 'Nouveau client' }}
-              </button>
+    <AdminAppModal v-model="showFormModal" :title="isEditing ? 'Modifier la réservation' : 'Nouvelle réservation'" width="760px">
+      <form @submit.prevent="saveBooking" class="admin-form booking-form-shell">
+        <div class="booking-form-hero">
+          <div class="booking-form-hero-copy">
+            <span class="booking-form-eyebrow">Réservation</span>
+            <h3>{{ isEditing ? 'Mettre à jour la réservation' : 'Créer une nouvelle réservation' }}</h3>
+            <p>Un parcours plus clair pour gérer le client, la chambre ou la salle, la période et le total en un seul endroit.</p>
+          </div>
+          <div class="booking-form-hero-meta">
+            <span class="booking-form-chip">{{ form.customer_kind === 'organization' ? 'Organisation' : 'Particulier' }}</span>
+            <span class="booking-form-chip accent">{{ form.booking_type === 'room' ? 'Réservation chambre' : 'Réservation salle' }}</span>
+          </div>
+        </div>
+
+        <section class="booking-form-section">
+          <div class="booking-form-section-head">
+            <div>
+              <span class="booking-form-section-kicker">Étape 1</span>
+              <h4>Client et contact</h4>
             </div>
-            <div class="customer-search-shell">
-              <i class="fas fa-search customer-search-icon"></i>
-              <input
-                v-model="customerSearch"
-                type="text"
-                class="form-input customer-search-input"
-                placeholder="Rechercher par nom ou téléphone"
-                @focus="openCustomerResults"
-              />
-            </div>
-            <div v-if="customerResultsOpen" class="customer-results-list">
-              <button
-                v-for="customer in customerSearchResults"
-                :key="customer.id"
-                type="button"
-                class="customer-result-item"
-                @click="selectCustomer(customer)"
-              >
-                <strong>{{ customer.full_name || `${customer.first_name || ''} ${customer.last_name || ''}`.trim() }}</strong>
-                <span>{{ customer.phone || '-' }}<template v-if="customer.email"> • {{ customer.email }}</template></span>
-              </button>
-              <div v-if="loadingCustomers" class="customer-results-empty">Recherche des clients...</div>
-              <div v-else-if="!customerSearchResults.length" class="customer-results-empty">
-                Aucun client trouvé. Utilisez <strong>Nouveau client</strong>.
-              </div>
-            </div>
-            <div v-if="selectedCustomer" class="selected-customer-card">
-              <div class="selected-customer-main">
-                <strong>{{ selectedCustomer.full_name || `${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim() }}</strong>
-                <span>{{ selectedCustomer.phone || '-' }}<template v-if="selectedCustomer.email"> • {{ selectedCustomer.email }}</template></span>
-                <span v-if="selectedCustomer.identity_number">{{ customerIdentitySummary(selectedCustomer) }}</span>
-              </div>
-              <button type="button" class="btn btn-outline btn-sm" @click="clearSelectedCustomer">Changer</button>
-            </div>
+            <p>Définissez le type de réservation puis complétez les informations du client ou de l’organisation.</p>
           </div>
 
-          <div v-if="showQuickCustomerForm" class="form-group full quick-customer-card">
-            <div class="quick-customer-head">
-              <strong>Nouveau client</strong>
-              <span>Création rapide en moins de 30 secondes</span>
+          <div class="form-grid booking-form-grid">
+            <div class="form-group">
+              <label class="form-label">Réservation pour</label>
+              <select v-model="form.customer_kind" class="form-select" @change="onCustomerKindChange">
+                <option value="individual">Particulier</option>
+                <option value="organization">Organisation</option>
+              </select>
             </div>
-            <div class="form-grid quick-customer-grid">
+
+            <div v-if="form.customer_kind === 'organization'" class="form-group full organization-booking-note">
+              <strong>Réservation organisation</strong>
+              <small>Une organisation peut réserver plusieurs chambres et la pièce d'identité n'est pas obligatoire.</small>
+            </div>
+
+            <div v-if="form.customer_kind === 'individual'" class="form-group full customer-lookup-card">
+              <div class="customer-lookup-head">
+                <div>
+                  <label class="form-label">Client</label>
+                  <small>Rechercher par nom ou téléphone, puis sélectionner ou créer rapidement.</small>
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" @click="toggleQuickCustomerForm">
+                  <i class="fas fa-user-plus"></i>
+                  {{ showQuickCustomerForm ? 'Fermer' : 'Nouveau client' }}
+                </button>
+              </div>
+              <div class="customer-search-shell">
+                <i class="fas fa-search customer-search-icon"></i>
+                <input
+                  v-model="customerSearch"
+                  type="text"
+                  class="form-input customer-search-input"
+                  placeholder="Rechercher par nom ou téléphone"
+                  @focus="openCustomerResults"
+                />
+              </div>
+              <div v-if="customerResultsOpen" class="customer-results-list">
+                <button
+                  v-for="customer in customerSearchResults"
+                  :key="customer.id"
+                  type="button"
+                  class="customer-result-item"
+                  @click="selectCustomer(customer)"
+                >
+                  <strong>{{ customer.full_name || `${customer.first_name || ''} ${customer.last_name || ''}`.trim() }}</strong>
+                  <span>{{ customer.phone || '-' }}<template v-if="customer.email"> • {{ customer.email }}</template></span>
+                </button>
+                <div v-if="loadingCustomers" class="customer-results-empty">Recherche des clients...</div>
+                <div v-else-if="!customerSearchResults.length" class="customer-results-empty">
+                  Aucun client trouvé. Utilisez <strong>Nouveau client</strong>.
+                </div>
+              </div>
+              <div v-if="selectedCustomer" class="selected-customer-card">
+                <div class="selected-customer-main">
+                  <strong>{{ selectedCustomer.full_name || `${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim() }}</strong>
+                  <span>{{ selectedCustomer.phone || '-' }}<template v-if="selectedCustomer.email"> • {{ selectedCustomer.email }}</template></span>
+                  <span v-if="selectedCustomer.identity_number">{{ customerIdentitySummary(selectedCustomer) }}</span>
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" @click="clearSelectedCustomer">Changer</button>
+              </div>
+            </div>
+
+            <div v-if="form.customer_kind === 'individual' && showQuickCustomerForm" class="form-group full quick-customer-card">
+              <div class="quick-customer-head">
+                <strong>Nouveau client</strong>
+                <span>Création rapide en moins de 30 secondes</span>
+              </div>
+              <div class="form-grid quick-customer-grid">
+                <div class="form-group">
+                  <label class="form-label">Nom</label>
+                  <input v-model="quickCustomerForm.last_name" type="text" class="form-input" placeholder="Nom" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Prénom</label>
+                  <input v-model="quickCustomerForm.first_name" type="text" class="form-input" placeholder="Prénom" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Téléphone</label>
+                  <input v-model="quickCustomerForm.phone" type="text" class="form-input" placeholder="Ex: 79 00 00 00" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Email</label>
+                  <input v-model="quickCustomerForm.email" type="email" class="form-input" placeholder="email@exemple.com" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Type de pièce</label>
+                  <select v-model="quickCustomerForm.identity_type" class="form-select">
+                    <option value="">Sélectionner</option>
+                    <option v-for="option in guestIdTypeOptions" :key="`quick-${option.value}`" :value="option.value">{{ option.label }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">ID / Passeport</label>
+                  <input v-model="quickCustomerForm.identity_number" type="text" class="form-input" placeholder="Numéro de pièce" />
+                </div>
+                <div class="form-group full">
+                  <label class="form-label">Adresse</label>
+                  <input v-model="quickCustomerForm.address" type="text" class="form-input" placeholder="Adresse (optionnel)" />
+                </div>
+                <div class="form-group full">
+                  <label class="form-label">Notes</label>
+                  <textarea v-model="quickCustomerForm.notes" class="form-textarea" rows="2" placeholder="Notes utiles (optionnel)"></textarea>
+                </div>
+              </div>
+              <div class="quick-customer-actions">
+                <small v-if="form.booking_type === 'room'">Pour une réservation de chambre, la pièce d'identité est obligatoire.</small>
+                <button type="button" class="btn btn-primary btn-sm" :class="{ 'is-loading': savingCustomer }" :disabled="savingCustomer" @click="createQuickCustomer">
+                  Enregistrer et sélectionner
+                </button>
+              </div>
+            </div>
+
+            <template v-if="form.customer_kind === 'individual'">
               <div class="form-group">
                 <label class="form-label">Nom</label>
-                <input v-model="quickCustomerForm.last_name" type="text" class="form-input" placeholder="Nom" />
+                <input v-model="form.customer_last_name" type="text" class="form-input" placeholder="Nom" required />
               </div>
               <div class="form-group">
                 <label class="form-label">Prénom</label>
-                <input v-model="quickCustomerForm.first_name" type="text" class="form-input" placeholder="Prénom" />
+                <input v-model="form.customer_first_name" type="text" class="form-input" placeholder="Prénom" required />
               </div>
-              <div class="form-group">
-                <label class="form-label">Téléphone</label>
-                <input v-model="quickCustomerForm.phone" type="text" class="form-input" placeholder="Ex: 79 00 00 00" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Email</label>
-                <input v-model="quickCustomerForm.email" type="email" class="form-input" placeholder="email@exemple.com" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Type de pièce</label>
-                <select v-model="quickCustomerForm.identity_type" class="form-select">
-                  <option value="">Sélectionner</option>
-                  <option v-for="option in guestIdTypeOptions" :key="`quick-${option.value}`" :value="option.value">{{ option.label }}</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">ID / Passeport</label>
-                <input v-model="quickCustomerForm.identity_number" type="text" class="form-input" placeholder="Numéro de pièce" />
+            </template>
+            <template v-else>
+              <div class="form-group full">
+                <label class="form-label">Nom de l'organisation</label>
+                <input v-model="form.organization_name" type="text" class="form-input" placeholder="Nom de l'organisation" required />
               </div>
               <div class="form-group full">
-                <label class="form-label">Adresse</label>
-                <input v-model="quickCustomerForm.address" type="text" class="form-input" placeholder="Adresse (optionnel)" />
+                <label class="form-label">Nom du contact</label>
+                <input v-model="form.organization_contact_name" type="text" class="form-input" placeholder="Nom du contact" required />
               </div>
-              <div class="form-group full">
-                <label class="form-label">Notes</label>
-                <textarea v-model="quickCustomerForm.notes" class="form-textarea" rows="2" placeholder="Notes utiles (optionnel)"></textarea>
-              </div>
+            </template>
+
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input v-model="form.customer_email" type="email" class="form-input" placeholder="email@exemple.com" />
             </div>
-            <div class="quick-customer-actions">
-              <small v-if="form.booking_type === 'room'">Pour une réservation de chambre, la pièce d'identité est obligatoire.</small>
-              <button type="button" class="btn btn-primary btn-sm" :class="{ 'is-loading': savingCustomer }" :disabled="savingCustomer" @click="createQuickCustomer">
-                Enregistrer et sélectionner
-              </button>
+            <div class="form-group">
+              <label class="form-label">Téléphone</label>
+              <input v-model="form.customer_phone" type="text" class="form-input" placeholder="Ex: 79 00 00 00" />
             </div>
+          </div>
+        </section>
+
+        <section class="booking-form-section">
+          <div class="booking-form-section-head">
+            <div>
+              <span class="booking-form-section-kicker">Étape 2</span>
+              <h4>Détails de la réservation</h4>
+            </div>
+            <p>Choisissez le type de réservation, l’espace concerné et les informations spécifiques au séjour.</p>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Nom</label>
-            <input v-model="form.customer_last_name" type="text" class="form-input" placeholder="Nom" required />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Prénom</label>
-            <input v-model="form.customer_first_name" type="text" class="form-input" placeholder="Prénom" required />
-          </div>
-          <div class="form-group full">
-            <label class="form-label">Email</label>
-            <input v-model="form.customer_email" type="email" class="form-input" placeholder="email@exemple.com" />
-          </div>
-          <div class="form-group full">
-            <label class="form-label">Téléphone</label>
-            <input v-model="form.customer_phone" type="text" class="form-input" placeholder="Ex: 79 00 00 00" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Type de réservation</label>
-            <select v-model="form.booking_type" class="form-select" @change="onBookingTypeChange">
-              <option value="hall">Salle</option>
-              <option value="room">Chambre</option>
-            </select>
-          </div>
-          <div v-if="form.booking_type === 'hall'" class="form-group">
-            <label class="form-label">Salle</label>
-            <select v-model="form.hall" class="form-select" required @change="onItemChange">
-              <option v-for="h in halls" :key="h.id" :value="h.id">{{ h.name }}</option>
-            </select>
-          </div>
-          <div v-if="form.booking_type === 'room'" class="form-group">
-            <label class="form-label">Chambre</label>
-            <select v-model="form.room" class="form-select" required @change="onItemChange">
-              <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.room_number }} - {{ r.name }} ({{ roomTypeLabel(r.room_type) }})</option>
-            </select>
-          </div>
-          <div v-if="form.booking_type === 'room' && selectedRoom" class="form-group full room-booking-note">
-            <div class="room-booking-note-head">
-              <strong>{{ selectedRoom.room_number }} - {{ selectedRoom.name }}</strong>
-              <span :class="['status-pill', `status-${selectedRoom.status || 'available'}`]">{{ roomStatusLabel(selectedRoom.status) }}</span>
-            </div>
-            <small>Pour une chambre, sélectionnez ou créez d'abord le client. La pièce d'identité est obligatoire pour finaliser la réservation.</small>
-          </div>
-          <div v-if="form.booking_type === 'hall'" class="form-group">
-            <label class="form-label">Type d'événement</label>
-            <select v-model="form.event_type" class="form-select" required>
-              <option v-for="eventOption in eventTypeOptions" :key="eventOption" :value="eventOption">{{ eventOption }}</option>
-            </select>
-          </div>
-          <div v-if="form.booking_type === 'hall' && isOtherEventType" class="form-group full">
-            <label class="form-label">Détails de l'événement</label>
-            <textarea
-              v-model="form.event_type_other"
-              class="form-textarea"
-              rows="3"
-              required
-              placeholder="Précisez le type d'événement"
-            ></textarea>
-          </div>
-          <template v-if="form.booking_type === 'room'">
+          <div class="form-grid booking-form-grid">
             <div class="form-group">
-              <label class="form-label">Type de pièce</label>
-              <select v-model="form.guest_id_type" class="form-select" required>
-                <option v-for="option in guestIdTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              <label class="form-label">Type de réservation</label>
+              <select v-model="form.booking_type" class="form-select" @change="onBookingTypeChange">
+                <option value="hall">Salle</option>
+                <option value="room">Chambre</option>
               </select>
             </div>
-            <div class="form-group">
-              <label class="form-label">Numéro de pièce</label>
-              <input v-model="form.guest_id_number" type="text" class="form-input" placeholder="Passeport ou carte d'identité" required />
+            <div v-if="form.booking_type === 'hall'" class="form-group">
+              <label class="form-label">Salle</label>
+              <select v-model="form.hall" class="form-select" required @change="onItemChange">
+                <option v-for="h in halls" :key="h.id" :value="h.id">{{ h.name }}</option>
+              </select>
             </div>
-            <div v-if="formStayHistory.length" class="form-group full stay-history-card">
-              <div class="stay-history-head">
-                <strong>Historique de séjour</strong>
-                <span>{{ formStayHistory.length }} séjour(s)</span>
+            <div v-if="form.booking_type === 'room'" class="form-group full">
+              <div class="room-selection-head">
+                <label class="form-label">Chambres</label>
+                <small>Sélectionnez une ou plusieurs chambres disponibles pour cette même réservation.</small>
               </div>
-              <div class="stay-history-list compact">
-                <div v-for="stay in formStayHistory" :key="`form-stay-${stay.id}`" class="stay-history-item">
-                  <strong>{{ stay.room_display || '-' }}</strong>
-                  <span>{{ stay.start_date }} → {{ stay.end_date }}</span>
-                  <span>{{ getStatusTranslation(stay.status) }}</span>
-                  <span>Check-in: {{ stay.checked_in_at ? formatDateTime(stay.checked_in_at) : 'Non effectué' }}</span>
-                  <span>Check-out: {{ stay.checked_out_at ? formatDateTime(stay.checked_out_at) : 'Non effectué' }}</span>
-                </div>
-              </div>
-            </div>
-          </template>
-          <div class="form-group full">
-            <div class="calendar-top">
-              <strong>{{ calendarMonthLabel }}</strong>
-              <div class="calendar-nav">
-                <button class="icon-btn" type="button" @click="prevCalendarMonth">
-                  <i class="fas fa-chevron-left"></i>
-                </button>
-                <button class="icon-btn" type="button" @click="nextCalendarMonth">
-                  <i class="fas fa-chevron-right"></i>
-                </button>
-                <button class="btn btn-outline btn-sm" type="button" @click="clearCalendarDates">
-                  Effacer
-                </button>
-              </div>
-            </div>
-            <div class="weekday-row">
-              <span v-for="d in calendarWeekdays" :key="d">{{ d }}</span>
-            </div>
-            <div class="calendar-grid-admin">
-              <button
-                v-for="cell in adminCalendarCells"
-                :key="cell.key"
-                class="day-cell"
-                :class="{
-                  muted: !cell.currentMonth,
-                  disabled: cell.isPast || (!isEditing && cell.isBooked),
-                  start: isSameCalendarDate(cell.date, calendarRangeStart),
-                  end: isSameCalendarDate(cell.date, calendarRangeEnd),
-                  inrange: isCalendarInRange(cell.date, calendarRangeStart, calendarRangeEnd),
-                  booked: cell.isBooked
-                }"
-                :disabled="cell.isPast || (!isEditing && cell.isBooked)"
-                type="button"
-                @click="onAdminCalendarDayClick(cell.date)"
-              >
-                {{ cell.date.getDate() }}
-              </button>
-            </div>
-            <div class="calendar-legend">
-              <span><i class="dot booked"></i> Réservé</span>
-              <span><i class="dot selected"></i> Début/Fin</span>
-              <span><i class="dot range"></i> Période</span>
-            </div>
-            <div class="selected-period-card">
-              <div class="selected-period-label">Période sélectionnée</div>
-              <div class="selected-period-value">{{ selectedPeriodLabel }}</div>
-              <div class="selected-period-hint">{{ selectedPeriodHint }}</div>
-            </div>
-          </div>
-          <div v-if="itemAdditionalServices.length" class="form-group full addons-section">
-            <div class="addons-head">
-              <strong>Services additionnels</strong>
-              <span v-if="addonsTotal > 0" class="addons-total">+ {{ formatMoney(addonsTotal) }}</span>
-            </div>
-            <div class="addons-list">
-              <div v-for="service in itemAdditionalServices" :key="service.name" class="addon-item">
-                <div v-if="!service.has_subservices" class="addon-line">
-                  <label :class="['addon-toggle', { 'is-active': isServiceSelected(service.name) }]">
-                    <input
-                      type="checkbox"
-                      :checked="isServiceSelected(service.name)"
-                      @change="toggleSimpleService(service)"
-                    />
-                    <span class="toggle-switch" aria-hidden="true">
-                      <span class="toggle-knob"></span>
-                    </span>
-                    <span class="addon-toggle-copy">
-                      <strong>{{ service.name }}</strong>
-                      <small>{{ isServiceSelected(service.name) ? 'Service ajoute a la reservation.' : 'Activer pour ajouter ce service.' }}</small>
-                    </span>
-                  </label>
-                  <strong class="addon-price">{{ formatMoney(service.price) }}</strong>
-                </div>
-                <div v-else class="addon-sub-block">
-                  <div class="addon-sub-head">
-                    <strong>{{ service.name }}</strong>
-                    <span class="muted-line">Choisissez les sous-services</span>
+              <div class="room-selection-grid">
+                <label
+                  v-for="r in rooms"
+                  :key="`room-option-${r.id}`"
+                  :class="['room-option-card', { selected: isRoomSelected(r.id), unavailable: isRoomUnavailable(r.id), maintenance: String(r.status || '') === 'maintenance' }]"
+                >
+                  <input
+                    type="checkbox"
+                    class="room-option-input"
+                    :checked="isRoomSelected(r.id)"
+                    :disabled="isRoomUnavailable(r.id)"
+                    @change="toggleRoomSelection(r.id)"
+                  />
+                  <div class="room-option-check" aria-hidden="true">
+                    <i class="fas" :class="isRoomSelected(r.id) ? 'fa-check' : 'fa-plus'"></i>
                   </div>
-                  <div class="addon-subs">
-                    <label
-                      v-for="sub in (service.subservices || [])"
-                      :key="`${service.name}-${sub.name}`"
-                      :class="['addon-toggle', 'addon-sub-line', { 'is-active': isSubserviceSelected(service.name, sub.name) }]"
-                    >
+                  <div class="room-option-main">
+                    <div class="room-option-top">
+                      <strong>{{ r.room_number }} - {{ r.name }}</strong>
+                      <span class="room-option-price">{{ formatMoney(r.price_per_night) }}/nuit</span>
+                    </div>
+                    <div class="room-option-meta">
+                      <span class="room-option-type">{{ roomTypeLabel(r.room_type) }}</span>
+                      <span :class="['room-option-status', `status-${String(r.status || 'available')}`]">
+                        {{ isRoomUnavailable(r.id) ? 'Indisponible' : roomStatusLabel(r.status) }}
+                      </span>
+                    </div>
+                    <small v-if="roomBookedDatesSummary(r.id)" class="room-option-booked-dates">
+                      {{ roomBookedDatesSummary(r.id) }}
+                    </small>
+                    <small>{{ isRoomSelected(r.id) ? 'Chambre sélectionnée pour cette réservation.' : 'Cliquez pour sélectionner cette chambre.' }}</small>
+                  </div>
+                </label>
+              </div>
+              <small class="form-hint" v-if="!selectedRoomIds.length">Choisissez au moins une chambre.</small>
+              <small class="form-hint" v-else-if="selectedRoomIds.length > 1">Toutes les chambres sélectionnées resteront dans une seule réservation, avec un seul jeton et une seule facture.</small>
+            </div>
+            <div v-if="form.booking_type === 'room' && selectedRooms.length" class="form-group full room-booking-note">
+              <div class="room-booking-note-head">
+                <strong>{{ selectedRoomsSummary }}</strong>
+                <span class="status-pill">{{ selectedRooms.length }} chambre{{ selectedRooms.length > 1 ? 's' : '' }}</span>
+              </div>
+              <small v-if="form.customer_kind === 'organization'">Réservation au nom d'une organisation: les personnes hébergées seront enregistrées au check-in pour chaque chambre.</small>
+              <small v-else>Pour une chambre, sélectionnez ou créez d'abord le client. Les pièces d'identité seront demandées au check-in, pas pendant la réservation.</small>
+            </div>
+            <div v-if="form.booking_type === 'hall'" class="form-group">
+              <label class="form-label">Type d'événement</label>
+              <select v-model="form.event_type" class="form-select" required>
+                <option v-for="eventOption in eventTypeOptions" :key="eventOption" :value="eventOption">{{ eventOption }}</option>
+              </select>
+            </div>
+            <div v-if="form.booking_type === 'hall' && isOtherEventType" class="form-group full">
+              <label class="form-label">Détails de l'événement</label>
+              <textarea
+                v-model="form.event_type_other"
+                class="form-textarea"
+                rows="3"
+                required
+                placeholder="Précisez le type d'événement"
+              ></textarea>
+            </div>
+            <template v-if="form.booking_type === 'room'">
+              <div class="form-group full organization-room-note">
+                <strong>Informations voyageurs au check-in</strong>
+                <small>Les noms des personnes hébergées ainsi que leurs pièces d'identité seront saisis à l'arrivée, chambre par chambre.</small>
+              </div>
+              <div v-if="formStayHistory.length" class="form-group full stay-history-card">
+                <div class="stay-history-head">
+                  <strong>Historique de séjour</strong>
+                  <span>{{ formStayHistory.length }} séjour(s)</span>
+                </div>
+                <div class="stay-history-list compact">
+                  <div v-for="stay in formStayHistory" :key="`form-stay-${stay.id}`" class="stay-history-item">
+                    <strong>{{ stay.room_display || '-' }}</strong>
+                    <span>{{ stay.start_date }} → {{ stay.end_date }}</span>
+                    <span>{{ getStatusTranslation(stay.status) }}</span>
+                    <span>Check-in: {{ stay.checked_in_at ? formatDateTime(stay.checked_in_at) : 'Non effectué' }}</span>
+                    <span>Check-out: {{ stay.checked_out_at ? formatDateTime(stay.checked_out_at) : 'Non effectué' }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </section>
+
+        <section class="booking-form-section">
+          <div class="booking-form-section-head">
+            <div>
+              <span class="booking-form-section-kicker">Étape 3</span>
+              <h4>Période et montant</h4>
+            </div>
+            <p>Choisissez les dates, ajoutez les services utiles et validez le total calculé automatiquement.</p>
+          </div>
+
+          <div class="form-grid booking-form-grid">
+            <div class="form-group full">
+              <div class="calendar-top">
+                <strong>{{ calendarMonthLabel }}</strong>
+                <div class="calendar-nav">
+                  <button class="icon-btn" type="button" @click="prevCalendarMonth">
+                    <i class="fas fa-chevron-left"></i>
+                  </button>
+                  <button class="icon-btn" type="button" @click="nextCalendarMonth">
+                    <i class="fas fa-chevron-right"></i>
+                  </button>
+                  <button class="btn btn-outline btn-sm" type="button" @click="clearCalendarDates">
+                    Effacer
+                  </button>
+                </div>
+              </div>
+              <div class="weekday-row">
+                <span v-for="d in calendarWeekdays" :key="d">{{ d }}</span>
+              </div>
+              <div class="calendar-grid-admin">
+                <button
+                  v-for="cell in adminCalendarCells"
+                  :key="cell.key"
+                  class="day-cell"
+                  :class="{
+                    muted: !cell.currentMonth,
+                    disabled: cell.isPast || (!isEditing && cell.isBooked),
+                    start: isSameCalendarDate(cell.date, calendarRangeStart),
+                    end: isSameCalendarDate(cell.date, calendarRangeEnd),
+                    inrange: isCalendarInRange(cell.date, calendarRangeStart, calendarRangeEnd),
+                    booked: cell.isBooked
+                  }"
+                  :disabled="cell.isPast || (!isEditing && cell.isBooked)"
+                  type="button"
+                  @click="onAdminCalendarDayClick(cell.date)"
+                >
+                  {{ cell.date.getDate() }}
+                </button>
+              </div>
+              <div class="calendar-legend">
+                <span><i class="dot booked"></i> Réservé</span>
+                <span><i class="dot selected"></i> Début/Fin</span>
+                <span><i class="dot range"></i> Période</span>
+              </div>
+              <div class="selected-period-card">
+                <div class="selected-period-label">Période sélectionnée</div>
+                <div class="selected-period-value">{{ selectedPeriodLabel }}</div>
+                <div class="selected-period-hint">{{ selectedPeriodHint }}</div>
+              </div>
+            </div>
+
+            <div v-if="itemAdditionalServices.length" class="form-group full addons-section">
+              <div class="addons-head">
+                <strong>Services additionnels</strong>
+                <span v-if="addonsTotal > 0" class="addons-total">+ {{ formatMoney(addonsTotal) }}</span>
+              </div>
+              <div class="addons-list">
+                <div v-for="service in itemAdditionalServices" :key="service.name" class="addon-item">
+                  <div v-if="!service.has_subservices" class="addon-line">
+                    <label :class="['addon-toggle', { 'is-active': isServiceSelected(service.name) }]">
                       <input
                         type="checkbox"
-                        :checked="isSubserviceSelected(service.name, sub.name)"
-                        @change="toggleSubservice(service.name, sub.name)"
+                        :checked="isServiceSelected(service.name)"
+                        @change="toggleSimpleService(service)"
                       />
                       <span class="toggle-switch" aria-hidden="true">
                         <span class="toggle-knob"></span>
                       </span>
                       <span class="addon-toggle-copy">
-                        <strong>{{ sub.name }}</strong>
-                        <small>{{ isSubserviceSelected(service.name, sub.name) ? 'Sous-service selectionne.' : 'Activer pour ajouter ce sous-service.' }}</small>
+                        <strong>{{ service.name }}</strong>
+                        <small>{{ isServiceSelected(service.name) ? 'Service ajoute a la reservation.' : 'Activer pour ajouter ce service.' }}</small>
                       </span>
-                      <strong class="addon-price">{{ formatMoney(sub.price) }}</strong>
                     </label>
+                    <strong class="addon-price">{{ formatMoney(service.price) }}</strong>
+                  </div>
+                  <div v-else class="addon-sub-block">
+                    <div class="addon-sub-head">
+                      <strong>{{ service.name }}</strong>
+                      <span class="muted-line">Choisissez les sous-services</span>
+                    </div>
+                    <div class="addon-subs">
+                      <label
+                        v-for="sub in (service.subservices || [])"
+                        :key="`${service.name}-${sub.name}`"
+                        :class="['addon-toggle', 'addon-sub-line', { 'is-active': isSubserviceSelected(service.name, sub.name) }]"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="isSubserviceSelected(service.name, sub.name)"
+                          @change="toggleSubservice(service.name, sub.name)"
+                        />
+                        <span class="toggle-switch" aria-hidden="true">
+                          <span class="toggle-knob"></span>
+                        </span>
+                        <span class="addon-toggle-copy">
+                          <strong>{{ sub.name }}</strong>
+                          <small>{{ isSubserviceSelected(service.name, sub.name) ? 'Sous-service selectionne.' : 'Activer pour ajouter ce sous-service.' }}</small>
+                        </span>
+                        <strong class="addon-price">{{ formatMoney(sub.price) }}</strong>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
+            <div class="form-group">
+              <label class="form-label">Montant (Fbu)</label>
+              <input
+                v-model="totalPriceInput"
+                inputmode="numeric"
+                type="text"
+                class="form-input"
+                :disabled="!isEditing"
+                :readonly="!isEditing"
+                required
+              />
+              <small class="form-hint" v-if="daysCount > 0">{{ daysCount }} {{ form.booking_type === 'hall' ? 'jour(s)' : 'nuit(s)' }} à {{ formatMoney(pricePerUnit) }}/{{ form.booking_type === 'hall' ? 'jour' : 'nuit' }}</small>
+              <small class="form-hint" v-if="!isEditing">Montant calcule automatiquement selon la salle et la periode.</small>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Montant (Fbu)</label>
-            <input
-              v-model="totalPriceInput"
-              inputmode="numeric"
-              type="text"
-              class="form-input"
-              :disabled="!isEditing"
-              :readonly="!isEditing"
-              required
-            />
-            <small class="form-hint" v-if="daysCount > 0">{{ daysCount }} {{ form.booking_type === 'hall' ? 'jour(s)' : 'nuit(s)' }} à {{ formatMoney(pricePerUnit) }}/{{ form.booking_type === 'hall' ? 'jour' : 'nuit' }}</small>
-            <small class="form-hint" v-if="!isEditing">Montant calcule automatiquement selon la salle et la periode.</small>
-          </div>
-        </div>
+        </section>
 
         <div class="booking-total-banner booking-total-banner-bottom">
           <div class="booking-total-main">
@@ -677,6 +784,8 @@
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Email</span><span class="entity-view-value">{{ selectedBooking.customer_email || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Téléphone</span><span class="entity-view-value">{{ selectedBooking.customer_phone || '-' }}</span></div>
+              <div v-if="selectedBooking.customer_kind === 'organization'" class="entity-view-item"><span class="entity-view-label">Organisation</span><span class="entity-view-value">{{ selectedBooking.organization_name || selectedBooking.customer_name || '-' }}</span></div>
+              <div v-if="selectedBooking.customer_kind === 'organization'" class="entity-view-item"><span class="entity-view-label">Contact</span><span class="entity-view-value">{{ selectedBooking.organization_contact_name || selectedBooking.guest_full_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">{{ selectedBooking.booking_type === 'hall' ? 'Salle' : 'Chambre' }}</span><span class="entity-view-value">{{ selectedBooking.booking_type === 'hall' ? selectedBooking.hall_name : selectedBooking.room_display || 'N/A' }}</span></div>
               <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Statut chambre</span><span class="entity-view-value">{{ roomStatusLabel(selectedBooking.room_status) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Événement</span><span class="entity-view-value">{{ selectedBooking.event_type }}</span></div>
@@ -691,7 +800,7 @@
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ getStatusTranslation(selectedBooking.status) }}</span></div>
               <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Client hébergé</span><span class="entity-view-value">{{ selectedBooking.guest_full_name || selectedBooking.customer_name }}</span></div>
-              <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Pièce</span><span class="entity-view-value">{{ guestIdSummary(selectedBooking) }}</span></div>
+              <div v-if="selectedBooking.booking_type === 'room' && selectedBooking.customer_kind !== 'organization'" class="entity-view-item"><span class="entity-view-label">Pièce</span><span class="entity-view-value">{{ guestIdSummary(selectedBooking) }}</span></div>
               <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-in</span><span class="entity-view-value">{{ selectedBooking.checked_in_at ? formatDateTime(selectedBooking.checked_in_at) : 'Non effectué' }}</span></div>
               <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-out</span><span class="entity-view-value">{{ selectedBooking.checked_out_at ? formatDateTime(selectedBooking.checked_out_at) : 'Non effectué' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Créé le</span><span class="entity-view-value">{{ formatDisplayDate(selectedBooking.created_at) }}</span></div>
@@ -760,7 +869,7 @@ import { useDateFormat } from '~/composables/useDateFormat'
 import { useTableSort } from '~/composables/useTableSort'
 import { useDocumentBranding } from '~/composables/useDocumentBranding'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
-import { canDeleteBookings as canDeleteBookingsByRole, getStoredUser } from '~/composables/useRoleAccess'
+import { canDeleteBookings as canDeleteBookingsByRole, canExportAdminExcel, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
@@ -768,26 +877,6 @@ const { formatMoney, formatNumberSpaces, moneyInputModel, parseMoney } = useMone
 const { formatDateRange, formatDisplayDate, formatDateTime } = useDateFormat()
 const { escapeHtml } = useDocumentBranding()
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName, openPrintPreviewHtml } = useAdminExportDocuments()
-// #region debug-point A:booking-debug-reporter
-const reportBookingDebug = (hypothesisId, msg, data = {}) => {
-  try {
-    fetch('http://127.0.0.1:7777/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'post-broken-pipe',
-        runId: 'pre-fix',
-        hypothesisId,
-        location: 'pages/admin/bookings.vue',
-        msg: `[DEBUG] ${msg}`,
-        data,
-        ts: Date.now(),
-      }),
-    }).catch(() => {})
-  } catch {
-  }
-}
-// #endregion
 const eventTypeOptions = ['Mariage', 'Séminaire', 'Gala', 'Anniversaire', 'Réunion', 'Autres']
 const guestIdTypeOptions = [
   { value: 'passport', label: 'Passeport' },
@@ -806,6 +895,7 @@ const minAmount = ref(null)
 const maxAmount = ref(null)
 const currentUser = ref({})
 const canDeleteBookings = computed(() => canDeleteBookingsByRole(currentUser.value))
+const canExportExcel = computed(() => canExportAdminExcel(currentUser.value))
 
 const toYmd = (date) => {
   const d = (date instanceof Date) ? date : new Date(date)
@@ -1000,22 +1090,33 @@ const onAdminCalendarDayClick = (date) => {
 }
 
 const fetchCalendarRanges = async () => {
-  if ((form.value.booking_type === 'hall' && !form.value.hall) || (form.value.booking_type === 'room' && !form.value.room)) {
+  if ((form.value.booking_type === 'hall' && !form.value.hall) || (form.value.booking_type === 'room' && !selectedRoomIds.value.length)) {
     calendarRanges.value = []
     return
   }
   try {
-    const params = form.value.booking_type === 'hall' 
-      ? { hall: form.value.hall } 
-      : { room: form.value.room }
-    const res = await api.get('bookings/calendar/', { params })
-    calendarRanges.value = Array.isArray(res.data) ? res.data : []
+    if (form.value.booking_type === 'hall') {
+      const res = await api.get('bookings/calendar/', { params: { hall: form.value.hall } })
+      calendarRanges.value = Array.isArray(res.data) ? res.data : []
+      return
+    }
+    const ranges = []
+    for (const roomId of selectedRoomIds.value) {
+      const res = await api.get('bookings/calendar/', { params: { room: roomId } })
+      const items = Array.isArray(res.data) ? res.data : []
+      ranges.push(...items)
+    }
+    calendarRanges.value = ranges
   } catch {
     calendarRanges.value = []
   }
 }
 
 const exportXls = async () => {
+  if (!canExportExcel.value) {
+    notify("L'export Excel n'est pas autorisé pour ce rôle", 'warning')
+    return
+  }
   if (!tableRef.value) return
   exportingXls.value = true
   await nextTick()
@@ -1053,13 +1154,17 @@ const exportPdf = async () => {
 const createEmptyBookingForm = () => ({
   id: null,
   customer: null,
+  customer_kind: 'individual',
   customer_first_name: '',
   customer_last_name: '',
+  organization_name: '',
+  organization_contact_name: '',
   customer_email: '',
   customer_phone: '',
   booking_type: 'hall',
   hall: '',
   room: '',
+  rooms_selected: [],
   guest_full_name: '',
   guest_id_type: 'passport',
   guest_id_number: '',
@@ -1141,6 +1246,7 @@ const fetchRooms = async () => {
     rooms.value = response.data
     if (rooms.value.length > 0 && !form.value.room && form.value.booking_type === 'room') {
       form.value.room = rooms.value[0].id
+      form.value.rooms_selected = [rooms.value[0].id]
     }
   } catch (error) {
     notify('Erreur lors du chargement des chambres', 'danger')
@@ -1248,17 +1354,43 @@ const pricePerUnit = ref(0)
 const daysCount = ref(0)
 
 const selectedHall = computed(() => halls.value.find(h => String(h.id) === String(form.value.hall)) || null)
+const selectedRoomIds = computed(() => {
+  const ids = Array.isArray(form.value.rooms_selected) ? form.value.rooms_selected : []
+  const normalized = ids
+    .map(id => String(id || '').trim())
+    .filter(Boolean)
+  return Array.from(new Set(normalized))
+})
+const selectedRooms = computed(() => rooms.value.filter(r => selectedRoomIds.value.includes(String(r.id))))
 const selectedRoom = computed(() => rooms.value.find(r => String(r.id) === String(form.value.room)) || null)
 const selectedItem = computed(() => form.value.booking_type === 'hall' ? selectedHall.value : selectedRoom.value)
-const itemAdditionalServices = computed(() => Array.isArray(selectedItem.value?.additional_services) ? selectedItem.value.additional_services : [])
+const itemAdditionalServices = computed(() => {
+  if (form.value.booking_type === 'room' && selectedRooms.value.length !== 1) return []
+  return Array.isArray(selectedItem.value?.additional_services) ? selectedItem.value.additional_services : []
+})
 const customerFullName = computed(() => `${String(form.value.customer_first_name || '').trim()} ${String(form.value.customer_last_name || '').trim()}`.trim())
+const organizationContactName = computed(() => String(form.value.organization_contact_name || '').trim())
+const activeGuestName = computed(() => (
+  form.value.booking_type === 'room'
+    ? (form.value.customer_kind === 'organization' ? organizationContactName.value : customerFullName.value)
+    : ''
+))
+const selectedRoomsSummary = computed(() => (
+  selectedRooms.value
+    .map(room => `${room.room_number} - ${room.name}`)
+    .join(', ')
+))
 const selectedPeriodLabel = computed(() => {
   if (!form.value.start_date || !form.value.end_date) return 'Aucune période sélectionnée'
   return formatDateRange(form.value.start_date, form.value.end_date)
 })
 const selectedPeriodHint = computed(() => {
   if (!form.value.start_date || !form.value.end_date) return 'Choisissez la période directement dans le calendrier.'
-  return `${daysCount.value || 0} ${form.value.booking_type === 'room' ? 'nuit(s)' : 'jour(s)'} sélectionné(s)`
+  const durationLabel = `${daysCount.value || 0} ${form.value.booking_type === 'room' ? 'nuit(s)' : 'jour(s)'} sélectionné(s)`
+  if (form.value.booking_type === 'room' && selectedRoomIds.value.length > 1) {
+    return `${durationLabel} pour ${selectedRoomIds.value.length} chambres`
+  }
+  return durationLabel
 })
 const roomTypeLabel = (roomType) => ({
   single: 'Simple',
@@ -1285,6 +1417,79 @@ const customerIdentitySummary = (customer) => {
   if (!type && !number) return '-'
   const label = guestIdTypeOptions.find(option => option.value === type)?.label || type || 'Pièce'
   return [label, number].filter(Boolean).join(' • ')
+}
+const roomAvailabilityMap = computed(() => {
+  const map = new Map()
+  const start = String(form.value.start_date || '').slice(0, 10)
+  const end = String(form.value.end_date || '').slice(0, 10)
+  for (const room of rooms.value) {
+    const roomId = String(room?.id || '')
+    const unavailable = String(room?.status || '') === 'maintenance' || bookings.value.some((booking) => {
+      if (booking.booking_type !== 'room' || String(booking.status || '') === 'cancelled') return false
+      if (Number(booking.id) === Number(form.value.id || 0)) return false
+      const bookingRoomIds = Array.isArray(booking.room_ids)
+        ? booking.room_ids.map(id => String(id || '').trim()).filter(Boolean)
+        : (booking.room ? [String(booking.room)] : [])
+      if (!bookingRoomIds.includes(roomId)) return false
+      if (!start || !end) return false
+      const bookingStart = String(booking.start_date || '').slice(0, 10)
+      const bookingEnd = String(booking.end_date || '').slice(0, 10)
+      return Boolean(bookingStart && bookingEnd && bookingStart <= end && bookingEnd >= start)
+    })
+    map.set(roomId, unavailable)
+  }
+  return map
+})
+const roomBookingConflictsMap = computed(() => {
+  const map = new Map()
+  const start = String(form.value.start_date || '').slice(0, 10)
+  const end = String(form.value.end_date || '').slice(0, 10)
+  for (const room of rooms.value) {
+    const roomId = String(room?.id || '')
+    const conflicts = bookings.value.filter((booking) => {
+      if (booking.booking_type !== 'room' || String(booking.status || '') === 'cancelled') return false
+      if (Number(booking.id) === Number(form.value.id || 0)) return false
+      const bookingRoomIds = Array.isArray(booking.room_ids)
+        ? booking.room_ids.map(id => String(id || '').trim()).filter(Boolean)
+        : (booking.room ? [String(booking.room)] : [])
+      if (!bookingRoomIds.includes(roomId)) return false
+      const bookingStart = String(booking.start_date || '').slice(0, 10)
+      const bookingEnd = String(booking.end_date || '').slice(0, 10)
+      if (!bookingStart || !bookingEnd) return false
+      if (start && end) return bookingStart <= end && bookingEnd >= start
+      return true
+    }).map((booking) => ({
+      id: booking.id,
+      start_date: String(booking.start_date || '').slice(0, 10),
+      end_date: String(booking.end_date || '').slice(0, 10),
+      status: String(booking.status || ''),
+      code: booking.code || '',
+    }))
+    map.set(roomId, conflicts)
+  }
+  return map
+})
+const isRoomUnavailable = (roomId) => Boolean(roomAvailabilityMap.value.get(String(roomId || '')))
+const isRoomSelected = (roomId) => selectedRoomIds.value.includes(String(roomId || ''))
+const roomBookingConflicts = (roomId) => roomBookingConflictsMap.value.get(String(roomId || '')) || []
+const roomBookedDatesSummary = (roomId) => {
+  const conflicts = roomBookingConflicts(roomId)
+  if (!conflicts.length) return ''
+  const [firstConflict] = conflicts
+  const hasSelectedPeriod = Boolean(String(form.value.start_date || '').slice(0, 10) && String(form.value.end_date || '').slice(0, 10))
+  const firstLabel = `${hasSelectedPeriod ? 'Déjà réservée' : 'Réservée'} du ${firstConflict.start_date} au ${firstConflict.end_date}`
+  if (conflicts.length === 1) return firstLabel
+  return `${firstLabel} • +${conflicts.length - 1} autre(s) période(s)`
+}
+const pruneUnavailableSelectedRooms = () => {
+  if (form.value.booking_type !== 'room') return
+  const next = selectedRoomIds.value.filter(roomId => !isRoomUnavailable(roomId))
+  if (next.length === selectedRoomIds.value.length) return
+  form.value.rooms_selected = next
+  syncPrimaryRoomSelection()
+  if (selectedRoomIds.value.length !== 1) {
+    form.value.additional_services_selected = []
+  }
 }
 const baseBookingAmount = computed(() => Number(daysCount.value || 0) * Number(pricePerUnit.value || 0))
 const selectedAddonsCount = computed(() => {
@@ -1321,10 +1526,54 @@ const addonsTotal = computed(() => {
   return total
 })
 
+const syncPrimaryRoomSelection = () => {
+  if (form.value.booking_type !== 'room') {
+    form.value.room = ''
+    form.value.rooms_selected = []
+    return
+  }
+  const normalized = selectedRoomIds.value
+  form.value.rooms_selected = normalized
+  form.value.room = normalized[0] || ''
+}
+
+const toggleRoomSelection = (roomId) => {
+  const roomKey = String(roomId || '')
+  if (!roomKey || isRoomUnavailable(roomKey)) return
+  const next = [...selectedRoomIds.value]
+  const index = next.indexOf(roomKey)
+  if (index >= 0) {
+    next.splice(index, 1)
+  } else {
+    next.push(roomKey)
+  }
+  form.value.rooms_selected = next
+  syncPrimaryRoomSelection()
+  if (selectedRoomIds.value.length !== 1) {
+    form.value.additional_services_selected = []
+  }
+  fetchCalendarRanges()
+  calculatePrice()
+}
+
+const onCustomerKindChange = () => {
+  if (form.value.customer_kind === 'organization') {
+    resetQuickCustomerState()
+    form.value.customer = null
+    form.value.customer_first_name = ''
+    form.value.customer_last_name = ''
+  } else {
+    form.value.organization_name = ''
+    form.value.organization_contact_name = ''
+  }
+  calculatePrice()
+}
+
 const onBookingTypeChange = () => {
   clearCalendarDates()
   form.value.hall = null
   form.value.room = null
+  form.value.rooms_selected = []
   form.value.additional_services_selected = []
   form.value.event_type_other = ''
   form.value.event_type = form.value.booking_type === 'room' ? 'Séjour' : 'Mariage'
@@ -1332,10 +1581,11 @@ const onBookingTypeChange = () => {
     form.value.hall = halls.value[0].id
   } else if (form.value.booking_type === 'room' && rooms.value.length > 0) {
     form.value.room = rooms.value[0].id
+    form.value.rooms_selected = [String(rooms.value[0].id)]
   }
-  if (form.value.booking_type === 'room' && selectedCustomer.value) {
-    form.value.guest_id_type = String(selectedCustomer.value.identity_type || form.value.guest_id_type || 'passport').trim()
-    form.value.guest_id_number = String(selectedCustomer.value.identity_number || form.value.guest_id_number || '').trim()
+  if (form.value.booking_type === 'hall') {
+    form.value.guest_id_type = ''
+    form.value.guest_id_number = ''
   }
   fetchCalendarRanges()
   calculatePrice()
@@ -1349,19 +1599,32 @@ const onItemChange = () => {
 }
 
 const calculatePrice = () => {
-  if (form.value.start_date && form.value.end_date && selectedItem.value) {
-    const start = new Date(form.value.start_date)
-    const end = new Date(form.value.end_date)
-    const diffTime = Math.abs(end - start)
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-    daysCount.value = diffDays
-
-    const itemPrice = form.value.booking_type === 'hall'
-      ? Number(selectedItem.value.price_per_day || 0)
-      : Number(selectedItem.value.price_per_night || 0)
-    pricePerUnit.value = itemPrice
-    form.value.total_price = (diffDays * itemPrice) + Number(addonsTotal.value || 0)
+  if (!form.value.start_date || !form.value.end_date) {
+    daysCount.value = 0
+    pricePerUnit.value = 0
+    form.value.total_price = Number(addonsTotal.value || 0)
+    return
   }
+
+  const start = new Date(form.value.start_date)
+  const end = new Date(form.value.end_date)
+  const diffTime = Math.abs(end - start)
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+  daysCount.value = diffDays
+
+  if (form.value.booking_type === 'hall') {
+    const hallPrice = Number(selectedHall.value?.price_per_day || 0)
+    pricePerUnit.value = hallPrice
+    form.value.total_price = (diffDays * hallPrice) + Number(addonsTotal.value || 0)
+    return
+  }
+
+  const totalRoomRate = selectedRooms.value.reduce((sum, room) => sum + Number(room?.price_per_night || 0), 0)
+  const singleRoomRate = Number(selectedRoom.value?.price_per_night || 0)
+  pricePerUnit.value = selectedRooms.value.length > 1 ? totalRoomRate : singleRoomRate
+  const baseTotal = diffDays * totalRoomRate
+  const addons = selectedRooms.value.length === 1 ? Number(addonsTotal.value || 0) : 0
+  form.value.total_price = baseTotal + addons
 }
 
 watch(
@@ -1381,6 +1644,29 @@ watch(
     if (String(nextHall || '') !== String(prevHall || '')) {
       form.value.additional_services_selected = []
     }
+    calculatePrice()
+  }
+)
+
+watch(
+  () => form.value.rooms_selected,
+  () => {
+    if (!showFormModal.value || form.value.booking_type !== 'room') return
+    syncPrimaryRoomSelection()
+    if (selectedRoomIds.value.length !== 1) {
+      form.value.additional_services_selected = []
+    }
+    fetchCalendarRanges()
+    calculatePrice()
+  },
+  { deep: true }
+)
+
+watch(
+  () => `${form.value.booking_type}:${String(form.value.start_date || '')}:${String(form.value.end_date || '')}:${bookings.value.length}`,
+  () => {
+    if (!showFormModal.value || form.value.booking_type !== 'room') return
+    pruneUnavailableSelectedRooms()
     calculatePrice()
   }
 )
@@ -1463,6 +1749,7 @@ const openCustomerResults = async () => {
 const selectCustomer = (customer) => {
   if (!customer) return
   selectedCustomer.value = customer
+  form.value.customer_kind = 'individual'
   form.value.customer = customer.id
   form.value.customer_first_name = String(customer.first_name || '').trim()
   form.value.customer_last_name = String(customer.last_name || '').trim()
@@ -1560,7 +1847,7 @@ const filteredBookings = computed(() => {
 })
 const formStayHistory = computed(() => {
   if (form.value.booking_type !== 'room') return []
-  const guestName = customerFullName.value.toLowerCase()
+  const guestName = activeGuestName.value.toLowerCase()
   const guestIdNumber = String(form.value.guest_id_number || '').trim().toLowerCase()
   const customerEmail = String(form.value.customer_email || '').trim().toLowerCase()
   return bookings.value
@@ -1581,6 +1868,8 @@ const formStayHistory = computed(() => {
       start_date: booking.start_date,
       end_date: booking.end_date,
       status: booking.status,
+      checked_in_at: booking.checked_in_at,
+      checked_out_at: booking.checked_out_at,
     }))
 })
 
@@ -1605,6 +1894,24 @@ const guestIdSummary = (booking) => {
   const label = guestIdTypeOptions.find(option => option.value === type)?.label || type || 'Pièce'
   return [label, number].filter(Boolean).join(' • ')
 }
+const extractApiErrorMessage = (payload) => {
+  if (!payload) return ''
+  if (typeof payload === 'string') return payload
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const message = extractApiErrorMessage(item)
+      if (message) return message
+    }
+    return ''
+  }
+  if (typeof payload === 'object') {
+    for (const value of Object.values(payload)) {
+      const message = extractApiErrorMessage(value)
+      if (message) return message
+    }
+  }
+  return ''
+}
 
 const {
   paginatedItems: paginatedBookings,
@@ -1621,50 +1928,32 @@ const saveBooking = async () => {
   savingBooking.value = true
   try {
     const payload = buildBookingPayload()
-    // #region debug-point A:booking-submit
-    reportBookingDebug('A', 'saveBooking submit', {
-      isEditing: isEditing.value,
-      bookingType: payload.booking_type,
-      hasEmail: Boolean(payload.customer_email),
-      room: payload.room || null,
-      hall: payload.hall || null,
-      startDate: payload.start_date || null,
-      endDate: payload.end_date || null,
-    })
-    // #endregion
+    if (form.value.booking_type === 'room' && !selectedRoomIds.value.length) {
+      notify('Complétez les informations de réservation avant de continuer', 'warning')
+      return
+    }
     if (isEditing.value) {
       await api.put(`bookings/${form.value.id}/`, payload)
       notify('Réservation mise à jour avec succès', 'success')
     } else {
+      if (form.value.booking_type === 'room') {
+        const unavailable = selectedRooms.value.filter(room => isRoomUnavailable(room.id))
+        if (unavailable.length) {
+          notify(`Ces chambres ne sont plus disponibles: ${unavailable.map(room => room.room_number).join(', ')}`, 'warning')
+          return
+        }
+      }
       const response = await api.post('bookings/', payload)
-      // #region debug-point B:booking-post-success
-      reportBookingDebug('B', 'booking post success before refresh', {
-        responseId: response?.data?.id ?? null,
-        responseKeys: Object.keys(response?.data || {}),
-        emailSent: response?.data?.email_sent ?? null,
-      })
-      // #endregion
       await fetchBookings()
       const createdBooking = bookings.value.find(booking => booking.id === response.data?.id) || response.data
-      // #region debug-point D:booking-after-refresh
-      reportBookingDebug('D', 'booking refresh completed', {
-        fetchedCount: bookings.value.length,
-        createdBookingFound: Boolean(createdBooking),
-        createdBookingId: createdBooking?.id ?? null,
-      })
-      // #endregion
-      if (payload.customer_email) {
+      if (form.value.booking_type === 'room' && selectedRoomIds.value.length > 1) {
+        notify(`Réservation multi-chambres créée avec succès (${selectedRoomIds.value.length} chambres)`, 'success')
+      } else if (payload.customer_email) {
         notify(response.data?.email_sent ? 'Nouvelle réservation créée et email envoyé' : 'Nouvelle réservation créée, mais email non envoyé', response.data?.email_sent ? 'success' : 'warning')
       } else {
         notify('Nouvelle réservation créée', 'success')
       }
       if (createdBooking) {
-        // #region debug-point E:booking-before-print
-        reportBookingDebug('E', 'booking about to print jeton', {
-          createdBookingId: createdBooking?.id ?? null,
-          responseId: response?.data?.id ?? null,
-        })
-        // #endregion
         openReservationJetonPrintPreview(createdBooking, Boolean(response.data?.email_sent))
       }
     }
@@ -1674,14 +1963,7 @@ const saveBooking = async () => {
     }
   } catch (error) {
     const data = error?.response?.data || {}
-    // #region debug-point C:booking-submit-error
-    reportBookingDebug('C', 'saveBooking catch', {
-      message: error?.message || null,
-      status: error?.response?.status ?? null,
-      data,
-    })
-    // #endregion
-    notify(data.additional_services_selected || data.dates || data.detail || 'Erreur lors de l\'enregistrement', 'danger')
+    notify(extractApiErrorMessage(data) || 'Erreur lors de l\'enregistrement', 'danger')
   } finally {
     savingBooking.value = false
   }
@@ -1766,6 +2048,8 @@ const openAddModal = () => {
   form.value = {
     ...createEmptyBookingForm(),
     hall: halls.value[0]?.id || null,
+    room: rooms.value[0]?.id || '',
+    rooms_selected: rooms.value[0]?.id ? [String(rooms.value[0].id)] : [],
   }
   resetQuickCustomerState()
   daysCount.value = 0
@@ -1781,7 +2065,7 @@ const editBooking = (booking) => {
   closeActions()
   isEditing.value = true
   form.value = mapBookingToForm(booking)
-  selectedCustomer.value = booking?.customer
+  selectedCustomer.value = booking?.customer && form.value.customer_kind !== 'organization'
     ? {
       id: booking.customer,
       first_name: form.value.customer_first_name,
@@ -1861,8 +2145,14 @@ const mapBookingToForm = (booking) => {
     return {
       ...booking,
       customer: booking?.customer || null,
+      customer_kind: booking?.customer_kind || 'individual',
       customer_first_name,
       customer_last_name,
+      organization_name: booking?.organization_name || '',
+      organization_contact_name: booking?.organization_contact_name || '',
+      rooms_selected: Array.isArray(booking?.room_ids) && booking.room_ids.length
+        ? booking.room_ids.map(id => String(id))
+        : (booking?.room ? [String(booking.room)] : []),
       additional_services_selected: booking?.additional_services_selected || [],
       event_type: 'Séjour',
       event_type_other: '',
@@ -1870,15 +2160,30 @@ const mapBookingToForm = (booking) => {
   }
 
   if (isKnown) {
-    return { ...booking, customer: booking?.customer || null, customer_first_name, customer_last_name, additional_services_selected: booking?.additional_services_selected || [], event_type_other: '' }
+    return {
+      ...booking,
+      customer: booking?.customer || null,
+      customer_kind: booking?.customer_kind || 'individual',
+      customer_first_name,
+      customer_last_name,
+      organization_name: booking?.organization_name || '',
+      organization_contact_name: booking?.organization_contact_name || '',
+      rooms_selected: [],
+      additional_services_selected: booking?.additional_services_selected || [],
+      event_type_other: '',
+    }
   }
 
   const otherPrefix = 'Autres: '
   return {
     ...booking,
     customer: booking?.customer || null,
+    customer_kind: booking?.customer_kind || 'individual',
     customer_first_name,
     customer_last_name,
+    organization_name: booking?.organization_name || '',
+    organization_contact_name: booking?.organization_contact_name || '',
+    rooms_selected: [],
     additional_services_selected: booking?.additional_services_selected || [],
     event_type: 'Autres',
     event_type_other: rawEventType.startsWith(otherPrefix) ? rawEventType.slice(otherPrefix.length) : rawEventType,
@@ -1886,17 +2191,27 @@ const mapBookingToForm = (booking) => {
 }
 
 const buildBookingPayload = () => {
-  const { event_type_other, customer_first_name, customer_last_name, ...payload } = form.value
+  const { event_type_other, customer_first_name, customer_last_name, rooms_selected, ...payload } = form.value
   const fullName = `${String(customer_first_name || '').trim()} ${String(customer_last_name || '').trim()}`.trim()
+  const customerName = form.value.customer_kind === 'organization'
+    ? String(form.value.organization_name || '').trim()
+    : fullName
+  const guestName = payload.booking_type === 'room'
+    ? (form.value.customer_kind === 'organization'
+      ? String(form.value.organization_contact_name || '').trim()
+      : fullName)
+    : ''
   return {
     ...payload,
-    customer: payload.customer || null,
-    customer_name: fullName,
+    customer: form.value.customer_kind === 'organization' ? null : (payload.customer || null),
+    room: payload.booking_type === 'room' ? (payload.room || selectedRoomIds.value[0] || '') : '',
+    room_ids: payload.booking_type === 'room' ? selectedRoomIds.value.map(id => Number(id)) : [],
+    customer_name: customerName,
     customer_email: String(payload.customer_email || '').trim(),
     customer_phone: String(payload.customer_phone || '').trim(),
-    guest_full_name: payload.booking_type === 'room' ? fullName : '',
-    guest_id_type: payload.booking_type === 'room' ? String(payload.guest_id_type || '').trim() : '',
-    guest_id_number: payload.booking_type === 'room' ? String(payload.guest_id_number || '').trim() : '',
+    guest_full_name: guestName,
+    guest_id_type: '',
+    guest_id_number: '',
     event_type: payload.booking_type === 'room' ? 'Séjour' : normalizeEventType(form.value.event_type, event_type_other),
   }
 }
@@ -1917,28 +2232,44 @@ const buildPdfFileName = (prefix, identifier) => {
 const buildReservationJetonPdfHtml = (booking, emailSent = null) => {
   const displayId = getBookingDisplayId(booking)
   const reservationNumber = booking?.id || '-'
-  const bookedItemLabel = booking?.booking_type === 'room' ? 'Chambre' : 'Salle'
+  const bookedItemLabel = booking?.booking_type === 'room'
+    ? ((Number(booking?.room_count || 0) > 1) ? 'Chambres' : 'Chambre')
+    : 'Salle'
   const bookedItemName = booking?.booking_type === 'room' ? (booking?.room_display || '') : (booking?.hall_name || '')
   const emailValue = booking?.customer_email || 'Non renseigné'
   const emailSentLabel = typeof emailSent === 'boolean' ? (emailSent ? 'Oui' : 'Non') : '-'
   const periodLabel = formatDateRange(booking?.start_date, booking?.end_date)
-  const detailRows = [
+  const clientRows = [
     ['Client', booking?.customer_name || '-'],
+    ...(booking?.customer_kind === 'organization'
+      ? [
+        ['Organisation', booking?.organization_name || booking?.customer_name || '-'],
+        ['Contact', booking?.organization_contact_name || booking?.guest_full_name || '-'],
+      ]
+      : []),
+    ['Email client', emailValue],
+  ]
+  const reservationRows = [
     [bookedItemLabel, bookedItemName || '-'],
     ['Evénement', booking?.event_type || '-'],
     ['Période', periodLabel || '-'],
     ['Montant', formatMoney(booking?.total_price)],
     ['Statut', getStatusTranslation(booking?.status)],
-    ['Email client', emailValue],
+  ]
+  const followUpRows = [
+    ['Code de réservation', displayId],
+    ['Numéro', reservationNumber],
   ]
 
   if (typeof emailSent === 'boolean') {
-    detailRows.push(['Email envoyé', emailSentLabel])
+    followUpRows.push(['Email envoyé', emailSentLabel])
   }
 
   if (booking?.booking_type === 'room') {
-    detailRows.push(['Client hébergé', booking?.guest_full_name || booking?.customer_name || '-'])
-    detailRows.push(['Pièce', guestIdSummary(booking)])
+    followUpRows.push(['Client hébergé', booking?.guest_full_name || booking?.customer_name || '-'])
+    if (booking?.customer_kind !== 'organization') {
+      followUpRows.push(['Pièce', guestIdSummary(booking)])
+    }
   }
 
   return buildPdfDocumentHtml({
@@ -1946,38 +2277,15 @@ const buildReservationJetonPdfHtml = (booking, emailSent = null) => {
     documentTitle: `Jeton ${displayId}`,
     subtitle: 'Jeton officiel de reservation a presenter pour le suivi de votre dossier ou a l accueil.',
     typeLabel: 'Jeton PDF',
+    headerVariant: 'ticket',
+    headerEyebrow: 'Document de suivi',
+    headerReference: displayId,
     tableTitle: 'Détails du jeton',
-    tableTitles: ['Détails du jeton'],
+    tableTitles: ['Résumé du jeton', 'Client et contact', 'Réservation', 'Suivi du dossier'],
     periodLabel,
     contentHtml: `
-      <div class="summary-cards">
-        <div class="summary-card">
-          <div>
-            <div class="label">Code de réservation</div>
-            <div class="value">${escapeHtml(displayId)}</div>
-          </div>
-        </div>
-        <div class="summary-card">
-          <div>
-            <div class="label">Numéro</div>
-            <div class="value">${escapeHtml(reservationNumber)}</div>
-          </div>
-        </div>
-        <div class="summary-card">
-          <div>
-            <div class="label">Type</div>
-            <div class="value">${escapeHtml(bookedItemLabel)}</div>
-          </div>
-        </div>
-        <div class="summary-card">
-          <div>
-            <div class="label">Montant</div>
-            <div class="value">${escapeHtml(formatMoney(booking?.total_price))}</div>
-          </div>
-        </div>
-      </div>
       <div class="section-card">
-        <div class="section-header"><h2>Détails du jeton</h2></div>
+        <div class="section-header"><h2>Résumé du jeton</h2></div>
         <table>
           <thead>
             <tr>
@@ -1986,7 +2294,86 @@ const buildReservationJetonPdfHtml = (booking, emailSent = null) => {
             </tr>
           </thead>
           <tbody>
-            ${detailRows.map(([label, value]) => `
+            <tr>
+              <td>Code de réservation</td>
+              <td>${escapeHtml(displayId)}</td>
+            </tr>
+            <tr>
+              <td>Numéro</td>
+              <td>${escapeHtml(reservationNumber)}</td>
+            </tr>
+            <tr>
+              <td>Client</td>
+              <td>${escapeHtml(booking?.customer_name || '-')}</td>
+            </tr>
+            <tr>
+              <td>${escapeHtml(bookedItemLabel)}</td>
+              <td>${escapeHtml(bookedItemName || '-')}</td>
+            </tr>
+            <tr>
+              <td>Période</td>
+              <td>${escapeHtml(periodLabel || '-')}</td>
+            </tr>
+            <tr>
+              <td>Montant</td>
+              <td>${escapeHtml(formatMoney(booking?.total_price))}</td>
+            </tr>
+            <tr>
+              <td>Statut</td>
+              <td>${escapeHtml(getStatusTranslation(booking?.status))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><h2>Client et contact</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Information</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${clientRows.map(([label, value]) => `
+              <tr>
+                <td>${escapeHtml(label)}</td>
+                <td>${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><h2>Réservation</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Information</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${reservationRows.map(([label, value]) => `
+              <tr>
+                <td>${escapeHtml(label)}</td>
+                <td>${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><h2>Suivi du dossier</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Information</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${followUpRows.map(([label, value]) => `
               <tr>
                 <td>${escapeHtml(label)}</td>
                 <td>${escapeHtml(value)}</td>
@@ -2009,6 +2396,7 @@ const openReservationJetonPrintPreview = (booking, emailSent = null) => {
   const ok = openPrintPreviewHtml({
     html,
     title: `Jeton ${getBookingDisplayId(booking)}`,
+    autoPrint: false,
   })
   if (!ok) {
     notify('Impossible d’ouvrir l’aperçu d’impression du jeton', 'warning')
@@ -2320,12 +2708,159 @@ const printReservationJeton = async (booking) => {
   gap: var(--space-4);
 }
 
+.booking-form-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.booking-form-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 1.2rem;
+  border: 1px solid rgba(191, 219, 254, 0.9);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 34%),
+    linear-gradient(135deg, #ffffff 0%, #f8fbff 52%, #eef6ff 100%);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+}
+
+.booking-form-hero-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.booking-form-eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.booking-form-hero-copy h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.booking-form-hero-copy p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.6;
+  max-width: 44rem;
+}
+
+.booking-form-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.booking-form-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid #dbeafe;
+  background: rgba(255, 255, 255, 0.85);
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.booking-form-chip.accent {
+  border-color: rgba(212, 175, 55, 0.3);
+  background: rgba(212, 175, 55, 0.12);
+  color: #8a6a12;
+}
+
+.booking-form-section {
+  display: grid;
+  gap: 1rem;
+  padding: 1.05rem 1.1rem 1.15rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 22px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+}
+
+.booking-form-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.booking-form-section-kicker {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 0.25rem;
+  color: #2563eb;
+  font-size: 0.73rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.booking-form-section-head h4 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.booking-form-section-head p {
+  margin: 0;
+  max-width: 28rem;
+  color: #64748b;
+  line-height: 1.55;
+  font-size: 0.9rem;
+}
+
+.booking-form-grid {
+  gap: 1rem;
+}
+
 .customer-lookup-card,
 .quick-customer-card {
   padding: 1rem;
   border: 1px solid #dbeafe;
   border-radius: 18px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.organization-booking-note,
+.organization-room-note {
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  border: 1px solid #c7d2fe;
+  background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.organization-booking-note strong,
+.organization-room-note strong {
+  color: #1e293b;
+}
+
+.organization-booking-note small,
+.organization-room-note small {
+  color: #64748b;
+  line-height: 1.5;
 }
 
 .customer-lookup-head,
@@ -2412,6 +2947,171 @@ const printReservationJeton = async (booking) => {
 
 .quick-customer-actions {
   margin-top: 0.85rem;
+}
+
+.room-selection-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.room-selection-head small {
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.room-selection-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.room-option-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: flex-start;
+  min-height: 138px;
+  padding: 1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  cursor: pointer;
+}
+
+.room-option-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.room-option-check {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #64748b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.room-option-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(59, 130, 246, 0.36);
+  box-shadow: 0 18px 30px rgba(59, 130, 246, 0.12);
+}
+
+.room-option-card.selected {
+  border-color: rgba(59, 130, 246, 0.68);
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  box-shadow: 0 20px 36px rgba(59, 130, 246, 0.16);
+}
+
+.room-option-card.selected .room-option-check {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: linear-gradient(180deg, #93c5fd 0%, #60a5fa 100%);
+  color: #ffffff;
+}
+
+.room-option-card.unavailable {
+  opacity: 0.7;
+  cursor: not-allowed;
+  border-color: rgba(148, 163, 184, 0.2);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  box-shadow: none;
+}
+
+.room-option-card.maintenance {
+  border-color: #fecaca;
+}
+
+.room-option-main {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.room-option-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.room-option-price {
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.room-option-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.room-option-type,
+.room-option-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.room-option-type {
+  background: rgba(148, 163, 184, 0.12);
+  color: #475569;
+}
+
+.room-option-main strong {
+  color: #0f172a;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.room-option-main span,
+.room-option-main small {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.room-option-main small {
+  line-height: 1.5;
+}
+
+.room-option-booked-dates {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(254, 242, 242, 0.95);
+  border: 1px solid rgba(252, 165, 165, 0.55);
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.room-option-booked-dates::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.8;
 }
 
 .booking-total-banner {
@@ -2972,6 +3672,106 @@ html[data-admin-theme="dark"] .room-booking-note {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 14px 28px rgba(2, 6, 23, 0.28);
 }
 
+html[data-admin-theme="dark"] .booking-form-hero {
+  border-color: rgba(51, 65, 85, 0.95);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 34%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.92) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 16px 30px rgba(2, 6, 23, 0.28);
+}
+
+html[data-admin-theme="dark"] .booking-form-eyebrow {
+  background: rgba(59, 130, 246, 0.18);
+  color: #bfdbfe;
+}
+
+html[data-admin-theme="dark"] .booking-form-hero-copy h3,
+html[data-admin-theme="dark"] .booking-form-section-head h4 {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .booking-form-hero-copy p,
+html[data-admin-theme="dark"] .booking-form-section-head p,
+html[data-admin-theme="dark"] .booking-form-section-kicker {
+  color: #cbd5e1;
+}
+
+html[data-admin-theme="dark"] .booking-form-chip {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+}
+
+html[data-admin-theme="dark"] .booking-form-chip.accent {
+  border-color: rgba(212, 175, 55, 0.28);
+  background: rgba(161, 98, 7, 0.16);
+  color: #fde68a;
+}
+
+html[data-admin-theme="dark"] .booking-form-section {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.82) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+html[data-admin-theme="dark"] .organization-booking-note,
+html[data-admin-theme="dark"] .organization-room-note,
+html[data-admin-theme="dark"] .room-option-card {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(15, 23, 42, 0.78) 100%);
+}
+
+html[data-admin-theme="dark"] .organization-booking-note strong,
+html[data-admin-theme="dark"] .organization-room-note strong,
+html[data-admin-theme="dark"] .room-option-main strong {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .organization-booking-note small,
+html[data-admin-theme="dark"] .organization-room-note small,
+html[data-admin-theme="dark"] .room-option-main span,
+html[data-admin-theme="dark"] .room-option-main small,
+html[data-admin-theme="dark"] .room-selection-head small {
+  color: #cbd5e1;
+}
+
+html[data-admin-theme="dark"] .room-option-check {
+  border-color: rgba(71, 85, 105, 0.95);
+  background: rgba(30, 41, 59, 0.96);
+  color: #cbd5e1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+html[data-admin-theme="dark"] .room-option-card.selected {
+  border-color: rgba(96, 165, 250, 0.68);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.92) 100%);
+}
+
+html[data-admin-theme="dark"] .room-option-card.selected .room-option-check {
+  border-color: rgba(96, 165, 250, 0.52);
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.9) 0%, rgba(59, 130, 246, 0.96) 100%);
+  color: #ffffff;
+}
+
+html[data-admin-theme="dark"] .room-option-card.unavailable {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.72) 0%, rgba(15, 23, 42, 0.58) 100%);
+}
+
+html[data-admin-theme="dark"] .room-option-price {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .room-option-type {
+  background: rgba(148, 163, 184, 0.16);
+  color: #e2e8f0;
+}
+
+html[data-admin-theme="dark"] .room-option-booked-dates {
+  background: rgba(127, 29, 29, 0.18);
+  border-color: rgba(248, 113, 113, 0.32);
+  color: #fecaca;
+}
+
 html[data-admin-theme="dark"] .room-booking-note strong {
   color: #f8fafc;
 }
@@ -3008,6 +3808,26 @@ html[data-admin-theme="dark"] .customer-result-item:hover {
   background: rgba(30, 41, 59, 0.95);
 }
 
+html[data-admin-theme="dark"] .stay-history-card {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.86) 0%, rgba(15, 23, 42, 0.74) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+html[data-admin-theme="dark"] .stay-history-head {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .stay-history-item {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: rgba(15, 23, 42, 0.94);
+  color: #cbd5e1;
+}
+
+html[data-admin-theme="dark"] .stay-history-item strong {
+  color: #f8fafc;
+}
+
 html[data-admin-theme="dark"] .selected-period-card {
   border-color: rgba(51, 65, 85, 0.95);
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(15, 23, 42, 0.82) 100%);
@@ -3024,6 +3844,25 @@ html[data-admin-theme="dark"] .selected-period-value {
 }
 
 @media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-group.full {
+    grid-column: auto;
+  }
+  .booking-form-hero {
+    padding: 1rem;
+  }
+  .booking-form-hero,
+  .booking-form-section-head {
+    flex-direction: column;
+  }
+  .booking-form-hero-meta {
+    justify-content: flex-start;
+  }
+  .booking-form-section {
+    padding: 0.95rem;
+  }
   .entity-view-hero { flex-direction: column; align-items: flex-start; }
   .entity-view-badges { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
   .entity-view-grid { grid-template-columns: 1fr; }
@@ -3044,6 +3883,20 @@ html[data-admin-theme="dark"] .selected-period-value {
   }
   .addon-price {
     padding-left: 62px;
+  }
+  .room-selection-grid {
+    grid-template-columns: 1fr;
+  }
+  .room-option-card {
+    grid-template-columns: 1fr;
+    min-height: unset;
+  }
+  .room-option-check {
+    width: 40px;
+    height: 40px;
+  }
+  .room-option-top {
+    flex-direction: column;
   }
 }
 

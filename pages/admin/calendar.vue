@@ -49,9 +49,9 @@
                 <span class="event-time">{{ safeHallLabel(event.hall_name) }}</span>
                 <span class="event-title">{{ nameInitials(event.customer_name) }}</span>
               </div>
-              <div v-if="extraEventsCount(day) > 0" class="event-pill more">
+              <button v-if="extraEventsCount(day) > 0" type="button" class="event-pill more" @click="openDayEvents(day)">
                 +{{ extraEventsCount(day) }}
-              </div>
+              </button>
             </template>
           </div>
         </div>
@@ -113,6 +113,57 @@
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
       </template>
     </AdminAppModal>
+
+    <AdminAppModal v-model="showDayEventsModal" :title="selectedDayModalTitle" width="760px">
+      <div class="day-events-modal">
+        <div class="day-events-head">
+          <div>
+            <h3>{{ selectedDayModalTitle }}</h3>
+            <p>{{ selectedDayEvents.length }} réservation{{ selectedDayEvents.length > 1 ? 's' : '' }} sur cette journée</p>
+          </div>
+        </div>
+
+        <div v-if="selectedDayEvents.length" class="day-events-list">
+          <button
+            v-for="event in selectedDayEvents"
+            :key="`day-modal-${event.id}`"
+            type="button"
+            class="day-event-card"
+            @click="openEventFromDayModal(event)"
+          >
+            <div class="day-event-card-top">
+              <div>
+                <div class="day-event-code">{{ event.code || 'Reservation' }}</div>
+                <strong>{{ event.customer_name || '-' }}</strong>
+              </div>
+              <span :class="['badge', getBadgeClass(event.status)]">{{ translateStatus(event.status) }}</span>
+            </div>
+            <div class="day-event-meta">
+              <span>{{ event.hall_name || '-' }}</span>
+              <span>{{ event.event_type || '-' }}</span>
+            </div>
+            <div class="day-event-grid">
+              <div class="day-event-item">
+                <span class="day-event-label">Période</span>
+                <span class="day-event-value">{{ formatDateRange(event.start_date, event.end_date) }}</span>
+              </div>
+              <div class="day-event-item">
+                <span class="day-event-label">Montant</span>
+                <span class="day-event-value">{{ formatMoney(event.total_price) }}</span>
+              </div>
+            </div>
+            <div class="day-event-action">Voir les détails</div>
+          </button>
+        </div>
+
+        <div v-else class="day-events-empty">
+          Aucune réservation disponible pour cette journée.
+        </div>
+      </div>
+      <template #footer>
+        <button class="btn btn-primary" @click="showDayEventsModal = false">Fermer</button>
+      </template>
+    </AdminAppModal>
   </div>
 </template>
 
@@ -131,7 +182,9 @@ const months = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet'
 
 const currentDate = ref(new Date())
 const showViewModal = ref(false)
+const showDayEventsModal = ref(false)
 const selectedEvent = ref(null)
+const selectedDay = ref(null)
 
 const events = ref([])
 const loadingEvents = ref(false)
@@ -214,6 +267,21 @@ const extraEventsCount = (day) => {
   return Math.max(0, list.length - maxEventsPerDay.value)
 }
 
+const selectedDayEvents = computed(() => {
+  if (!selectedDay.value) return []
+  return getEventsForDay(selectedDay.value)
+})
+
+const selectedDayModalTitle = computed(() => {
+  if (!selectedDay.value) return 'Réservations du jour'
+  const date = new Date(currentYear.value, currentMonth.value, selectedDay.value)
+  return `Réservations du ${date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })}`
+})
+
 const safeHallLabel = (name) => {
   const v = String(name || '').trim()
   if (!v) return ''
@@ -240,6 +308,16 @@ const nameInitials = (name) => {
 const viewEvent = (event) => {
   selectedEvent.value = event
   showViewModal.value = true
+}
+
+const openDayEvents = (day) => {
+  selectedDay.value = day
+  showDayEventsModal.value = true
+}
+
+const openEventFromDayModal = (event) => {
+  showDayEventsModal.value = false
+  viewEvent(event)
 }
 
 const translateStatus = (status) => {
@@ -395,7 +473,7 @@ const getBadgeClass = (status) => {
   background: var(--gray-100);
   color: var(--gray-600);
   border: 1px solid var(--gray-200);
-  cursor: default;
+  cursor: pointer;
   justify-content: center;
   font-weight: 800;
 }
@@ -450,6 +528,97 @@ const getBadgeClass = (status) => {
 .entity-view-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--gray-50); border: 1px solid var(--gray-200); }
 .entity-view-label { color: var(--gray-500); font-size: .82rem; font-weight: 700; }
 .entity-view-value { color: var(--gray-900); font-size: .9rem; font-weight: 700; text-align: right; word-break: break-word; }
+.day-events-modal { display: grid; gap: 16px; }
+.day-events-head h3 { margin: 0 0 4px; font-size: 1.1rem; font-weight: 800; color: var(--gray-900); }
+.day-events-head p { margin: 0; color: var(--gray-500); font-size: .92rem; }
+.day-events-list { display: grid; gap: 12px; }
+.day-event-card {
+  width: 100%;
+  border: 1px solid var(--gray-200);
+  border-radius: 18px;
+  background: var(--white);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.day-event-card:hover {
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+.day-event-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.day-event-card-top strong {
+  display: block;
+  color: var(--gray-900);
+  font-size: .98rem;
+  font-weight: 800;
+}
+.day-event-code {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  margin-bottom: 8px;
+}
+.day-event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: var(--gray-500);
+  font-size: .88rem;
+  font-weight: 600;
+}
+.day-event-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.day-event-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-50);
+}
+.day-event-label {
+  color: var(--gray-500);
+  font-size: .76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.day-event-value {
+  color: var(--gray-900);
+  font-size: .9rem;
+  font-weight: 700;
+}
+.day-event-action {
+  color: #2563eb;
+  font-size: .84rem;
+  font-weight: 800;
+}
+.day-events-empty {
+  padding: 18px;
+  border: 1px dashed var(--gray-300);
+  border-radius: 18px;
+  color: var(--gray-500);
+  text-align: center;
+  background: var(--gray-50);
+}
 
 :global(html[data-admin-theme="dark"]) .calendar-nav {
   background: rgba(255, 255, 255, 0.04);
@@ -499,6 +668,31 @@ const getBadgeClass = (status) => {
   border-color: rgba(30, 41, 59, 0.95);
 }
 
+:global(html[data-admin-theme="dark"]) .day-event-card {
+  background: rgba(15, 23, 42, 0.78);
+  border-color: rgba(30, 41, 59, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .day-event-card-top strong,
+:global(html[data-admin-theme="dark"]) .day-event-value,
+:global(html[data-admin-theme="dark"]) .day-events-head h3 {
+  color: #f8fafc;
+}
+
+:global(html[data-admin-theme="dark"]) .day-event-code,
+:global(html[data-admin-theme="dark"]) .day-event-item,
+:global(html[data-admin-theme="dark"]) .day-events-empty {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(30, 41, 59, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .day-event-meta,
+:global(html[data-admin-theme="dark"]) .day-event-label,
+:global(html[data-admin-theme="dark"]) .day-events-head p,
+:global(html[data-admin-theme="dark"]) .day-events-empty {
+  color: rgba(226, 232, 240, 0.72);
+}
+
 @media (max-width: 992px) {
   .current-month {
     font-size: 0.95rem;
@@ -517,6 +711,11 @@ const getBadgeClass = (status) => {
   .calendar-day {
     min-height: 88px;
     padding: 8px;
+  }
+
+  .day-event-grid,
+  .entity-view-grid {
+    grid-template-columns: 1fr;
   }
 
   .event-pill {

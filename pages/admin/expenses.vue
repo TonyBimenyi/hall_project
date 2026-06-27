@@ -7,7 +7,7 @@
           <i class="fas fa-file-pdf"></i>
           <span class="btn-label">Export PDF</span>
         </button>
-        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
+        <button v-if="canExportExcel" class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
           <i class="fas fa-file-excel"></i>
           <span class="btn-label">Export XLS</span>
         </button>
@@ -18,7 +18,7 @@
       </div>
     </div>
 
-    <div class="stats-grid mb-8">
+    <div v-if="canSeeExpenseStats" class="stats-grid mb-8">
       <div class="stat-card card">
         <div class="stat-icon danger"><i class="fas fa-money-bill-wave"></i></div>
         <div class="stat-info">
@@ -286,7 +286,7 @@
         <div class="form-grid">
           <div class="form-group">
             <label class="form-label">Payé par</label>
-            <input v-model="form.paid_by" type="text" class="form-input" required />
+            <input v-model="form.paid_by" type="text" class="form-input" required readonly />
           </div>
           <div class="form-group">
             <label class="form-label">Statut</label>
@@ -372,6 +372,7 @@ import { usePagination } from '~/composables/usePagination'
 import { useDisplayIds } from '~/composables/useDisplayIds'
 import { useTableSort } from '~/composables/useTableSort'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
+import { canExportAdminExcel, canSeeSyntheticRevenue, getRoleKey, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
 const { formatMoney, moneyInputModel } = useMoney()
@@ -379,6 +380,7 @@ const { buildHashSequenceMap } = useDisplayIds()
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
 
 const expenses = ref([])
+const currentUser = ref({})
 const tableRef = ref(null)
 const exportingPdf = ref(false)
 const exportingXls = ref(false)
@@ -451,6 +453,19 @@ const filtersOpen = ref(false)
 const openActionsId = ref(null)
 const savingExpense = ref(false)
 const deletingExpense = ref(false)
+const canExportExcel = computed(() => canExportAdminExcel(currentUser.value))
+const canSeeExpenseStats = computed(() => canSeeSyntheticRevenue(currentUser.value))
+const isReceptionist = computed(() => getRoleKey(currentUser.value) === 'receptionniste')
+const currentUserId = computed(() => Number(currentUser.value?.id || currentUser.value?.user_id || 0))
+const currentExpenseUserLabel = computed(() => (
+  String(
+    currentUser.value?.username ||
+    currentUser.value?.full_name ||
+    currentUser.value?.name ||
+    currentUser.value?.email ||
+    'Utilisateur connecté'
+  ).trim() || 'Utilisateur connecté'
+))
 
 const toggleActions = (id) => {
   openActionsId.value = openActionsId.value === id ? null : id
@@ -470,6 +485,10 @@ const resetFilters = () => {
 }
 
 const exportXls = async () => {
+  if (!canExportExcel.value) {
+    notify("L'export Excel n'est pas autorisé pour ce rôle", 'warning')
+    return
+  }
   if (!tableRef.value) return
   exportingXls.value = true
   await nextTick()
@@ -517,6 +536,7 @@ const fetchExpenses = async () => {
 }
 
 onMounted(() => {
+  currentUser.value = getStoredUser()
   fetchExpenses()
   if (process.client) {
     const update = () => {
@@ -586,6 +606,7 @@ onBeforeUnmount(() => {
 const filteredExpenses = computed(() => {
   const q = search.value.toLowerCase().trim()
   return (expenses.value || []).filter((e) => {
+    const matchesOwnership = !isReceptionist.value || Number(e?.created_by || 0) === currentUserId.value
     const matchesSearch = q === '' ||
       String(e.description || '').toLowerCase().includes(q) ||
       String(e.paid_to || '').toLowerCase().includes(q) ||
@@ -593,7 +614,7 @@ const filteredExpenses = computed(() => {
     const matchesCategory = categoryFilter.value === '' || e.category === categoryFilter.value
     const matchesStatus = statusFilter.value === '' || e.status === statusFilter.value
     const matchesDate = inRangeYmd(e.date, rangeStartYmd.value, rangeEndYmd.value)
-    return matchesSearch && matchesCategory && matchesStatus && matchesDate
+    return matchesOwnership && matchesSearch && matchesCategory && matchesStatus && matchesDate
   })
 })
 
@@ -636,7 +657,7 @@ const form = ref({
   description: '',
   category: 'Autre',
   amount: 0,
-  paid_by: 'Admin',
+  paid_by: '',
   paid_to: '',
   status: 'paid'
 })
@@ -650,7 +671,7 @@ const resetForm = () => {
     description: '',
     category: 'Autre',
     amount: 0,
-    paid_by: 'Admin',
+    paid_by: currentExpenseUserLabel.value,
     paid_to: '',
     status: 'paid'
   }
@@ -671,7 +692,10 @@ const viewExpense = (expense) => {
 const editExpense = (expense) => {
   closeActions()
   isEditing.value = true
-  form.value = { ...expense }
+  form.value = {
+    ...expense,
+    paid_by: currentExpenseUserLabel.value,
+  }
   showFormModal.value = true
 }
 
@@ -685,6 +709,7 @@ const saveExpense = async () => {
   if (savingExpense.value) return
   savingExpense.value = true
   try {
+    form.value.paid_by = currentExpenseUserLabel.value
     if (isEditing.value) {
       await api.put(`expenses/${form.value.id}/`, form.value)
       notify('Dépense mise à jour avec succès')

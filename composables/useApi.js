@@ -43,8 +43,8 @@ export const getApiBaseUrl = () => {
   } catch {
   }
 
-  return 'https://api.labertha-villa.com/api/'
-  // return 'http://127.0.0.1:8000/api/'
+  // return 'https://api.labertha-villa.com/api/'
+  return 'http://127.0.0.1:8000/api/'
 }
 
 

@@ -25,6 +25,7 @@ from django.core.mail import send_mail
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.password_validation import validate_password
 from datetime import timedelta, date
+from django.utils.dateparse import parse_datetime
 import hashlib
 import secrets
 import unicodedata
@@ -493,6 +494,150 @@ def _compute_booking_totals(item: Hall | Room, start_dt: date, end_dt: date, sel
     total = (base_total + addons_total).quantize(Decimal('0.01'))
     return base_total, addons_total, total, normalized_selected
 
+
+def _normalize_booking_room_ids(booking):
+    if not booking or getattr(booking, 'booking_type', '') != 'room':
+        return []
+    room_ids = []
+    raw_ids = getattr(booking, 'room_ids', []) if isinstance(getattr(booking, 'room_ids', []), list) else []
+    for value in raw_ids:
+        try:
+            room_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if room_id not in room_ids:
+            room_ids.append(room_id)
+    room_id = getattr(booking, 'room_id', None)
+    if room_id and room_id not in room_ids:
+        room_ids.insert(0, room_id)
+    return room_ids
+
+
+def _get_booking_rooms(booking):
+    room_ids = _normalize_booking_room_ids(booking)
+    return _get_rooms_by_ids(room_ids, fallback_room=getattr(booking, 'room', None))
+
+
+def _get_rooms_by_ids(room_ids, fallback_room=None):
+    normalized_ids = []
+    raw_ids = room_ids if isinstance(room_ids, list) else []
+    for value in raw_ids:
+        try:
+            room_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if room_id not in normalized_ids:
+            normalized_ids.append(room_id)
+    fallback_room_id = getattr(fallback_room, 'id', None)
+    if fallback_room_id and fallback_room_id not in normalized_ids:
+        normalized_ids.insert(0, fallback_room_id)
+    room_ids = normalized_ids
+    if not room_ids:
+        return []
+    room_map = {room.id: room for room in Room.objects.filter(id__in=room_ids)}
+    return [room_map[room_id] for room_id in room_ids if room_id in room_map]
+
+
+def _room_is_booked_in_booking(booking, room_id):
+    try:
+        room_id = int(room_id)
+    except (TypeError, ValueError):
+        return False
+    return room_id in _normalize_booking_room_ids(booking)
+
+
+def _normalize_guest_payload(guests):
+    normalized = []
+    raw_items = guests if isinstance(guests, list) else []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        full_name = str(item.get('full_name') or '').strip()
+        id_type = str(item.get('id_type') or '').strip()
+        id_number = str(item.get('id_number') or '').strip()
+        if not full_name:
+            continue
+        normalized.append({
+            'full_name': full_name,
+            'id_type': id_type,
+            'id_number': id_number,
+        })
+    return normalized
+
+
+def _get_booking_room_stays(booking):
+    if not booking or getattr(booking, 'booking_type', '') != 'room':
+        return []
+    stay_map = {}
+    raw_stays = getattr(booking, 'room_stays', []) if isinstance(getattr(booking, 'room_stays', []), list) else []
+    for item in raw_stays:
+        if not isinstance(item, dict):
+            continue
+        try:
+            room_id = int(item.get('room_id'))
+        except (TypeError, ValueError):
+            continue
+        stay_map[room_id] = {
+            'room_id': room_id,
+            'checked_in_at': item.get('checked_in_at') or None,
+            'checked_out_at': item.get('checked_out_at') or None,
+            'guests': _normalize_guest_payload(item.get('guests')),
+        }
+    return [
+        stay_map.get(room_id, {
+            'room_id': room_id,
+            'checked_in_at': None,
+            'checked_out_at': None,
+            'guests': [],
+        })
+        for room_id in _normalize_booking_room_ids(booking)
+    ]
+
+
+def _find_room_stay(booking, room_id):
+    try:
+        room_id = int(room_id)
+    except (TypeError, ValueError):
+        return None
+    for stay in _get_booking_room_stays(booking):
+        if int(stay.get('room_id') or 0) == room_id:
+            return stay
+    return None
+
+
+def _sync_booking_summary_from_room_stays(booking):
+    if not booking or getattr(booking, 'booking_type', '') != 'room':
+        return
+    stays = _get_booking_room_stays(booking)
+    checked_in_times = []
+    checked_out_times = []
+    representative_guest = None
+    all_checked_out = bool(stays)
+    for stay in stays:
+        checked_in_at = stay.get('checked_in_at')
+        checked_out_at = stay.get('checked_out_at')
+        if checked_in_at:
+            parsed = parse_datetime(str(checked_in_at))
+            if parsed:
+                checked_in_times.append(parsed)
+        else:
+            all_checked_out = False
+        if checked_out_at:
+            parsed = parse_datetime(str(checked_out_at))
+            if parsed:
+                checked_out_times.append(parsed)
+        else:
+            all_checked_out = False
+        guests = stay.get('guests') or []
+        if guests and representative_guest is None:
+            representative_guest = guests[0]
+    booking.checked_in_at = min(checked_in_times) if checked_in_times else None
+    booking.checked_out_at = max(checked_out_times) if all_checked_out and checked_out_times else None
+    booking.guest_full_name = str((representative_guest or {}).get('full_name') or '').strip()
+    booking.guest_id_type = str((representative_guest or {}).get('id_type') or '').strip()
+    booking.guest_id_number = str((representative_guest or {}).get('id_number') or '').strip()
+    booking.room_stays = stays
+
 def _get_security_profile(user):
     if not user or not getattr(user, 'pk', None):
         return None
@@ -531,67 +676,102 @@ def _actor(request):
 
 
 def _sync_room_status_for_booking(booking, room_action='none'):
-    if not booking or getattr(booking, 'booking_type', '') != 'room' or not getattr(booking, 'room_id', None):
+    if not booking or getattr(booking, 'booking_type', '') != 'room':
         return
 
-    room = booking.room
-    now = timezone.now()
-    booking_fields = []
-    room_fields = []
-
-    if room_action == 'check_in':
-        if booking.checked_in_at is None:
-            booking.checked_in_at = now
-            booking_fields.append('checked_in_at')
-        if room.status != 'occupied':
-            room.status = 'occupied'
-            room_fields.append('status')
-    elif room_action == 'check_out':
-        if booking.checked_out_at is None:
-            booking.checked_out_at = now
-            booking_fields.append('checked_out_at')
-        if room.status != 'cleaning':
-            room.status = 'cleaning'
-            room_fields.append('status')
-    else:
-        if booking.checked_in_at and not booking.checked_out_at and room.status != 'occupied':
-            room.status = 'occupied'
-            room_fields.append('status')
-        elif booking.checked_out_at and room.status != 'cleaning':
-            room.status = 'cleaning'
-            room_fields.append('status')
+    _sync_booking_summary_from_room_stays(booking)
+    rooms = _get_booking_rooms(booking)
+    if not rooms:
+        return
+    booking.save(update_fields=['room_stays', 'checked_in_at', 'checked_out_at', 'guest_full_name', 'guest_id_type', 'guest_id_number', 'updated_at'])
+    stays = {int(stay.get('room_id')): stay for stay in _get_booking_room_stays(booking)}
+    for room in rooms:
+        stay = stays.get(room.id) or {}
+        checked_in_at = stay.get('checked_in_at')
+        checked_out_at = stay.get('checked_out_at')
+        if checked_in_at and not checked_out_at:
+            next_status = 'occupied'
+        elif checked_out_at:
+            next_status = 'cleaning'
+        elif getattr(booking, 'status', '') in ('pending', 'confirmed', 'paid'):
+            next_status = 'reserved'
         else:
-            if (
-                not booking.checked_in_at
-                and not booking.checked_out_at
-                and getattr(booking, 'status', '') in ('pending', 'confirmed', 'paid')
-                and room.status == 'available'
-            ):
-                room.status = 'reserved'
-                room_fields.append('status')
-
-    if booking_fields:
-        booking.save(update_fields=booking_fields)
-    if room_fields:
-        room.save(update_fields=room_fields)
+            next_status = 'available'
+        if room.status != next_status:
+            room.status = next_status
+            room.save(update_fields=['status', 'updated_at'])
 
 
 def _refresh_room_reservation_state(room):
-    if not room or getattr(room, 'status', '') not in ('available', 'reserved'):
+    if not room or getattr(room, 'status', '') == 'maintenance':
         return
 
-    has_active_reservation = Booking.objects.filter(
+    desired = 'available'
+    latest_checked_out_at = None
+    candidate_bookings = Booking.objects.filter(
         booking_type='room',
-        room=room,
         status__in=['pending', 'confirmed', 'paid'],
-        checked_in_at__isnull=True,
-        checked_out_at__isnull=True,
-    ).exists()
-
-    desired = 'reserved' if has_active_reservation else 'available'
+    )
+    for booking in candidate_bookings:
+        stay = _find_room_stay(booking, room.id)
+        if not stay:
+            continue
+        checked_in_at = stay.get('checked_in_at')
+        checked_out_at = stay.get('checked_out_at')
+        if checked_in_at and not checked_out_at:
+            desired = 'occupied'
+            break
+        if checked_out_at:
+            parsed = parse_datetime(str(checked_out_at))
+            if parsed and (latest_checked_out_at is None or parsed > latest_checked_out_at):
+                latest_checked_out_at = parsed
+            continue
+        desired = 'reserved'
+    if desired == 'available' and latest_checked_out_at is not None:
+        desired = 'cleaning'
     if room.status != desired:
         room.status = desired
         room.save(update_fields=['status', 'updated_at'])
+
+
+def _check_in_booking_room(booking, room, guests):
+    stays = _get_booking_room_stays(booking)
+    now = timezone.now().isoformat()
+    updated = False
+    for stay in stays:
+        if int(stay.get('room_id') or 0) != room.id:
+            continue
+        if stay.get('checked_in_at') and not stay.get('checked_out_at'):
+            raise DjangoValidationError("Le check-in a déjà été effectué pour cette chambre")
+        stay['checked_in_at'] = now
+        stay['checked_out_at'] = None
+        stay['guests'] = _normalize_guest_payload(guests)
+        updated = True
+        break
+    if not updated:
+        raise DjangoValidationError("Cette chambre n'appartient pas à la réservation")
+    booking.room_stays = stays
+    _sync_room_status_for_booking(booking, 'check_in')
+
+
+def _check_out_booking_room(booking, room):
+    stays = _get_booking_room_stays(booking)
+    now = timezone.now().isoformat()
+    updated = False
+    for stay in stays:
+        if int(stay.get('room_id') or 0) != room.id:
+            continue
+        if not stay.get('checked_in_at'):
+            raise DjangoValidationError("Le check-in n'a pas encore été effectué pour cette chambre")
+        if stay.get('checked_out_at'):
+            raise DjangoValidationError("Le check-out a déjà été effectué pour cette chambre")
+        stay['checked_out_at'] = now
+        updated = True
+        break
+    if not updated:
+        raise DjangoValidationError("Cette chambre n'appartient pas à la réservation")
+    booking.room_stays = stays
+    _sync_room_status_for_booking(booking, 'check_out')
 
 def _normalize_role_label(value):
     text = str(value or '').strip().lower()
@@ -958,29 +1138,45 @@ class BookingViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        customer = serializer.validated_data.get('customer')
+        customer_kind = serializer.validated_data.get('customer_kind', 'individual')
+        customer = serializer.validated_data.get('customer') if customer_kind != 'organization' else None
         customer_name = serializer.validated_data.get('customer_name', '')
         customer_phone = serializer.validated_data.get('customer_phone', '')
         customer_email = serializer.validated_data.get('customer_email', '')
         guest_id_type = serializer.validated_data.get('guest_id_type', '')
         guest_id_number = serializer.validated_data.get('guest_id_number', '')
-        resolved_customer = _upsert_customer_from_snapshot(
-            customer=customer,
-            full_name=customer_name,
-            phone=customer_phone,
-            email=customer_email,
-            identity_type=guest_id_type,
-            identity_number=guest_id_number,
-            actor=_actor(self.request),
-        )
+        resolved_customer = None
+        if customer_kind != 'organization':
+            resolved_customer = _upsert_customer_from_snapshot(
+                customer=customer,
+                full_name=customer_name,
+                phone=customer_phone,
+                email=customer_email,
+                identity_type=guest_id_type,
+                identity_number=guest_id_number,
+                actor=_actor(self.request),
+            )
         booking_type = serializer.validated_data.get('booking_type', 'hall')
         hall = serializer.validated_data.get('hall')
         room = serializer.validated_data.get('room')
-        item = hall if booking_type == 'hall' else room
+        room_ids = serializer.validated_data.get('room_ids', [])
         start_dt = serializer.validated_data.get('start_date')
         end_dt = serializer.validated_data.get('end_date')
         selected = serializer.validated_data.get('additional_services_selected') or []
-        _, addons_total, total, normalized_selected = _compute_booking_totals(item, start_dt, end_dt, selected)
+        if booking_type == 'hall':
+            _, addons_total, total, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected)
+        else:
+            selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
+            addons_total = Decimal('0.00')
+            normalized_selected = []
+            total = Decimal('0.00')
+            if end_dt < start_dt:
+                raise DjangoValidationError('La date fin doit être après la date début')
+            days = (end_dt - start_dt).days + 1
+            room_total = sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)
+            total = (Decimal(days) * room_total).quantize(Decimal('0.01'))
+            if len(selected_rooms) == 1:
+                _, addons_total, total, normalized_selected = _compute_booking_totals(selected_rooms[0], start_dt, end_dt, selected)
         save_kwargs = {
             'created_by': self.request.user,
             'updated_by': self.request.user,
@@ -988,6 +1184,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             'total_price': total,
             'addons_total': addons_total,
             'additional_services_selected': normalized_selected,
+            'room_ids': room_ids if booking_type == 'room' else [],
         }
         if booking_type == 'hall':
             save_kwargs.update({
@@ -1003,40 +1200,58 @@ class BookingViewSet(viewsets.ModelViewSet):
         serializer.save(
             **save_kwargs,
         )
-        if getattr(serializer.instance, 'booking_type', '') == 'room' and getattr(serializer.instance, 'room_id', None):
+        if getattr(serializer.instance, 'booking_type', '') == 'room':
             _sync_room_status_for_booking(serializer.instance, 'none')
 
     def perform_update(self, serializer):
         instance = serializer.instance
-        customer = serializer.validated_data.get('customer', getattr(instance, 'customer', None))
+        previous_room_ids = _normalize_booking_room_ids(instance)
+        customer_kind = serializer.validated_data.get('customer_kind', getattr(instance, 'customer_kind', 'individual'))
+        customer = serializer.validated_data.get('customer', getattr(instance, 'customer', None)) if customer_kind != 'organization' else None
         customer_name = serializer.validated_data.get('customer_name', getattr(instance, 'customer_name', ''))
         customer_phone = serializer.validated_data.get('customer_phone', getattr(instance, 'customer_phone', ''))
         customer_email = serializer.validated_data.get('customer_email', getattr(instance, 'customer_email', ''))
         guest_id_type = serializer.validated_data.get('guest_id_type', getattr(instance, 'guest_id_type', ''))
         guest_id_number = serializer.validated_data.get('guest_id_number', getattr(instance, 'guest_id_number', ''))
-        resolved_customer = _upsert_customer_from_snapshot(
-            customer=customer,
-            full_name=customer_name,
-            phone=customer_phone,
-            email=customer_email,
-            identity_type=guest_id_type,
-            identity_number=guest_id_number,
-            actor=_actor(self.request),
-        )
+        resolved_customer = None
+        if customer_kind != 'organization':
+            resolved_customer = _upsert_customer_from_snapshot(
+                customer=customer,
+                full_name=customer_name,
+                phone=customer_phone,
+                email=customer_email,
+                identity_type=guest_id_type,
+                identity_number=guest_id_number,
+                actor=_actor(self.request),
+            )
         booking_type = serializer.validated_data.get('booking_type', getattr(instance, 'booking_type', 'hall'))
         hall = serializer.validated_data.get('hall', getattr(instance, 'hall', None))
         room = serializer.validated_data.get('room', getattr(instance, 'room', None))
-        item = hall if booking_type == 'hall' else room
+        room_ids = serializer.validated_data.get('room_ids', getattr(instance, 'room_ids', []))
         start_dt = serializer.validated_data.get('start_date', getattr(instance, 'start_date', None))
         end_dt = serializer.validated_data.get('end_date', getattr(instance, 'end_date', None))
         selected = serializer.validated_data.get('additional_services_selected', getattr(instance, 'additional_services_selected', [])) or []
-        _, addons_total, total, normalized_selected = _compute_booking_totals(item, start_dt, end_dt, selected)
+        if booking_type == 'hall':
+            _, addons_total, total, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected)
+        else:
+            selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
+            addons_total = Decimal('0.00')
+            normalized_selected = []
+            total = Decimal('0.00')
+            if end_dt < start_dt:
+                raise DjangoValidationError('La date fin doit être après la date début')
+            days = (end_dt - start_dt).days + 1
+            room_total = sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)
+            total = (Decimal(days) * room_total).quantize(Decimal('0.01'))
+            if len(selected_rooms) == 1:
+                _, addons_total, total, normalized_selected = _compute_booking_totals(selected_rooms[0], start_dt, end_dt, selected)
         save_kwargs = {
             'updated_by': _actor(self.request),
             'customer': resolved_customer,
             'total_price': total,
             'addons_total': addons_total,
             'additional_services_selected': normalized_selected,
+            'room_ids': room_ids if booking_type == 'room' else [],
         }
         if booking_type == 'hall':
             save_kwargs.update({
@@ -1052,9 +1267,18 @@ class BookingViewSet(viewsets.ModelViewSet):
         serializer.save(
             **save_kwargs,
         )
-        if getattr(serializer.instance, 'booking_type', '') == 'room' and getattr(serializer.instance, 'room_id', None):
+        if getattr(serializer.instance, 'booking_type', '') == 'room':
             _sync_room_status_for_booking(serializer.instance, 'none')
-            _refresh_room_reservation_state(serializer.instance.room)
+        current_room_ids = _normalize_booking_room_ids(serializer.instance)
+        refresh_room_ids = set(previous_room_ids) | set(current_room_ids)
+        for room in Room.objects.filter(id__in=refresh_room_ids):
+            _refresh_room_reservation_state(room)
+
+    def perform_destroy(self, instance):
+        room_ids = _normalize_booking_room_ids(instance)
+        super().perform_destroy(instance)
+        for room in Room.objects.filter(id__in=room_ids):
+            _refresh_room_reservation_state(room)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -1220,22 +1444,89 @@ class BookingViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    def _resolve_booking_room(self, booking, room_id):
+        try:
+            target_room_id = int(room_id)
+        except (TypeError, ValueError):
+            return None
+        for room in _get_booking_rooms(booking):
+            if room.id == target_room_id:
+                return room
+        return None
+
+    def _validate_room_guests(self, room, guests):
+        normalized_guests = _normalize_guest_payload(guests)
+        if not normalized_guests:
+            raise DjangoValidationError("Ajoutez au moins une personne pour cette chambre")
+        if len(normalized_guests) > int(getattr(room, 'capacity', 0) or 0):
+            raise DjangoValidationError(f"La chambre {room} ne peut pas dépasser sa capacité")
+        for guest in normalized_guests:
+            if not str(guest.get('id_type') or '').strip():
+                raise DjangoValidationError("Le type de pièce est obligatoire pour chaque personne")
+            if not str(guest.get('id_number') or '').strip():
+                raise DjangoValidationError("Le numéro de pièce est obligatoire pour chaque personne")
+        return normalized_guests
+
+    @action(detail=True, methods=['post'], url_path='check-in-room')
+    def check_in_room(self, request, pk=None):
+        booking = self.get_object()
+        if booking.booking_type != 'room' or not _get_booking_rooms(booking):
+            return Response({'detail': 'Action disponible uniquement pour une réservation de chambre'}, status=status.HTTP_400_BAD_REQUEST)
+        if booking.status != 'paid':
+            return Response({'detail': 'Seules les réservations payées peuvent être enregistrées au check-in'}, status=status.HTTP_400_BAD_REQUEST)
+        if booking.status == 'cancelled':
+            return Response({'detail': 'Impossible de gérer une réservation annulée'}, status=status.HTTP_400_BAD_REQUEST)
+        room = self._resolve_booking_room(booking, request.data.get('room_id'))
+        if room is None:
+            return Response({'room_id': 'Sélectionnez une chambre valide de cette réservation'}, status=status.HTTP_400_BAD_REQUEST)
+        if getattr(room, 'status', '') in ('maintenance', 'cleaning'):
+            return Response({'detail': "Cette chambre n'est pas prête pour le check-in"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            guests = self._validate_room_guests(room, request.data.get('guests'))
+            _check_in_booking_room(booking, room, guests)
+        except DjangoValidationError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        booking.updated_by = _actor(request)
+        booking.save(update_fields=['updated_by', 'updated_at'])
+        return Response(self.get_serializer(booking).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='check-out-room')
+    def check_out_room(self, request, pk=None):
+        booking = self.get_object()
+        if booking.booking_type != 'room' or not _get_booking_rooms(booking):
+            return Response({'detail': 'Action disponible uniquement pour une réservation de chambre'}, status=status.HTTP_400_BAD_REQUEST)
+        if booking.status == 'cancelled':
+            return Response({'detail': 'Impossible de gérer une réservation annulée'}, status=status.HTTP_400_BAD_REQUEST)
+        remaining = (booking.total_price or Decimal('0.00')) - (booking.paid_amount or Decimal('0.00'))
+        if remaining > Decimal('0.00'):
+            return Response({'detail': 'Le séjour doit être soldé avant le check-out'}, status=status.HTTP_400_BAD_REQUEST)
+        room = self._resolve_booking_room(booking, request.data.get('room_id'))
+        if room is None:
+            return Response({'room_id': 'Sélectionnez une chambre valide de cette réservation'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            _check_out_booking_room(booking, room)
+        except DjangoValidationError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        booking.updated_by = _actor(request)
+        booking.save(update_fields=['updated_by', 'updated_at'])
+        return Response(self.get_serializer(booking).data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'], url_path='check-in')
     def check_in(self, request, pk=None):
         booking = self.get_object()
-        if booking.booking_type != 'room' or not booking.room_id:
-            return Response({'detail': 'Action disponible uniquement pour une réservation de chambre'}, status=status.HTTP_400_BAD_REQUEST)
-        if booking.checked_in_at:
-            return Response({'detail': 'Le check-in a déjà été effectué'}, status=status.HTTP_400_BAD_REQUEST)
-        if booking.status == 'cancelled':
-            return Response({'detail': 'Impossible de gérer une réservation annulée'}, status=status.HTTP_400_BAD_REQUEST)
-        if getattr(booking.room, 'status', '') in ('maintenance', 'cleaning'):
-            return Response({'detail': "Cette chambre n'est pas prête pour le check-in"}, status=status.HTTP_400_BAD_REQUEST)
-        if not str(booking.guest_full_name or '').strip() or not str(booking.guest_id_type or '').strip() or not str(booking.guest_id_number or '').strip():
-            return Response({'detail': 'Complétez le profil client et la pièce d’identité avant le check-in'}, status=status.HTTP_400_BAD_REQUEST)
-        if (booking.paid_amount or Decimal('0.00')) <= Decimal('0.00'):
-            return Response({'detail': 'Enregistrez au moins un paiement avant le check-in'}, status=status.HTTP_400_BAD_REQUEST)
-        _sync_room_status_for_booking(booking, 'check_in')
+        pending_rooms = [stay for stay in _get_booking_room_stays(booking) if not stay.get('checked_in_at')]
+        if len(pending_rooms) != 1:
+            return Response({'detail': 'Utilisez le check-in par chambre pour cette réservation'}, status=status.HTTP_400_BAD_REQUEST)
+        room = self._resolve_booking_room(booking, pending_rooms[0].get('room_id'))
+        if room is None:
+            return Response({'room_id': 'Sélectionnez une chambre valide de cette réservation'}, status=status.HTTP_400_BAD_REQUEST)
+        if booking.status != 'paid':
+            return Response({'detail': 'Seules les réservations payées peuvent être enregistrées au check-in'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            guests = self._validate_room_guests(room, request.data.get('guests'))
+            _check_in_booking_room(booking, room, guests)
+        except DjangoValidationError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         booking.updated_by = _actor(request)
         booking.save(update_fields=['updated_by', 'updated_at'])
         return Response(self.get_serializer(booking).data, status=status.HTTP_200_OK)
@@ -1243,18 +1534,19 @@ class BookingViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='check-out')
     def check_out(self, request, pk=None):
         booking = self.get_object()
-        if booking.booking_type != 'room' or not booking.room_id:
-            return Response({'detail': 'Action disponible uniquement pour une réservation de chambre'}, status=status.HTTP_400_BAD_REQUEST)
-        if not booking.checked_in_at:
-            return Response({'detail': 'Le check-in doit être effectué avant le check-out'}, status=status.HTTP_400_BAD_REQUEST)
-        if booking.checked_out_at:
-            return Response({'detail': 'Le check-out a déjà été effectué'}, status=status.HTTP_400_BAD_REQUEST)
-        if booking.status == 'cancelled':
-            return Response({'detail': 'Impossible de gérer une réservation annulée'}, status=status.HTTP_400_BAD_REQUEST)
+        active_rooms = [stay for stay in _get_booking_room_stays(booking) if stay.get('checked_in_at') and not stay.get('checked_out_at')]
+        if len(active_rooms) != 1:
+            return Response({'detail': 'Utilisez le check-out par chambre pour cette réservation'}, status=status.HTTP_400_BAD_REQUEST)
+        room = self._resolve_booking_room(booking, active_rooms[0].get('room_id'))
+        if room is None:
+            return Response({'room_id': 'Sélectionnez une chambre valide de cette réservation'}, status=status.HTTP_400_BAD_REQUEST)
         remaining = (booking.total_price or Decimal('0.00')) - (booking.paid_amount or Decimal('0.00'))
         if remaining > Decimal('0.00'):
             return Response({'detail': 'Le séjour doit être soldé avant le check-out'}, status=status.HTTP_400_BAD_REQUEST)
-        _sync_room_status_for_booking(booking, 'check_out')
+        try:
+            _check_out_booking_room(booking, room)
+        except DjangoValidationError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         booking.updated_by = _actor(request)
         booking.save(update_fields=['updated_by', 'updated_at'])
         return Response(self.get_serializer(booking).data, status=status.HTTP_200_OK)
@@ -1266,10 +1558,21 @@ class BookingViewSet(viewsets.ModelViewSet):
         qs = Booking.objects.all()
         if hall_id:
             qs = qs.filter(hall_id=hall_id)
+        qs = qs.exclude(status='cancelled')
         if room_id:
-            qs = qs.filter(room_id=room_id)
-        qs = qs.exclude(status='cancelled').values('hall_id', 'room_id', 'start_date', 'end_date')
-        return Response(list(qs))
+            requested_room_id = str(room_id).strip()
+            payload = []
+            for booking in qs:
+                for booking_room_id in _normalize_booking_room_ids(booking):
+                    if str(booking_room_id) == requested_room_id:
+                        payload.append({
+                            'hall_id': booking.hall_id,
+                            'room_id': booking_room_id,
+                            'start_date': booking.start_date,
+                            'end_date': booking.end_date,
+                        })
+            return Response(payload)
+        return Response(list(qs.values('hall_id', 'room_id', 'start_date', 'end_date')))
 
 class MagicLinkRequestView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -1508,6 +1811,12 @@ class MaterialViewSet(viewsets.ModelViewSet):
 class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = Expense.objects.all().order_by('-id')
     serializer_class = ExpenseSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if _staff_role_key(getattr(self.request, 'user', None)) == 'receptionniste':
+            return queryset.filter(created_by=self.request.user)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))

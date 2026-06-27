@@ -74,7 +74,7 @@
           <i class="fas fa-file-pdf"></i>
           <span class="btn-label">Export PDF</span>
         </button>
-        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
+        <button v-if="canExportExcel" class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
           <i class="fas fa-file-excel"></i>
           <span class="btn-label">Export XLS</span>
         </button>
@@ -462,9 +462,11 @@
 </template>
 
 <script setup>
+import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { useDocumentBranding } from '~/composables/useDocumentBranding'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
+import { canExportAdminExcel, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
 const { documentBranding, documentLogoUrl, escapeHtml } = useDocumentBranding()
@@ -489,6 +491,7 @@ const bookings = ref([])
 const payments = ref([])
 const expenses = ref([])
 const materials = ref([])
+const currentUser = ref({})
 const exportingPdf = ref(false)
 const exportingXls = ref(false)
 const loadingStats = ref(false)
@@ -500,6 +503,7 @@ const isMobile = ref(false)
 const filtersOpen = ref(false)
 const chartsReady = ref(false)
 const adminThemeMode = ref('light')
+const canExportExcel = computed(() => canExportAdminExcel(currentUser.value))
 
 const preset = ref('28d')
 const customStart = ref('')
@@ -1018,6 +1022,10 @@ const bookingsEvolutionByTypeSeries = computed(() => {
 })
 
 const exportXls = async () => {
+  if (!canExportExcel.value) {
+    notify("L'export Excel n'est pas autorisé pour ce rôle", 'warning')
+    return
+  }
   exportingXls.value = true
   await nextTick()
   const rows = [
@@ -1838,6 +1846,7 @@ watch(
 )
 
 onMounted(() => {
+  currentUser.value = getStoredUser()
   const initial = resolvePreset('28d')
   customStart.value = initial.start
   customEnd.value = initial.end

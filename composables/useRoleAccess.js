@@ -50,6 +50,16 @@ export const canDeleteBookings = (user) => ['super_admin', 'proprietaire', 'gest
 
 export const canSeeSyntheticRevenue = (user) => ['super_admin', 'proprietaire', 'gestionnaire'].includes(getRoleKey(user))
 
+export const canExportAdminPdf = (user) => canAccessAdmin(user)
+
+export const canExportAdminExcel = (user) => {
+  const role = getRoleKey(user)
+  return canAccessAdmin(user) && role !== 'receptionniste'
+}
+
+export const canManagePayments = (user) => ['super_admin', 'proprietaire', 'gestionnaire', 'gerant'].includes(getRoleKey(user))
+export const canManageFacilities = (user) => ['super_admin', 'proprietaire', 'gestionnaire', 'gerant'].includes(getRoleKey(user))
+
 export const canAccessAdminRoute = (user, path) => {
   if (!canAccessAdmin(user)) return false
 
@@ -65,6 +75,14 @@ export const canAccessAdminRoute = (user, path) => {
       adminPath.startsWith('/admin/bookings/') ||
       adminPath === '/admin/calendar' ||
       adminPath.startsWith('/admin/calendar/') ||
+      adminPath === '/admin/payments' ||
+      adminPath.startsWith('/admin/payments/') ||
+      adminPath === '/admin/expenses' ||
+      adminPath.startsWith('/admin/expenses/') ||
+      adminPath === '/admin/halls' ||
+      adminPath.startsWith('/admin/halls/') ||
+      adminPath === '/admin/rooms' ||
+      adminPath.startsWith('/admin/rooms/') ||
       adminPath === '/admin/profile'
     )
   }

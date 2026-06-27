@@ -5,13 +5,13 @@
         <h1>Gestion des Chambres</h1>
         <p>Créer, modifier et suivre les capacités et tarifs des chambres</p>
       </div>
-      <button class="btn btn-primary btn-sm admin-head-btn" @click="openAddModal">
+      <button v-if="canManageFacilitiesCatalog" class="btn btn-primary btn-sm admin-head-btn" @click="openAddModal">
         <i class="fas fa-plus"></i>
         <span class="btn-label">Ajouter une chambre</span>
       </button>
     </div>
 
-    <div class="stats-grid mb-8">
+    <div v-if="showRoomStats" class="stats-grid mb-8">
       <div class="stat-card card">
         <div class="stat-icon primary"><i class="fas fa-door-closed"></i></div>
         <div class="stat-info">
@@ -155,20 +155,20 @@
         </div>
         <div v-if="deskLoading" class="desk-empty">Chargement des séjours...</div>
         <div v-else-if="filteredPendingArrivalBookings.length === 0" class="desk-empty">Aucune arrivée en attente</div>
-        <div v-else class="desk-list desk-list-checkin">
+          <div v-else class="desk-list desk-list-checkin">
           <div v-for="booking in paginatedPendingArrivalBookings" :key="`arrival-${booking.id}`" class="desk-item">
             <div class="desk-item-main">
-              <div class="desk-item-title">{{ booking.guest_full_name || booking.customer_name }}</div>
+              <div class="desk-item-title">{{ roomStayGuestLabel(booking) }}</div>
               <div class="desk-item-sub">{{ booking.room_display || '-' }} • {{ formatDateRange(booking.start_date, booking.end_date) }}</div>
               <div class="desk-item-meta">
                 <span :class="['status-pill', `status-${booking.room_status || 'reserved'}`]">{{ roomStatusLabel(booking.room_status || 'reserved') }}</span>
                 <span class="desk-mini">{{ booking.code || '-' }}</span>
-                <span class="desk-mini">{{ paymentStateLabel(booking) }}</span>
+                <span class="desk-mini">{{ booking.guest_count || 0 }} pers.</span>
               </div>
             </div>
             <div class="desk-item-actions">
               <button v-if="Number(booking.remaining_amount || 0) > 0" class="btn btn-outline btn-sm" @click="openPaymentForBooking(booking)">Paiement</button>
-              <button class="btn btn-primary btn-sm" :class="{ 'is-loading': stayActionLoadingId === booking.id && stayActionType === 'check_in' }" :disabled="stayActionLoadingId === booking.id || !booking.can_check_in" @click="manageStay(booking, 'check_in')">Check-in</button>
+              <button class="btn btn-primary btn-sm" :class="{ 'is-loading': isStayActionLoading(booking, 'check_in') }" :disabled="stayActionLoadingId || !booking.can_check_in" @click="openStayModal(booking, 'check_in')">Check-in</button>
               <button class="btn btn-outline btn-sm" @click="openBookingDetails(booking)">Détails</button>
             </div>
           </div>
@@ -197,20 +197,20 @@
         </div>
         <div v-if="deskLoading" class="desk-empty">Chargement des séjours...</div>
         <div v-else-if="filteredInHouseBookings.length === 0" class="desk-empty">Aucun client en chambre</div>
-        <div v-else class="desk-list">
+          <div v-else class="desk-list">
           <div v-for="booking in paginatedInHouseBookings" :key="`stay-${booking.id}`" class="desk-item">
             <div class="desk-item-main">
-              <div class="desk-item-title">{{ booking.guest_full_name || booking.customer_name }}</div>
+              <div class="desk-item-title">{{ roomStayGuestLabel(booking) }}</div>
               <div class="desk-item-sub">{{ booking.room_display || '-' }} • Check-in {{ formatDeskDateTime(booking.checked_in_at) }}</div>
               <div class="desk-item-meta">
                 <span :class="['status-pill', 'status-occupied']">Occupée</span>
                 <span class="desk-mini">{{ booking.code || '-' }}</span>
-                <span class="desk-mini">{{ paymentStateLabel(booking) }}</span>
+                <span class="desk-mini">{{ booking.guest_count || 0 }} pers.</span>
               </div>
             </div>
             <div class="desk-item-actions">
               <button v-if="Number(booking.remaining_amount || 0) > 0" class="btn btn-outline btn-sm" @click="openPaymentForBooking(booking)">Solder</button>
-              <button class="btn btn-primary btn-sm" :class="{ 'is-loading': stayActionLoadingId === booking.id && stayActionType === 'check_out' }" :disabled="stayActionLoadingId === booking.id || Number(booking.remaining_amount || 0) > 0 || !booking.can_check_out" @click="manageStay(booking, 'check_out')">Check-out</button>
+              <button class="btn btn-primary btn-sm" :class="{ 'is-loading': isStayActionLoading(booking, 'check_out') }" :disabled="stayActionLoadingId || Number(booking.remaining_amount || 0) > 0 || !booking.can_check_out" @click="manageStay(booking, 'check_out')">Check-out</button>
               <button class="btn btn-outline btn-sm" @click="openBookingDetails(booking)">Détails</button>
             </div>
           </div>
@@ -247,11 +247,11 @@
               <div class="desk-item-meta">
                 <span :class="['status-pill', 'status-cleaning']">Nettoyage</span>
                 <span class="desk-mini" v-if="lastCompletedStayForRoom(room.id)?.checked_out_at">Sortie: {{ formatDeskDateTime(lastCompletedStayForRoom(room.id).checked_out_at) }}</span>
-                <span class="desk-mini" v-if="nextReservationForRoom(room.id)">Prochaine arrivée: {{ nextReservationForRoom(room.id).guest_full_name || nextReservationForRoom(room.id).customer_name }}</span>
+                <span class="desk-mini" v-if="nextReservationForRoom(room.id)">Prochaine arrivée: {{ roomStayGuestLabel(nextReservationForRoom(room.id)) }}</span>
               </div>
             </div>
             <div class="desk-item-actions">
-              <button class="btn btn-primary btn-sm" @click="setRoomStatus(room, 'available')">Marquer prête</button>
+              <button v-if="canManageFacilitiesCatalog" class="btn btn-primary btn-sm" @click="setRoomStatus(room, 'available')">Marquer prête</button>
               <button v-if="nextReservationForRoom(room.id)" class="btn btn-outline btn-sm" @click="openBookingDetails(nextReservationForRoom(room.id))">Voir réservation</button>
             </div>
           </div>
@@ -296,7 +296,7 @@
             <div v-else class="activity-list">
               <div v-for="booking in paginatedRecentCheckIns" :key="`recent-checkin-${booking.id}`" class="activity-item">
                 <div class="activity-item-main">
-                  <div class="activity-title">{{ booking.guest_full_name || booking.customer_name }}</div>
+                  <div class="activity-title">{{ roomStayGuestLabel(booking) }}</div>
                   <div class="activity-sub">{{ booking.room_display || '-' }} • {{ booking.code || '-' }}</div>
                   <div class="activity-time">Entrée le {{ formatDeskDateTime(booking.checked_in_at) }}</div>
                 </div>
@@ -330,7 +330,7 @@
             <div v-else class="activity-list">
               <div v-for="booking in paginatedRecentCheckOuts" :key="`recent-checkout-${booking.id}`" class="activity-item">
                 <div class="activity-item-main">
-                  <div class="activity-title">{{ booking.guest_full_name || booking.customer_name }}</div>
+                  <div class="activity-title">{{ roomStayGuestLabel(booking) }}</div>
                   <div class="activity-sub">{{ booking.room_display || '-' }} • {{ booking.code || '-' }}</div>
                   <div class="activity-time">Sortie le {{ formatDeskDateTime(booking.checked_out_at) }}</div>
                 </div>
@@ -417,19 +417,19 @@
                   <button class="actions-item" @click="viewRoom(room)">
                     <i class="fas fa-eye"></i> Voir
                   </button>
-                  <button v-if="room.status === 'cleaning'" class="actions-item" @click="setRoomStatus(room, 'available')">
+                  <button v-if="canManageFacilitiesCatalog && room.status === 'cleaning'" class="actions-item" @click="setRoomStatus(room, 'available')">
                     <i class="fas fa-broom"></i> Marquer prête
                   </button>
-                  <button v-if="room.status !== 'maintenance'" class="actions-item" @click="setRoomStatus(room, 'maintenance')">
+                  <button v-if="canManageFacilitiesCatalog && room.status !== 'maintenance'" class="actions-item" @click="setRoomStatus(room, 'maintenance')">
                     <i class="fas fa-screwdriver-wrench"></i> Mettre en maintenance
                   </button>
-                  <button v-if="room.status === 'maintenance'" class="actions-item" @click="setRoomStatus(room, 'available')">
+                  <button v-if="canManageFacilitiesCatalog && room.status === 'maintenance'" class="actions-item" @click="setRoomStatus(room, 'available')">
                     <i class="fas fa-circle-check"></i> Rendre disponible
                   </button>
-                  <button class="actions-item" @click="editRoom(room)">
+                  <button v-if="canManageFacilitiesCatalog" class="actions-item" @click="editRoom(room)">
                     <i class="fas fa-edit"></i> Modifier
                   </button>
-                  <button class="actions-item danger" @click="confirmDelete(room)">
+                  <button v-if="canManageFacilitiesCatalog" class="actions-item danger" @click="confirmDelete(room)">
                     <i class="fas fa-trash-alt"></i> Supprimer
                   </button>
                 </div>
@@ -521,19 +521,19 @@
                     <button class="actions-item" @click="viewRoom(room)">
                       <i class="fas fa-eye"></i> Voir
                     </button>
-                    <button v-if="room.status === 'cleaning'" class="actions-item" @click="setRoomStatus(room, 'available')">
+                    <button v-if="canManageFacilitiesCatalog && room.status === 'cleaning'" class="actions-item" @click="setRoomStatus(room, 'available')">
                       <i class="fas fa-broom"></i> Marquer prête
                     </button>
-                    <button v-if="room.status !== 'maintenance'" class="actions-item" @click="setRoomStatus(room, 'maintenance')">
+                    <button v-if="canManageFacilitiesCatalog && room.status !== 'maintenance'" class="actions-item" @click="setRoomStatus(room, 'maintenance')">
                       <i class="fas fa-screwdriver-wrench"></i> Mettre en maintenance
                     </button>
-                    <button v-if="room.status === 'maintenance'" class="actions-item" @click="setRoomStatus(room, 'available')">
+                    <button v-if="canManageFacilitiesCatalog && room.status === 'maintenance'" class="actions-item" @click="setRoomStatus(room, 'available')">
                       <i class="fas fa-circle-check"></i> Rendre disponible
                     </button>
-                    <button class="actions-item" @click="editRoom(room)">
+                    <button v-if="canManageFacilitiesCatalog" class="actions-item" @click="editRoom(room)">
                       <i class="fas fa-edit"></i> Modifier
                     </button>
-                    <button class="actions-item danger" @click="confirmDelete(room)">
+                    <button v-if="canManageFacilitiesCatalog" class="actions-item danger" @click="confirmDelete(room)">
                       <i class="fas fa-trash-alt"></i> Supprimer
                     </button>
                   </div>
@@ -690,7 +690,7 @@
               <div class="entity-view-item"><span class="entity-view-label">Chambre</span><span class="entity-view-value">{{ selectedDeskBooking.room_display || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedDeskBooking.start_date, selectedDeskBooking.end_date) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Montant total</span><span class="entity-view-value">{{ formatMoney(selectedDeskBooking.total_price) }}</span></div>
-              <div class="entity-view-item"><span class="entity-view-label">Déjà payé</span><span class="entity-view-value">{{ formatMoney(selectedDeskBooking.paid_amount) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Déjà paye</span><span class="entity-view-value">{{ formatMoney(selectedDeskBooking.paid_amount) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Reste</span><span class="entity-view-value">{{ formatMoney(selectedDeskBooking.remaining_amount) }}</span></div>
             </div>
           </section>
@@ -728,9 +728,8 @@
           <div><strong>Client:</strong> {{ selectedDeskBooking.customer_name }}</div>
           <div><strong>Chambre:</strong> {{ selectedDeskBooking.room_display || '-' }}</div>
           <div><strong>Total:</strong> {{ formatMoney(selectedDeskBooking.total_price) }}</div>
-          <div><strong>Déjà payé:</strong> {{ formatMoney(selectedDeskBooking.paid_amount) }}</div>
+          <div><strong>Déjà paye:</strong> {{ formatMoney(selectedDeskBooking.paid_amount) }}</div>
           <div><strong>Reste:</strong> {{ formatMoney(selectedDeskBooking.remaining_amount) }}</div>
-          <div><strong>Pièce:</strong> {{ guestIdSummary(selectedDeskBooking) }}</div>
         </div>
 
         <div class="form-grid">
@@ -749,11 +748,11 @@
 
         <div class="form-grid">
           <div class="form-group">
-            <label class="form-label">Date</label>
+            <label class="form-label">Date *</label>
             <input v-model="deskPaymentForm.date" type="date" class="form-input" required />
           </div>
           <div class="form-group">
-            <label class="form-label">Méthode</label>
+            <label class="form-label">Méthode *</label>
             <select v-model="deskPaymentForm.method" class="form-select" required>
               <option value="Virement">Virement</option>
               <option value="Espèces">Espèces</option>
@@ -764,24 +763,83 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">Référence</label>
+          <label class="form-label">Référence *</label>
           <input v-model="deskPaymentForm.reference" type="text" class="form-input" required />
         </div>
 
-        <div v-if="selectedDeskBooking" class="form-group">
-          <label class="form-label">Gestion du séjour</label>
-          <select v-model="deskPaymentForm.room_action" class="form-select">
-            <option value="none">Aucune action</option>
-            <option v-if="!selectedDeskBooking.checked_in_at" value="check_in">Valider le check-in</option>
-            <option v-if="selectedDeskBooking.checked_in_at && !selectedDeskBooking.checked_out_at" value="check_out">Valider le check-out</option>
-          </select>
-          <small class="form-hint">Le check-in exige un paiement marqué comme payé et une pièce d'identité déjà renseignée.</small>
-        </div>
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showDeskPaymentModal = false">Annuler</button>
         <button class="btn btn-primary" :class="{ 'is-loading': savingDeskPayment }" :disabled="savingDeskPayment" @click="saveDeskPayment">
           Enregistrer
+        </button>
+      </template>
+    </AdminAppModal>
+
+    <AdminAppModal v-model="showStayModal" :title="selectedRoomStay?.action === 'check_out' ? 'Check-out chambre' : 'Check-in chambre'" width="680px">
+      <div v-if="selectedRoomStay" class="stay-modal-shell">
+        <div class="stay-modal-summary">
+          <div><strong>Réservation:</strong> {{ selectedRoomStay.code || getBookingDisplayId(selectedRoomStay.booking) }}</div>
+          <div><strong>Chambre:</strong> {{ selectedRoomStay.room_display }}</div>
+          <div><strong>Client:</strong> {{ selectedRoomStay.customer_name }}</div>
+          <div><strong>Période:</strong> {{ formatDateRange(selectedRoomStay.start_date, selectedRoomStay.end_date) }}</div>
+        </div>
+
+        <template v-if="selectedRoomStay.action === 'check_in'">
+          <div class="stay-modal-head">
+            <div>
+              <h3>Personnes hébergées</h3>
+              <p>Ajoutez les occupants de cette chambre. Le type et le numéro de pièce sont obligatoires pour chaque personne.</p>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" @click="addStayGuest">
+              <i class="fas fa-plus"></i>
+              Ajouter une personne
+            </button>
+          </div>
+
+          <div class="stay-guests-list">
+            <div v-for="(guest, index) in stayForm.guests" :key="`stay-guest-${index}`" class="stay-guest-card">
+              <div class="stay-guest-card-head">
+                <strong>Personne {{ index + 1 }}</strong>
+                <button v-if="stayForm.guests.length > 1" type="button" class="btn-icon delete" @click="removeStayGuest(index)">
+                  <i class="fas fa-trash-alt"></i>
+                </button>
+              </div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Nom complet *</label>
+                  <input v-model="guest.full_name" type="text" class="form-input" placeholder="Nom complet" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Type de pièce *</label>
+                  <select v-model="guest.id_type" class="form-select">
+                    <option v-for="option in guestIdTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                  </select>
+                </div>
+                <div class="form-group full">
+                  <label class="form-label">Numéro de pièce *</label>
+                  <input v-model="guest.id_number" type="text" class="form-input" placeholder="Numéro de pièce" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="stay-modal-checkout">
+            <h3>Confirmer le départ</h3>
+            <p>Cette action clôture le séjour pour la chambre sélectionnée et la place en nettoyage.</p>
+            <div class="stay-modal-guest-line">
+              <strong>Occupants:</strong>
+              <span>{{ roomStayGuestNames(selectedRoomStay) || 'Aucune personne enregistrée' }}</span>
+            </div>
+          </div>
+        </template>
+      </div>
+      <template #footer>
+        <button class="btn btn-outline" @click="closeStayModal">Annuler</button>
+        <button class="btn btn-primary" :class="{ 'is-loading': savingStayAction || isStayActionLoading(selectedRoomStay, selectedRoomStay?.action) }" :disabled="savingStayAction || stayActionLoadingId" @click="manageStay(selectedRoomStay, selectedRoomStay.action)">
+          {{ selectedRoomStay?.action === 'check_out' ? 'Valider le check-out' : 'Valider le check-in' }}
         </button>
       </template>
     </AdminAppModal>
@@ -853,7 +911,7 @@
       <p>Êtes-vous sûr de vouloir supprimer <strong>{{ selectedRoom?.name }} ({{ selectedRoom?.room_number }})</strong> ?</p>
       <template #footer>
         <button class="btn btn-outline" @click="showDeleteModal = false">Annuler</button>
-        <button class="btn btn-danger" :class="{ 'is-loading': deletingRoom }" :disabled="deletingRoom" @click="deleteRoom">
+        <button v-if="canManageFacilitiesCatalog" class="btn btn-danger" :class="{ 'is-loading': deletingRoom }" :disabled="deletingRoom" @click="deleteRoom">
           Supprimer
         </button>
       </template>
@@ -870,6 +928,7 @@ import { useTableSort } from '~/composables/useTableSort'
 import { useDateFormat } from '~/composables/useDateFormat'
 import { useDocumentBranding } from '~/composables/useDocumentBranding'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
+import { canManageFacilities, getRoleKey, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
 const { formatMoney, moneyInputModel, parseMoney, formatNumberSpaces } = useMoney()
@@ -886,9 +945,12 @@ const showViewModal = ref(false)
 const showDeleteModal = ref(false)
 const showDeskBookingModal = ref(false)
 const showDeskPaymentModal = ref(false)
+const showStayModal = ref(false)
+const currentUser = ref({})
 const isEditing = ref(false)
 const selectedRoom = ref(null)
 const selectedDeskBooking = ref(null)
+const selectedRoomStay = ref(null)
 const openActionsId = ref(null)
 const isMobile = ref(false)
 const frontdeskSearch = ref('')
@@ -899,7 +961,10 @@ const deletingRoom = ref(false)
 const savingDeskPayment = ref(false)
 const stayActionLoadingId = ref(null)
 const stayActionType = ref('')
+const savingStayAction = ref(false)
 const activeDeskTab = ref('checkin')
+const canManageFacilitiesCatalog = computed(() => canManageFacilities(currentUser.value))
+const showRoomStats = computed(() => getRoleKey(currentUser.value) !== 'receptionniste')
 
 const roomTypeOptions = [
   { value: 'single', label: 'Simple' },
@@ -914,6 +979,12 @@ const roomStatusOptions = [
   { value: 'occupied', label: 'Occupée' },
   { value: 'cleaning', label: 'Nettoyage' },
   { value: 'maintenance', label: 'Maintenance' },
+]
+const guestIdTypeOptions = [
+  { value: 'passport', label: 'Passeport' },
+  { value: 'id_card', label: "Carte d'identité" },
+  { value: 'driving_license', label: 'Permis de conduire' },
+  { value: 'other', label: 'Autre pièce' },
 ]
 
 const form = ref({
@@ -935,7 +1006,11 @@ const deskPaymentForm = ref({
   method: 'Virement',
   kind: 'full',
   status: 'paid',
-  room_action: 'none',
+})
+const stayForm = ref({
+  guests: [
+    { full_name: '', id_type: 'passport', id_number: '' },
+  ],
 })
 const deskPaymentAmountInput = moneyInputModel(deskPaymentForm, 'amount')
 const defaultRoomServiceOptions = ['Petit-déjeuner', 'Minibar', 'Service en chambre', 'Parking', 'WiFi premium', 'Autre']
@@ -984,33 +1059,81 @@ const roomStatusCounts = computed(() => ({
   maintenance: rooms.value.filter(room => room?.status === 'maintenance').length,
 }))
 const roomBookings = computed(() => bookings.value.filter((booking) => booking?.booking_type === 'room' && booking?.status !== 'cancelled'))
-const pendingArrivalBookings = computed(() => roomBookings.value
-  .filter((booking) => !booking?.checked_in_at && !booking?.checked_out_at)
+const normalizedRoomStays = (booking) => Array.isArray(booking?.room_stays) ? booking.room_stays : []
+const firstStayGuest = (roomStay) => Array.isArray(roomStay?.guests) && roomStay.guests.length ? roomStay.guests[0] : null
+const roomStayGuestLabel = (roomStay) => {
+  const firstGuest = firstStayGuest(roomStay)
+  return firstGuest?.full_name || roomStay?.organization_contact_name || roomStay?.customer_name || '-'
+}
+const roomStayRepresentativeId = (roomStay) => {
+  const firstGuest = firstStayGuest(roomStay)
+  return {
+    guest_id_type: firstGuest?.id_type || '',
+    guest_id_number: firstGuest?.id_number || '',
+  }
+}
+const roomStayEntries = computed(() => roomBookings.value.flatMap((booking) => {
+  return normalizedRoomStays(booking).map((stay) => ({
+    id: `${booking.id}-${stay.room_id}`,
+    booking_id: booking.id,
+    booking,
+    code: booking.code,
+    booking_status: booking.status,
+    customer_name: booking.customer_name,
+    customer_email: booking.customer_email,
+    customer_phone: booking.customer_phone,
+    customer_kind: booking.customer_kind,
+    organization_name: booking.organization_name,
+    organization_contact_name: booking.organization_contact_name,
+    room_id: stay.room_id,
+    room_display: stay.room_display || booking.room_display || '-',
+    room_number: stay.room_number || '',
+    room_name: stay.room_name || '',
+    room_type: stay.room_type || '',
+    room_capacity: Number(stay.room_capacity || 0),
+    room_status: stay.room_status || booking.room_status || '',
+    stay_status: stay.stay_status || '',
+    start_date: booking.start_date,
+    end_date: booking.end_date,
+    total_price: booking.total_price,
+    paid_amount: booking.paid_amount,
+    remaining_amount: booking.remaining_amount,
+    checked_in_at: stay.checked_in_at,
+    checked_out_at: stay.checked_out_at,
+    guests: Array.isArray(stay.guests) ? stay.guests : [],
+    guest_count: Number(stay.guest_count || 0),
+    can_check_in: Boolean(stay.can_check_in && booking.status === 'paid'),
+    can_check_out: Boolean(stay.can_check_out),
+  }))
+}))
+const pendingArrivalBookings = computed(() => roomStayEntries.value
+  .filter((roomStay) => roomStay.booking_status === 'paid' && !roomStay.checked_in_at)
   .slice()
   .sort((a, b) => new Date(a?.start_date || 0) - new Date(b?.start_date || 0)))
-const inHouseBookings = computed(() => roomBookings.value
-  .filter((booking) => booking?.checked_in_at && !booking?.checked_out_at)
+const inHouseBookings = computed(() => roomStayEntries.value
+  .filter((roomStay) => roomStay.checked_in_at && !roomStay.checked_out_at)
   .slice()
-  .sort((a, b) => new Date(a?.start_date || 0) - new Date(b?.start_date || 0)))
-const recentCheckIns = computed(() => roomBookings.value
-  .filter((booking) => booking?.checked_in_at)
+  .sort((a, b) => new Date(a?.checked_in_at || 0) - new Date(b?.checked_in_at || 0)))
+const recentCheckIns = computed(() => roomStayEntries.value
+  .filter((roomStay) => roomStay.checked_in_at)
   .slice()
   .sort((a, b) => new Date(b?.checked_in_at || 0) - new Date(a?.checked_in_at || 0)))
-const recentCheckOuts = computed(() => roomBookings.value
-  .filter((booking) => booking?.checked_out_at)
+const recentCheckOuts = computed(() => roomStayEntries.value
+  .filter((roomStay) => roomStay.checked_out_at)
   .slice()
   .sort((a, b) => new Date(b?.checked_out_at || 0) - new Date(a?.checked_out_at || 0)))
 const cleaningRoomsList = computed(() => rooms.value.filter(room => room?.status === 'cleaning'))
 const latestCompletedStayByRoomId = computed(() => {
   const map = new Map()
-  for (const booking of roomBookings.value) {
-    if (!booking?.room || !booking?.checked_out_at) continue
-    const roomId = Number(booking.room)
+  for (const roomStay of roomStayEntries.value) {
+    if (!roomStay?.checked_out_at) continue
+    const roomId = Number(roomStay.room_id)
+    if (!roomId) continue
     const existing = map.get(roomId)
-    const currentTime = new Date(booking.checked_out_at).getTime()
-    const existingTime = existing?.checked_out_at ? new Date(existing.checked_out_at).getTime() : 0
+    const currentTime = new Date(roomStay.checked_out_at).getTime()
+      const existingTime = existing?.checked_out_at ? new Date(existing.checked_out_at).getTime() : 0
     if (!existing || currentTime > existingTime) {
-      map.set(roomId, booking)
+      map.set(roomId, roomStay)
     }
   }
   return map
@@ -1029,11 +1152,11 @@ const matchesFrontdeskBookingSearch = (booking) => {
   const q = frontdeskSearchText.value
   if (!q) return true
   return [
-    booking?.guest_full_name,
+    roomStayGuestLabel(booking),
     booking?.customer_name,
     booking?.room_display,
     booking?.code,
-    booking?.guest_id_number,
+    roomStayRepresentativeId(booking)?.guest_id_number,
     booking?.customer_phone,
   ].some(value => String(value || '').toLowerCase().includes(q))
 }
@@ -1047,9 +1170,9 @@ const matchesFrontdeskRoomSearch = (room) => {
     room?.name,
     room?.room_number,
     roomTypeLabel(room?.room_type),
-    nextBooking?.guest_full_name,
+    roomStayGuestLabel(nextBooking),
     nextBooking?.customer_name,
-    lastBooking?.guest_full_name,
+    roomStayGuestLabel(lastBooking),
     lastBooking?.customer_name,
   ].some(value => String(value || '').toLowerCase().includes(q))
 }
@@ -1208,6 +1331,7 @@ const fetchBookings = async () => {
 }
 
 onMounted(() => {
+  currentUser.value = getStoredUser()
   fetchRooms()
   fetchBookings()
   if (process.client) {
@@ -1271,6 +1395,46 @@ const guestIdSummary = (booking) => {
   if (!type && !number) return 'Non renseignée'
   return [typeLabels[type] || type || 'Pièce', number || '-'].join(' • ')
 }
+const createEmptyStayGuest = () => ({ full_name: '', id_type: 'passport', id_number: '' })
+const resetStayForm = (roomStay = null) => {
+  const existingGuests = Array.isArray(roomStay?.guests) ? roomStay.guests : []
+  stayForm.value = {
+    guests: existingGuests.length
+      ? existingGuests.map(guest => ({
+        full_name: String(guest?.full_name || '').trim(),
+        id_type: String(guest?.id_type || 'passport').trim() || 'passport',
+        id_number: String(guest?.id_number || '').trim(),
+      }))
+      : [createEmptyStayGuest()],
+  }
+}
+const addStayGuest = () => {
+  stayForm.value.guests.push(createEmptyStayGuest())
+}
+const removeStayGuest = (index) => {
+  if (stayForm.value.guests.length === 1) return
+  stayForm.value.guests.splice(index, 1)
+}
+const openStayModal = (roomStay, action = 'check_in') => {
+  if (!roomStay?.booking_id || !roomStay?.room_id) return
+  selectedRoomStay.value = {
+    ...roomStay,
+    action,
+  }
+  resetStayForm(roomStay)
+  showStayModal.value = true
+}
+const closeStayModal = () => {
+  showStayModal.value = false
+  selectedRoomStay.value = null
+  resetStayForm()
+}
+const roomStayLoadingKey = (roomStay, action) => `${roomStay?.booking_id || roomStay?.id}-${roomStay?.room_id || ''}-${action}`
+const isStayActionLoading = (roomStay, action) => stayActionLoadingId.value === roomStayLoadingKey(roomStay, action)
+const roomStayGuestNames = (roomStay) => {
+  const guests = Array.isArray(roomStay?.guests) ? roomStay.guests : []
+  return guests.map(guest => String(guest?.full_name || '').trim()).filter(Boolean).join(', ')
+}
 
 const resetFrontdeskFilters = () => {
   frontdeskSearch.value = ''
@@ -1279,10 +1443,7 @@ const resetFrontdeskFilters = () => {
 }
 
 const formatDeskDateTime = (value) => value ? formatDateTime(value) : '-'
-const paymentStateLabel = (booking) => Number(booking?.remaining_amount || 0) > 0
-  ? `Reste: ${formatMoney(booking?.remaining_amount || 0)}`
-  : 'Séjour soldé'
-const nextReservationForRoom = (roomId) => pendingArrivalBookings.value.find((booking) => Number(booking?.room) === Number(roomId))
+const nextReservationForRoom = (roomId) => pendingArrivalBookings.value.find((booking) => Number(booking?.room_id) === Number(roomId))
 const lastCompletedStayForRoom = (roomId) => latestCompletedStayByRoomId.value.get(Number(roomId)) || null
 
 const syncSelectedDeskBooking = () => {
@@ -1305,7 +1466,6 @@ const resetDeskPaymentForm = (booking = null) => {
     method: 'Virement',
     kind: 'full',
     status: 'paid',
-    room_action: 'none',
   }
 }
 
@@ -1335,16 +1495,18 @@ watch(() => deskPaymentForm.value.amount, () => {
 })
 
 const openPaymentForBooking = (booking) => {
-  if (!booking?.id) return
-  selectedDeskBooking.value = booking
-  resetDeskPaymentForm(booking)
+  const bookingRef = booking?.booking || booking
+  if (!bookingRef?.id) return
+  selectedDeskBooking.value = bookingRef
+  resetDeskPaymentForm(bookingRef)
   showDeskBookingModal.value = false
   showDeskPaymentModal.value = true
 }
 
 const openBookingDetails = (booking) => {
-  if (!booking?.id) return
-  selectedDeskBooking.value = booking
+  const bookingRef = booking?.booking || booking
+  if (!bookingRef?.id) return
+  selectedDeskBooking.value = bookingRef
   showDeskBookingModal.value = true
 }
 
@@ -1446,6 +1608,10 @@ const printDeskPaymentInvoice = (payment) => {
 }
 
 const setRoomStatus = async (room, status) => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation de modifier le statut d'une chambre", 'warning')
+    return
+  }
   if (!room?.id || !status) return
   openActionsId.value = null
   try {
@@ -1457,18 +1623,31 @@ const setRoomStatus = async (room, status) => {
   }
 }
 
-const manageStay = async (booking, action) => {
-  if (!booking?.id || stayActionLoadingId.value) return
-  stayActionLoadingId.value = booking.id
+const manageStay = async (roomStay, action) => {
+  if (!roomStay?.booking_id || !roomStay?.room_id || stayActionLoadingId.value) return
+  savingStayAction.value = true
+  stayActionLoadingId.value = roomStayLoadingKey(roomStay, action)
   stayActionType.value = action
   try {
-    await api.post(`bookings/${booking.id}/${action === 'check_in' ? 'check-in' : 'check-out'}/`)
+    const payload = {
+      room_id: roomStay.room_id,
+    }
+    if (action === 'check_in') {
+      payload.guests = (stayForm.value.guests || []).map(guest => ({
+        full_name: String(guest?.full_name || '').trim(),
+        id_type: String(guest?.id_type || '').trim(),
+        id_number: String(guest?.id_number || '').trim(),
+      }))
+    }
+    await api.post(`bookings/${roomStay.booking_id}/${action === 'check_in' ? 'check-in-room' : 'check-out-room'}/`, payload)
     notify(action === 'check_in' ? 'Check-in enregistré' : 'Check-out enregistré', 'success')
     await Promise.all([fetchRooms(), fetchBookings()])
+    closeStayModal()
   } catch (error) {
     const data = error?.response?.data || {}
-    notify(data.detail || 'Impossible de mettre à jour le séjour', 'danger')
+    notify(data.room_id || data.detail || 'Impossible de mettre à jour le séjour', 'danger')
   } finally {
+    savingStayAction.value = false
     stayActionLoadingId.value = null
     stayActionType.value = ''
   }
@@ -1499,7 +1678,6 @@ const saveDeskPayment = async () => {
       method: deskPaymentForm.value.method,
       kind: deskPaymentForm.value.kind,
       status: deskPaymentForm.value.status,
-      room_action: deskPaymentForm.value.room_action,
     }
     const { data } = await api.post('payments/', payload)
     notify('Paiement enregistré avec succès', 'success')
@@ -1522,6 +1700,7 @@ const saveDeskPayment = async () => {
       booking_customer_email: booking.customer_email,
       booking_type: booking.booking_type,
       booking_room_display: booking.room_display,
+      booking_room_count: booking.room_count,
       booking_hall_name: booking.hall_name,
       booking_start_date: booking.start_date,
       booking_end_date: booking.end_date,
@@ -1648,6 +1827,10 @@ const resetForm = () => {
 }
 
 const openAddModal = () => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation d'ajouter une chambre", 'warning')
+    return
+  }
   isEditing.value = false
   resetForm()
   showFormModal.value = true
@@ -1660,6 +1843,10 @@ const viewRoom = (room) => {
 }
 
 const editRoom = (room) => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation de modifier une chambre", 'warning')
+    return
+  }
   openActionsId.value = null
   isEditing.value = true
   form.value = {
@@ -1672,12 +1859,20 @@ const editRoom = (room) => {
 }
 
 const confirmDelete = (room) => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation de supprimer une chambre", 'warning')
+    return
+  }
   openActionsId.value = null
   selectedRoom.value = room
   showDeleteModal.value = true
 }
 
 const saveRoom = async () => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation d'enregistrer une chambre", 'warning')
+    return
+  }
   if (savingRoom.value) return
   savingRoom.value = true
   try {
@@ -1708,6 +1903,10 @@ const saveRoom = async () => {
 }
 
 const deleteRoom = async () => {
+  if (!canManageFacilitiesCatalog.value) {
+    notify("Vous n'avez pas l'autorisation de supprimer une chambre", 'warning')
+    return
+  }
   if (deletingRoom.value || !selectedRoom.value?.id) return
   deletingRoom.value = true
   try {
@@ -2602,6 +2801,9 @@ const deleteRoom = async () => {
 :global(html[data-admin-theme="dark"]) .activity-item,
 :global(html[data-admin-theme="dark"]) .guide-step,
 :global(html[data-admin-theme="dark"]) .booking-summary,
+:global(html[data-admin-theme="dark"]) .stay-modal-summary,
+:global(html[data-admin-theme="dark"]) .stay-guest-card,
+:global(html[data-admin-theme="dark"]) .stay-modal-checkout,
 :global(html[data-admin-theme="dark"]) .entity-view-card,
 :global(html[data-admin-theme="dark"]) .entity-view-item,
 :global(html[data-admin-theme="dark"]) .entity-view-empty {
@@ -2626,10 +2828,22 @@ const deleteRoom = async () => {
 :global(html[data-admin-theme="dark"]) .activity-column-head strong,
 :global(html[data-admin-theme="dark"]) .activity-title,
 :global(html[data-admin-theme="dark"]) .booking-summary strong,
+:global(html[data-admin-theme="dark"]) .stay-modal-head h3,
+:global(html[data-admin-theme="dark"]) .stay-modal-checkout h3,
+:global(html[data-admin-theme="dark"]) .stay-guest-card-head strong,
+:global(html[data-admin-theme="dark"]) .stay-modal-summary strong,
+:global(html[data-admin-theme="dark"]) .stay-modal-guest-line strong,
 :global(html[data-admin-theme="dark"]) .entity-view-value,
 :global(html[data-admin-theme="dark"]) .table-title,
 :global(html[data-admin-theme="dark"]) .stat-value {
   color: #f8fafc;
+}
+
+:global(html[data-admin-theme="dark"]) .stay-modal-head p,
+:global(html[data-admin-theme="dark"]) .stay-modal-checkout p,
+:global(html[data-admin-theme="dark"]) .stay-modal-summary,
+:global(html[data-admin-theme="dark"]) .stay-modal-guest-line {
+  color: #cbd5e1;
 }
 
 :global(html[data-admin-theme="dark"]) .frontdesk-search-input:focus,
@@ -2717,7 +2931,127 @@ const deleteRoom = async () => {
 }
 
 .booking-summary strong {
+  color: var(--gray-900);
+}
+
+.stay-modal-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.stay-modal-summary {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid #dbeafe;
+  background: var(--white);
+  color: var(--gray-700);
+}
+
+.stay-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.stay-modal-head h3,
+.stay-modal-checkout h3 {
+  margin: 0;
   color: #0f172a;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.stay-modal-head p,
+.stay-modal-checkout p {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.stay-guests-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.stay-guest-card {
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid var(--gray-400);
+  background: var(--white);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.04);
+}
+
+.stay-guest-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.stay-guest-card-head strong,
+.stay-modal-summary strong,
+.stay-modal-guest-line strong {
+  color: var(--gray-900);
+}
+
+.stay-modal-checkout {
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.stay-modal-guest-line {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  color: #475569;
+  flex-wrap: wrap;
+}
+
+:global(html[data-admin-theme="dark"]) .stay-modal-summary,
+:global(html[data-admin-theme="dark"]) .stay-guest-card,
+:global(html[data-admin-theme="dark"]) .stay-modal-checkout {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(15, 23, 42, 0.84) 100%);
+  border-color: rgba(51, 65, 85, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+:global(html[data-admin-theme="dark"]) .stay-modal-summary,
+:global(html[data-admin-theme="dark"]) .stay-modal-head p,
+:global(html[data-admin-theme="dark"]) .stay-modal-checkout p,
+:global(html[data-admin-theme="dark"]) .stay-modal-guest-line {
+  color: #cbd5e1;
+}
+
+:global(html[data-admin-theme="dark"]) .stay-modal-summary strong,
+:global(html[data-admin-theme="dark"]) .stay-modal-head h3,
+:global(html[data-admin-theme="dark"]) .stay-modal-checkout h3,
+:global(html[data-admin-theme="dark"]) .stay-guest-card-head strong,
+:global(html[data-admin-theme="dark"]) .stay-modal-guest-line strong {
+  color: #f8fafc;
+}
+
+:global(html[data-admin-theme="dark"]) .stay-guest-card .form-input,
+:global(html[data-admin-theme="dark"]) .stay-guest-card .form-select,
+:global(html[data-admin-theme="dark"]) .stay-guest-card .form-textarea {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(71, 85, 105, 0.95);
+  color: #f8fafc;
+}
+
+:global(html[data-admin-theme="dark"]) .stay-guest-card .form-input::placeholder,
+:global(html[data-admin-theme="dark"]) .stay-guest-card .form-textarea::placeholder {
+  color: #94a3b8;
+}
+
+:global(html[data-admin-theme="dark"]) .stay-guest-card .form-label {
+  color: #cbd5e1;
 }
 
 .form-hint {
@@ -2763,6 +3097,8 @@ const deleteRoom = async () => {
   .entity-view-grid { grid-template-columns: 1fr; }
   .entity-view-item { flex-direction: column; }
   .entity-view-value { text-align: left; }
+  .stay-modal-head { flex-direction: column; }
+  .stay-modal-guest-line { flex-direction: column; }
 }
 
 .services-empty {

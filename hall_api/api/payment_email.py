@@ -91,7 +91,11 @@ def _build_payment_invoice_html(payment, booking, branding):
 
     payment_code = (getattr(payment, 'code', '') or '').strip() or f"Paiement #{payment.pk}"
     booking_code = (getattr(booking, 'code', '') or '').strip() or f"Reservation #{booking.pk}"
-    hall_name = getattr(getattr(booking, 'hall', None), 'name', '') or '-'
+    item_label = 'Salle'
+    item_name = getattr(getattr(booking, 'hall', None), 'name', '') or '-'
+    if getattr(booking, 'booking_type', '') == 'room':
+        item_label = 'Chambres' if len(getattr(booking, 'selected_room_ids', []) or []) > 1 else 'Chambre'
+        item_name = getattr(booking, 'room_display_summary', '') or item_name
     contacts = [str(item).strip() for item in (branding.get('contacts') or []) if str(item).strip()]
     contacts_text = ' | '.join(escape(item) for item in contacts) if contacts else '-'
 
@@ -137,7 +141,7 @@ def _build_payment_invoice_html(payment, booking, branding):
         <div style="padding:18px;border:1px solid #e2e8f0;border-radius:16px;background:#ffffff;">
           <div style="font-weight:700;margin-bottom:6px;">{escape(booking.customer_name or 'Client')}</div>
           <div style="color:#475569;margin-bottom:4px;">{escape((booking.customer_email or '-').strip() or '-')}</div>
-          <div style="color:#475569;margin-bottom:4px;">{escape(hall_name)}</div>
+          <div style="color:#475569;margin-bottom:4px;">{escape(item_label)}: {escape(item_name)}</div>
           <div style="color:#64748b;">Periode: {escape(_format_period(booking.start_date, booking.end_date))}</div>
         </div>
       </div>
@@ -154,8 +158,8 @@ def _build_payment_invoice_html(payment, booking, branding):
             <strong>{escape(payment.method or '-')}</strong>
           </div>
           <div style="display:flex;justify-content:space-between;gap:16px;padding:12px 0 6px;">
-            <span style="color:#64748b;">Salle</span>
-            <strong>{escape(hall_name)}</strong>
+            <span style="color:#64748b;">{escape(item_label)}</span>
+            <strong>{escape(item_name)}</strong>
           </div>
         </div>
       </div>
@@ -191,7 +195,11 @@ def _build_payment_invoice_text(payment, booking, branding):
     if remaining < 0:
         remaining = Decimal('0.00')
 
-    hall_name = getattr(getattr(booking, 'hall', None), 'name', '') or '-'
+    item_label = 'Salle'
+    item_name = getattr(getattr(booking, 'hall', None), 'name', '') or '-'
+    if getattr(booking, 'booking_type', '') == 'room':
+        item_label = 'Chambres' if len(getattr(booking, 'selected_room_ids', []) or []) > 1 else 'Chambre'
+        item_name = getattr(booking, 'room_display_summary', '') or item_name
     contacts = [str(item).strip() for item in (branding.get('contacts') or []) if str(item).strip()]
     return (
         f"Bonjour {booking.customer_name or 'Client'},\n\n"
@@ -204,7 +212,7 @@ def _build_payment_invoice_text(payment, booking, branding):
         f"Methode : {payment.method or '-'}\n"
         f"Client : {booking.customer_name or 'Client'}\n"
         f"Email : {(booking.customer_email or '-').strip() or '-'}\n"
-        f"Salle : {hall_name}\n"
+        f"{item_label} : {item_name}\n"
         f"Periode : {_format_period(booking.start_date, booking.end_date)}\n"
         f"Montant paye : {_format_money(payment.amount)}\n"
         f"Total reservation : {_format_money(booking.total_price)}\n"

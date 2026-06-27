@@ -75,6 +75,9 @@ export const useAdminExportDocuments = () => {
     documentTitle = '',
     subtitle = '',
     typeLabel = 'Export PDF',
+    headerVariant = 'default',
+    headerEyebrow = '',
+    headerReference = '',
     contentHtml = '',
     tableTitle = '',
     tableTitles = [],
@@ -137,11 +140,28 @@ export const useAdminExportDocuments = () => {
       background: linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #8b6b12 100%);
       color: #ffffff;
     }
+    .head.ticket-head {
+      position: relative;
+      padding: 0;
+      background: #ffffff;
+      color: var(--ink);
+      border-bottom: 1px solid var(--line);
+    }
+    .head.ticket-head::before {
+      content: '';
+      display: block;
+      height: 5px;
+      background: linear-gradient(90deg, #0f172a 0%, #1d4ed8 52%, #8b6b12 100%);
+    }
     .brand {
       display: flex;
       justify-content: space-between;
       gap: 20px;
       align-items: flex-start;
+    }
+    .ticket-head .brand {
+      align-items: center;
+      padding: 24px 30px;
     }
     .brand-main {
       display: flex;
@@ -164,6 +184,13 @@ export const useAdminExportDocuments = () => {
       height: 100%;
       object-fit: cover;
     }
+    .ticket-head .logo-wrap {
+      width: 70px;
+      height: 70px;
+      border-radius: 20px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+    }
     .brand-copy small {
       display: block;
       margin-bottom: 8px;
@@ -183,6 +210,19 @@ export const useAdminExportDocuments = () => {
       max-width: 560px;
       line-height: 1.6;
     }
+    .ticket-head .brand-copy small {
+      margin-bottom: 6px;
+      color: var(--info);
+    }
+    .ticket-head .brand-copy h1 {
+      color: var(--ink);
+      font-size: 26px;
+    }
+    .ticket-head .brand-copy p {
+      color: var(--muted);
+      margin-top: 6px;
+      max-width: 640px;
+    }
     .chip {
       display: inline-flex;
       align-items: center;
@@ -195,6 +235,42 @@ export const useAdminExportDocuments = () => {
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.12em;
+    }
+    .ticket-head .chip {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      color: var(--info);
+    }
+    .brand-side {
+      display: grid;
+      justify-items: end;
+      gap: 10px;
+      min-width: 220px;
+    }
+    .brand-side-card {
+      min-width: 220px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      text-align: right;
+    }
+    .brand-side-label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+    .brand-side-value {
+      display: block;
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--ink);
+      word-break: break-word;
     }
     .body {
       padding: 28px 30px 24px;
@@ -341,6 +417,15 @@ export const useAdminExportDocuments = () => {
       .brand-main {
         align-items: flex-start;
       }
+      .brand-side {
+        width: 100%;
+        justify-items: stretch;
+      }
+      .brand-side-card {
+        width: 100%;
+        min-width: 0;
+        text-align: left;
+      }
     }
     @media print {
       body {
@@ -357,19 +442,26 @@ export const useAdminExportDocuments = () => {
 </head>
 <body>
   <div class="sheet">
-    <div class="head">
+    <div class="head ${headerVariant === 'ticket' ? 'ticket-head' : ''}">
       <div class="brand">
         <div class="brand-main">
           <div class="logo-wrap">
             <img src="${escapeHtml(documentLogoUrl)}" alt="${escapeHtml(documentBranding.name)}" />
           </div>
           <div class="brand-copy">
-            <small>${escapeHtml(documentBranding.tagline)}</small>
+            <small>${escapeHtml(headerEyebrow || documentBranding.tagline)}</small>
             <h1>${escapeHtml(documentBranding.name)}</h1>
             <p>${escapeHtml(subtitle || title)}</p>
           </div>
         </div>
-        <div class="chip">${escapeHtml(typeLabel)}</div>
+        <div class="brand-side">
+          <div class="chip">${escapeHtml(typeLabel)}</div>
+          ${headerReference ? `
+          <div class="brand-side-card">
+            <span class="brand-side-label">Référence</span>
+            <span class="brand-side-value">${escapeHtml(headerReference)}</span>
+          </div>` : ''}
+        </div>
       </div>
     </div>
     <div class="body">
@@ -840,15 +932,17 @@ export const useAdminExportDocuments = () => {
     return true
   }
 
-  const openPrintPreviewHtml = ({ html, title = 'Document' }) => {
+  const openPrintPreviewHtml = ({ html, title = 'Document', autoPrint = true }) => {
     if (!process.client || !html) return false
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=980,height=860')
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1180,height=920')
     if (!printWindow) return false
 
     const safeTitle = escapeHtml(title || 'Document')
-    const preparedHtml = String(html)
+    let preparedHtml = String(html)
       .replace(/<title>[\s\S]*?<\/title>/i, `<title>${safeTitle}</title>`)
-      .replace('</body>', `
+
+    if (autoPrint) {
+      preparedHtml = preparedHtml.replace('</body>', `
         <script>
           window.addEventListener('load', function () {
             setTimeout(function () {
@@ -858,6 +952,7 @@ export const useAdminExportDocuments = () => {
           });
         </script>
       </body>`)
+    }
 
     printWindow.document.open()
     printWindow.document.write(preparedHtml)

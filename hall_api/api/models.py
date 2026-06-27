@@ -125,14 +125,23 @@ class Booking(models.Model):
         ('paid', 'Payé'),
         ('cancelled', 'Annulé'),
     ]
+    CUSTOMER_KIND_CHOICES = [
+        ('individual', 'Particulier'),
+        ('organization', 'Organisation'),
+    ]
     BOOKING_TYPE_CHOICES = [
         ('hall', 'Salle'),
         ('room', 'Chambre'),
     ]
     booking_type = models.CharField(max_length=20, choices=BOOKING_TYPE_CHOICES, default='hall')
+    customer_kind = models.CharField(max_length=20, choices=CUSTOMER_KIND_CHOICES, default='individual')
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='bookings')
     hall = models.ForeignKey(Hall, on_delete=models.CASCADE, null=True, blank=True)
     room = models.ForeignKey(Room, on_delete=models.CASCADE, null=True, blank=True)
+    room_ids = models.JSONField(default=list, blank=True)
+    room_stays = models.JSONField(default=list, blank=True)
+    organization_name = models.CharField(max_length=150, blank=True, default='')
+    organization_contact_name = models.CharField(max_length=120, blank=True, default='')
     customer_name = models.CharField(max_length=100)
     customer_email = models.EmailField(blank=True, default='')
     customer_phone = models.CharField(max_length=30, blank=True, default='')
@@ -160,18 +169,151 @@ class Booking(models.Model):
     def save(self, *args, **kwargs):
         if not self.code:
             self.code = _next_monthly_code(Booking, 'LBR', self.created_at)
+        if self.booking_type != 'room':
+            self.room = None
+            self.room_ids = []
+            self.room_stays = []
+        else:
+            normalized = []
+            raw_ids = self.room_ids if isinstance(self.room_ids, list) else []
+            for value in raw_ids:
+                try:
+                    room_id = int(value)
+                except (TypeError, ValueError):
+                    continue
+                if room_id not in normalized:
+                    normalized.append(room_id)
+            if self.room_id and self.room_id not in normalized:
+                normalized.insert(0, self.room_id)
+            self.room_ids = normalized
+            if normalized and not self.room_id:
+                self.room_id = normalized[0]
+            existing_stays = {}
+            raw_stays = self.room_stays if isinstance(self.room_stays, list) else []
+            for item in raw_stays:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    stay_room_id = int(item.get('room_id'))
+                except (TypeError, ValueError):
+                    continue
+                guests = item.get('guests') if isinstance(item.get('guests'), list) else []
+                existing_stays[stay_room_id] = {
+                    'room_id': stay_room_id,
+                    'checked_in_at': item.get('checked_in_at') or None,
+                    'checked_out_at': item.get('checked_out_at') or None,
+                    'guests': [
+                        {
+                            'full_name': str(guest.get('full_name') or '').strip(),
+                            'id_type': str(guest.get('id_type') or '').strip(),
+                            'id_number': str(guest.get('id_number') or '').strip(),
+                        }
+                        for guest in guests
+                        if isinstance(guest, dict) and str(guest.get('full_name') or '').strip()
+                    ],
+                }
+            self.room_stays = [
+                existing_stays.get(room_id, {
+                    'room_id': room_id,
+                    'checked_in_at': None,
+                    'checked_out_at': None,
+                    'guests': [],
+                })
+                for room_id in normalized
+            ]
         super().save(*args, **kwargs)
+
+    @property
+    def selected_room_ids(self):
+        ids = []
+        raw_ids = self.room_ids if isinstance(self.room_ids, list) else []
+        for value in raw_ids:
+            try:
+                room_id = int(value)
+            except (TypeError, ValueError):
+                continue
+            if room_id not in ids:
+                ids.append(room_id)
+        if self.room_id and self.room_id not in ids:
+            ids.insert(0, self.room_id)
+        return ids
+
+    @property
+    def selected_rooms(self):
+        room_ids = self.selected_room_ids
+        if not room_ids:
+            return []
+        room_map = {room.id: room for room in Room.objects.filter(id__in=room_ids)}
+        return [room_map[room_id] for room_id in room_ids if room_id in room_map]
+
+    @property
+    def room_display_summary(self):
+        if self.booking_type != 'room':
+            return ''
+        labels = [str(room) for room in self.selected_rooms]
+        if not labels and self.room:
+            labels = [str(self.room)]
+        return ', '.join(labels)
+
+    @property
+    def normalized_room_stays(self):
+        stays = self.room_stays if isinstance(self.room_stays, list) else []
+        stay_map = {}
+        for item in stays:
+            if not isinstance(item, dict):
+                continue
+            try:
+                room_id = int(item.get('room_id'))
+            except (TypeError, ValueError):
+                continue
+            guests = item.get('guests') if isinstance(item.get('guests'), list) else []
+            stay_map[room_id] = {
+                'room_id': room_id,
+                'checked_in_at': item.get('checked_in_at') or None,
+                'checked_out_at': item.get('checked_out_at') or None,
+                'guests': [
+                    {
+                        'full_name': str(guest.get('full_name') or '').strip(),
+                        'id_type': str(guest.get('id_type') or '').strip(),
+                        'id_number': str(guest.get('id_number') or '').strip(),
+                    }
+                    for guest in guests
+                    if isinstance(guest, dict) and str(guest.get('full_name') or '').strip()
+                ],
+            }
+        return [
+            stay_map.get(room_id, {
+                'room_id': room_id,
+                'checked_in_at': None,
+                'checked_out_at': None,
+                'guests': [],
+            })
+            for room_id in self.selected_room_ids
+        ]
+
+    @property
+    def representative_guest(self):
+        for stay in self.normalized_room_stays:
+            guests = stay.get('guests') or []
+            if guests:
+                return guests[0]
+        return {}
 
     @property
     def booked_item_name(self):
         if self.booking_type == 'hall' and self.hall:
             return self.hall.name
-        elif self.booking_type == 'room' and self.room:
-            return str(self.room)
+        elif self.booking_type == 'room':
+            return self.room_display_summary or (str(self.room) if self.room else '')
         return 'Non spécifié'
 
     @property
     def active_guest_name(self):
+        representative = self.representative_guest
+        if representative:
+            return str(representative.get('full_name') or '').strip() or (self.organization_contact_name or '').strip() or (self.customer_name or '').strip()
+        if self.customer_kind == 'organization':
+            return (self.organization_contact_name or '').strip() or (self.guest_full_name or '').strip() or (self.customer_name or '').strip()
         return (self.guest_full_name or '').strip() or (self.customer_name or '').strip()
 
     def __str__(self):

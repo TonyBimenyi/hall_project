@@ -10,7 +10,7 @@
           <i class="fas fa-file-pdf"></i>
           <span class="btn-label">Export PDF</span>
         </button>
-        <button class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
+        <button v-if="canExportExcel" class="btn btn-export btn-sm admin-head-btn" :class="{ 'is-loading': exportingXls }" :disabled="exportingPdf || exportingXls" @click="exportXls">
           <i class="fas fa-file-excel"></i>
           <span class="btn-label">Export XLS</span>
         </button>
@@ -67,7 +67,7 @@
     </div>
 
     <div ref="exportRef" class="export-scope">
-    <div class="stats-grid">
+    <div v-if="canSeePaymentStats" class="stats-grid">
       <div class="stat-card card">
         <div class="stat-icon success"><i class="fas fa-hand-holding-usd"></i></div>
         <div class="stat-info">
@@ -151,24 +151,6 @@
                 <button v-if="toNumber(booking.remaining_amount) > 0" class="btn btn-primary btn-sm" title="Payer" @click="openAddModal(booking)">
                   <i class="fas fa-coins"></i>
                 </button>
-                <button
-                  v-if="booking.booking_type === 'room' && !booking.checked_in_at"
-                  class="btn btn-outline btn-sm"
-                  :class="{ 'is-loading': stayActionLoadingId === booking.id && stayActionType === 'check_in' }"
-                  :disabled="stayActionLoadingId === booking.id"
-                  @click="manageStay(booking, 'check_in')"
-                >
-                  <i class="fas fa-right-to-bracket"></i>
-                </button>
-                <button
-                  v-if="booking.booking_type === 'room' && booking.checked_in_at && !booking.checked_out_at"
-                  class="btn btn-outline btn-sm"
-                  :class="{ 'is-loading': stayActionLoadingId === booking.id && stayActionType === 'check_out' }"
-                  :disabled="stayActionLoadingId === booking.id"
-                  @click="manageStay(booking, 'check_out')"
-                >
-                  <i class="fas fa-right-from-bracket"></i>
-                </button>
               </div>
             </div>
             <div class="admin-card-body">
@@ -251,24 +233,6 @@
                   <button v-if="toNumber(booking.remaining_amount) > 0" class="btn btn-primary btn-sm" @click="openAddModal(booking)">
                     <i class="fas fa-coins"></i> Payer
                   </button>
-                  <button
-                    v-if="booking.booking_type === 'room' && !booking.checked_in_at"
-                    class="btn btn-outline btn-sm"
-                    :class="{ 'is-loading': stayActionLoadingId === booking.id && stayActionType === 'check_in' }"
-                    :disabled="stayActionLoadingId === booking.id"
-                    @click="manageStay(booking, 'check_in')"
-                  >
-                    <i class="fas fa-right-to-bracket"></i> Check-in
-                  </button>
-                  <button
-                    v-if="booking.booking_type === 'room' && booking.checked_in_at && !booking.checked_out_at"
-                    class="btn btn-outline btn-sm"
-                    :class="{ 'is-loading': stayActionLoadingId === booking.id && stayActionType === 'check_out' }"
-                    :disabled="stayActionLoadingId === booking.id"
-                    @click="manageStay(booking, 'check_out')"
-                  >
-                    <i class="fas fa-right-from-bracket"></i> Check-out
-                  </button>
                 </div>
               </td>
             </tr>
@@ -329,7 +293,7 @@
                   <button class="actions-item" @click="printPaymentInvoice(payment)">
                     <i class="fas fa-file-arrow-down"></i> Télécharger la facture
                   </button>
-                  <button class="actions-item danger" @click="confirmDelete(payment)">
+                  <button v-if="canManagePaymentRecords" class="actions-item danger" @click="confirmDelete(payment)">
                     <i class="fas fa-trash-alt"></i> Supprimer
                   </button>
                 </div>
@@ -414,7 +378,7 @@
                     <button class="actions-item" @click="printPaymentInvoice(payment)">
                       <i class="fas fa-file-arrow-down"></i> Télécharger la facture
                     </button>
-                    <button class="actions-item danger" @click="confirmDelete(payment)">
+                    <button v-if="canManagePaymentRecords" class="actions-item danger" @click="confirmDelete(payment)">
                       <i class="fas fa-trash-alt"></i> Supprimer
                     </button>
                   </div>
@@ -486,15 +450,6 @@
           <input v-model="form.reference" type="text" class="form-input" required />
         </div>
 
-        <div v-if="selectedBookingForForm?.booking_type === 'room'" class="form-group">
-          <label class="form-label">Gestion du séjour</label>
-          <select v-model="form.room_action" class="form-select">
-            <option value="none">Aucune action</option>
-            <option v-if="!selectedBookingForForm.checked_in_at" value="check_in">Valider le check-in</option>
-            <option v-if="selectedBookingForForm.checked_in_at && !selectedBookingForForm.checked_out_at" value="check_out">Valider le check-out</option>
-          </select>
-          <small class="form-hint">Le check-in exige un paiement marqué comme payé et une pièce d'identité déjà renseignée.</small>
-        </div>
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showFormModal = false">Annuler</button>
@@ -561,7 +516,7 @@
       <p>Supprimer le paiement <strong>{{ selectedPayment?.reference }}</strong> ?</p>
       <template #footer>
         <button class="btn btn-outline" @click="showDeleteModal = false">Annuler</button>
-        <button class="btn btn-danger" :class="{ 'is-loading': deletingPayment }" :disabled="deletingPayment" @click="deletePayment">
+        <button v-if="canManagePaymentRecords" class="btn btn-danger" :class="{ 'is-loading': deletingPayment }" :disabled="deletingPayment" @click="deletePayment">
           Supprimer
         </button>
       </template>
@@ -578,6 +533,7 @@ import { useDateFormat } from '~/composables/useDateFormat'
 import { useTableSort } from '~/composables/useTableSort'
 import { useDocumentBranding } from '~/composables/useDocumentBranding'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
+import { canExportAdminExcel, canManagePayments as canManagePaymentsByRole, canSeeSyntheticRevenue, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
@@ -588,6 +544,7 @@ const { formatDateRange, formatDisplayDate, formatDateTime } = useDateFormat()
 
 const payments = ref([])
 const bookings = ref([])
+const currentUser = ref({})
 const exportRef = ref(null)
 const exportingPdf = ref(false)
 const exportingXls = ref(false)
@@ -604,8 +561,9 @@ const filtersOpen = ref(false)
 const openActionsId = ref(null)
 const savingPayment = ref(false)
 const deletingPayment = ref(false)
-const stayActionLoadingId = ref(null)
-const stayActionType = ref('')
+const canExportExcel = computed(() => canExportAdminExcel(currentUser.value))
+const canSeePaymentStats = computed(() => canSeeSyntheticRevenue(currentUser.value))
+const canManagePaymentRecords = computed(() => canManagePaymentsByRole(currentUser.value))
 
 const toggleActions = (id) => {
   openActionsId.value = openActionsId.value === id ? null : id
@@ -691,6 +649,10 @@ const inRangeYmd = (ymd, rangeStart, rangeEnd) => {
 const isLoading = computed(() => loadingPayments.value || loadingBookingsData.value)
 
 const exportXls = async () => {
+  if (!canExportExcel.value) {
+    notify("L'export Excel n'est pas autorisé pour ce rôle", 'warning')
+    return
+  }
   if (!exportRef.value) return
   exportingXls.value = true
   await nextTick()
@@ -742,7 +704,9 @@ const buildInvoicePdfHtml = (payment) => {
   const paymentCode = getPaymentDisplayId(payment)
   const reservationCode = String(payment?.booking_code || '').trim() || `Reservation #${payment?.booking || '-'}`
   const paymentTypeLabel = payment?.kind === 'full' ? 'Paiement total' : 'Avance'
-  const reservationTypeLabel = payment?.booking_type === 'room' ? 'Chambre' : 'Salle'
+  const reservationTypeLabel = payment?.booking_type === 'room'
+    ? ((Number(payment?.booking_room_count || 0) > 1) ? 'Chambres' : 'Chambre')
+    : 'Salle'
   const periodLabel = formatDateRange(payment?.booking_start_date, payment?.booking_end_date)
   const detailRows = [
     ['Paiement', paymentCode],
@@ -855,7 +819,6 @@ const form = ref({
   method: 'Virement',
   kind: 'advance',
   status: 'paid',
-  room_action: 'none',
 })
 const amountInput = moneyInputModel(form, 'amount')
 
@@ -1051,7 +1014,6 @@ const resetForm = () => {
     method: 'Virement',
     kind: 'advance',
     status: 'paid',
-    room_action: 'none',
   }
 }
 
@@ -1080,7 +1042,6 @@ const onKindChange = () => {
 
 const onBookingChange = () => {
   if (!selectedBookingForForm.value) return
-  form.value.room_action = 'none'
   if (form.value.kind === 'full') {
     form.value.amount = toNumber(selectedBookingForForm.value.remaining_amount)
   } else if (form.value.amount <= 0) {
@@ -1096,23 +1057,6 @@ watch(() => form.value.amount, () => {
 watch(selectedBookingForForm, () => {
   syncPaymentKindWithAmount()
 })
-
-const manageStay = async (booking, action) => {
-  if (!booking?.id || stayActionLoadingId.value) return
-  stayActionLoadingId.value = booking.id
-  stayActionType.value = action
-  try {
-    await api.post(`bookings/${booking.id}/${action === 'check_in' ? 'check-in' : 'check-out'}/`)
-    notify(action === 'check_in' ? 'Check-in enregistré' : 'Check-out enregistré', 'success')
-    await Promise.all([fetchBookings(), fetchPayments()])
-  } catch (error) {
-    const data = error?.response?.data || {}
-    notify(data.detail || 'Impossible de mettre à jour le séjour', 'danger')
-  } finally {
-    stayActionLoadingId.value = null
-    stayActionType.value = ''
-  }
-}
 
 const openAddModal = (booking = null) => {
   resetForm()
@@ -1148,7 +1092,6 @@ const savePayment = async () => {
       amount: form.value.amount,
       kind: form.value.kind,
       status: form.value.status,
-      roomAction: form.value.room_action,
       selectedBookingId: selectedBookingForForm.value?.id ?? null,
       remaining,
     })
@@ -1203,12 +1146,20 @@ const viewPayment = (payment) => {
 }
 
 const confirmDelete = (payment) => {
+  if (!canManagePaymentRecords.value) {
+    notify("Vous n'avez pas l'autorisation de supprimer un paiement", 'warning')
+    return
+  }
   closeActions()
   selectedPayment.value = payment
   showDeleteModal.value = true
 }
 
 const deletePayment = async () => {
+  if (!canManagePaymentRecords.value) {
+    notify("Vous n'avez pas l'autorisation de supprimer un paiement", 'warning')
+    return
+  }
   if (deletingPayment.value || !selectedPayment.value?.id) return
   deletingPayment.value = true
   try {
@@ -1240,6 +1191,7 @@ watch(() => `${route.query.view || ''}:${route.query.focus || ''}:${payments.val
 })
 
 onMounted(async () => {
+  currentUser.value = getStoredUser()
   await Promise.all([fetchPayments(), fetchBookings()])
   if (route.query.booking) openAddModal()
   openPaymentFromQuery()
