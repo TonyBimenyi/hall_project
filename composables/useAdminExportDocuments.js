@@ -932,9 +932,11 @@ export const useAdminExportDocuments = () => {
     return true
   }
 
-  const openPrintPreviewHtml = ({ html, title = 'Document', autoPrint = true }) => {
+  const openPrintPreviewHtml = ({ html, title = 'Document', autoPrint = true, printWindow: existingWindow = null }) => {
     if (!process.client || !html) return false
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1180,height=920')
+    const printWindow = existingWindow && !existingWindow.closed
+      ? existingWindow
+      : window.open('', '_blank', 'width=1180,height=920')
     if (!printWindow) return false
 
     const safeTitle = escapeHtml(title || 'Document')
@@ -954,7 +956,7 @@ export const useAdminExportDocuments = () => {
       </body>`)
     }
 
-    printWindow.document.open()
+    printWindow.document.open('text/html', 'replace')
     printWindow.document.write(preparedHtml)
     printWindow.document.close()
     return true

@@ -399,6 +399,17 @@ class BookingSerializer(serializers.ModelSerializer):
         if not isinstance(value, list):
             raise serializers.ValidationError('Les services sélectionnés doivent être une liste')
 
+        def _normalize_quantity(raw_value, *, label):
+            if raw_value in (None, ''):
+                return 1
+            try:
+                quantity = int(raw_value)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(f"Quantité invalide pour '{label}'")
+            if quantity < 1:
+                raise serializers.ValidationError(f"La quantité doit être supérieure ou égale à 1 pour '{label}'")
+            return quantity
+
         normalized = []
         for item in value:
             if not isinstance(item, dict):
@@ -406,6 +417,7 @@ class BookingSerializer(serializers.ModelSerializer):
             name = str(item.get('name') or '').strip()
             if not name:
                 raise serializers.ValidationError("Chaque service sélectionné doit avoir un nom")
+            quantity = _normalize_quantity(item.get('quantity', 1), label=name)
 
             subservices = item.get('subservices') or []
             if subservices and not isinstance(subservices, list):
@@ -418,9 +430,10 @@ class BookingSerializer(serializers.ModelSerializer):
                 sub_name = str(sub.get('name') or '').strip()
                 if not sub_name:
                     raise serializers.ValidationError(f"Chaque sous-service de '{name}' doit avoir un nom")
-                normalized_subservices.append({'name': sub_name})
+                sub_quantity = _normalize_quantity(sub.get('quantity', 1), label=sub_name)
+                normalized_subservices.append({'name': sub_name, 'quantity': sub_quantity})
 
-            payload = {'name': name}
+            payload = {'name': name, 'quantity': quantity}
             if normalized_subservices:
                 payload['subservices'] = normalized_subservices
             normalized.append(payload)

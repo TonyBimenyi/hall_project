@@ -436,6 +436,17 @@ def _compute_addons_total(item: Hall | Room, selected_services):
     if not isinstance(selected_services, list):
         raise DjangoValidationError('Les services sélectionnés doivent être une liste')
 
+    def _normalize_quantity(raw_value, *, label):
+        if raw_value in (None, ''):
+            return 1
+        try:
+            quantity = int(raw_value)
+        except (TypeError, ValueError):
+            raise DjangoValidationError(f"Quantité invalide pour '{label}'")
+        if quantity < 1:
+            raise DjangoValidationError(f"La quantité doit être supérieure ou égale à 1 pour '{label}'")
+        return quantity
+
     services_index = _index_hall_additional_services(item)
     addons_total = Decimal('0.00')
     normalized_selected = []
@@ -449,6 +460,7 @@ def _compute_addons_total(item: Hall | Room, selected_services):
             raise DjangoValidationError("Chaque service sélectionné doit avoir un nom")
         if name not in services_index:
             raise DjangoValidationError(f"Service '{name}' introuvable pour cette salle/chambre")
+        quantity = _normalize_quantity(selected_item.get('quantity', 1), label=name)
 
         cfg = services_index[name]
         if cfg['has_subservices']:
@@ -465,17 +477,18 @@ def _compute_addons_total(item: Hall | Room, selected_services):
                     raise DjangoValidationError(f"Sous-service invalide pour '{name}'")
                 if sub_name not in cfg['subservices']:
                     raise DjangoValidationError(f"Sous-service '{sub_name}' introuvable pour '{name}'")
-                addons_total += cfg['subservices'][sub_name]
-                normalized_subs.append({'name': sub_name})
+                sub_quantity = _normalize_quantity(sub.get('quantity', 1), label=sub_name)
+                addons_total += (cfg['subservices'][sub_name] * Decimal(sub_quantity))
+                normalized_subs.append({'name': sub_name, 'quantity': sub_quantity})
 
-            normalized_selected.append({'name': name, 'subservices': normalized_subs})
+            normalized_selected.append({'name': name, 'quantity': quantity, 'subservices': normalized_subs})
             continue
 
         if selected_item.get('subservices'):
             raise DjangoValidationError(f"Le service '{name}' n'a pas de sous-services")
 
-        addons_total += cfg['price']
-        normalized_selected.append({'name': name})
+        addons_total += (cfg['price'] * Decimal(quantity))
+        normalized_selected.append({'name': name, 'quantity': quantity})
 
     return addons_total.quantize(Decimal('0.01')), normalized_selected
 

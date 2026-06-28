@@ -151,6 +151,7 @@ export default {
         { title: 'Chambres', url: '/admin/rooms', icon: 'fa-solid fa-door-closed' },
         { title: 'Réservations', url: '/admin/bookings', icon: 'fa-solid fa-calendar-days' },
         { title: 'Paiements', url: '/admin/payments', icon: 'fa-solid fa-credit-card' },
+        { title: 'Comptabilite', url: '/admin/comptabilite', icon: 'fa-solid fa-book-open' },
         { title: 'Matériel', url: '/admin/materials', icon: 'fa-solid fa-box-open' },
         { title: 'Dépenses', url: '/admin/expenses', icon: 'fa-solid fa-money-bill-transfer' },
         { title: 'Personnel', url: '/admin/personnel', icon: 'fa-solid fa-users' },

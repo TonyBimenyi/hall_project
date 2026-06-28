@@ -678,7 +678,44 @@
                         <small>{{ isServiceSelected(service.name) ? 'Service ajoute a la reservation.' : 'Activer pour ajouter ce service.' }}</small>
                       </span>
                     </label>
-                    <strong class="addon-price">{{ formatMoney(service.price) }}</strong>
+                    <div class="addon-side">
+                      <div class="addon-side-top">
+                        <strong class="addon-price">{{ formatMoney(service.price) }}</strong>
+                        <span class="addon-unit">Par unité</span>
+                      </div>
+                      <div class="addon-qty-control" :class="{ 'is-disabled': !isServiceSelected(service.name) }" @click.stop>
+                        <span class="addon-qty-label">Qté</span>
+                        <div class="addon-stepper">
+                          <button
+                            type="button"
+                            class="addon-step-btn"
+                            :disabled="!isServiceSelected(service.name) || getServiceQuantity(service.name) <= 1"
+                            @click.stop="changeSimpleServiceQuantity(service.name, -1)"
+                          >
+                            <i class="fas fa-minus"></i>
+                          </button>
+                          <input
+                            :value="getServiceQuantity(service.name)"
+                            type="number"
+                            min="1"
+                            step="1"
+                            class="addon-qty-input"
+                            :disabled="!isServiceSelected(service.name)"
+                            @click.stop
+                            @input="updateSimpleServiceQuantity(service.name, $event.target.value)"
+                          />
+                          <button
+                            type="button"
+                            class="addon-step-btn"
+                            :disabled="!isServiceSelected(service.name)"
+                            @click.stop="changeSimpleServiceQuantity(service.name, 1)"
+                          >
+                            <i class="fas fa-plus"></i>
+                          </button>
+                        </div>
+                      </div>
+                      <strong v-if="isServiceSelected(service.name)" class="addon-line-total">Sous-total {{ formatMoney(getServiceLineTotal(service)) }}</strong>
+                    </div>
                   </div>
                   <div v-else class="addon-sub-block">
                     <div class="addon-sub-head">
@@ -686,25 +723,66 @@
                       <span class="muted-line">Choisissez les sous-services</span>
                     </div>
                     <div class="addon-subs">
-                      <label
+                      <div
                         v-for="sub in (service.subservices || [])"
                         :key="`${service.name}-${sub.name}`"
-                        :class="['addon-toggle', 'addon-sub-line', { 'is-active': isSubserviceSelected(service.name, sub.name) }]"
+                        class="addon-sub-row"
                       >
-                        <input
-                          type="checkbox"
-                          :checked="isSubserviceSelected(service.name, sub.name)"
-                          @change="toggleSubservice(service.name, sub.name)"
-                        />
-                        <span class="toggle-switch" aria-hidden="true">
-                          <span class="toggle-knob"></span>
-                        </span>
-                        <span class="addon-toggle-copy">
-                          <strong>{{ sub.name }}</strong>
-                          <small>{{ isSubserviceSelected(service.name, sub.name) ? 'Sous-service selectionne.' : 'Activer pour ajouter ce sous-service.' }}</small>
-                        </span>
-                        <strong class="addon-price">{{ formatMoney(sub.price) }}</strong>
-                      </label>
+                        <label
+                          :class="['addon-toggle', 'addon-sub-line', { 'is-active': isSubserviceSelected(service.name, sub.name) }]"
+                        >
+                          <input
+                            type="checkbox"
+                            :checked="isSubserviceSelected(service.name, sub.name)"
+                            @change="toggleSubservice(service.name, sub.name)"
+                          />
+                          <span class="toggle-switch" aria-hidden="true">
+                            <span class="toggle-knob"></span>
+                          </span>
+                          <span class="addon-toggle-copy">
+                            <strong>{{ sub.name }}</strong>
+                            <small>{{ isSubserviceSelected(service.name, sub.name) ? 'Sous-service selectionne.' : 'Activer pour ajouter ce sous-service.' }}</small>
+                          </span>
+                        </label>
+                        <div class="addon-side">
+                          <div class="addon-side-top">
+                            <strong class="addon-price">{{ formatMoney(sub.price) }}</strong>
+                            <span class="addon-unit">Par unité</span>
+                          </div>
+                          <div class="addon-qty-control" :class="{ 'is-disabled': !isSubserviceSelected(service.name, sub.name) }" @click.stop>
+                            <span class="addon-qty-label">Qté</span>
+                            <div class="addon-stepper">
+                              <button
+                                type="button"
+                                class="addon-step-btn"
+                                :disabled="!isSubserviceSelected(service.name, sub.name) || getSubserviceQuantity(service.name, sub.name) <= 1"
+                                @click.stop="changeSubserviceQuantity(service.name, sub.name, -1)"
+                              >
+                                <i class="fas fa-minus"></i>
+                              </button>
+                              <input
+                                :value="getSubserviceQuantity(service.name, sub.name)"
+                                type="number"
+                                min="1"
+                                step="1"
+                                class="addon-qty-input"
+                                :disabled="!isSubserviceSelected(service.name, sub.name)"
+                                @click.stop
+                                @input="updateSubserviceQuantity(service.name, sub.name, $event.target.value)"
+                              />
+                              <button
+                                type="button"
+                                class="addon-step-btn"
+                                :disabled="!isSubserviceSelected(service.name, sub.name)"
+                                @click.stop="changeSubserviceQuantity(service.name, sub.name, 1)"
+                              >
+                                <i class="fas fa-plus"></i>
+                              </button>
+                            </div>
+                          </div>
+                          <strong v-if="isSubserviceSelected(service.name, sub.name)" class="addon-line-total">Sous-total {{ formatMoney(getSubserviceLineTotal(service.name, sub)) }}</strong>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -742,8 +820,8 @@
               <strong>{{ formatMoney(baseBookingAmount) }}</strong>
             </div>
             <div class="booking-total-chip">
-              <span class="chip-label">Services</span>
-              <strong>{{ selectedAddonsCount }} selection{{ selectedAddonsCount > 1 ? 's' : '' }}</strong>
+              <span class="chip-label">Quantité services</span>
+              <strong>{{ selectedAddonsCount }} unité{{ selectedAddonsCount > 1 ? 's' : '' }}</strong>
             </div>
             <div class="booking-total-chip">
               <span class="chip-label">Supplément</span>
@@ -833,10 +911,12 @@
               >
                 <div class="service-preview-title">
                   <strong>{{ svc.name }}</strong>
+                  <span v-if="!svc.subservices?.length">x{{ addonQuantityValue(svc?.quantity) }}</span>
                 </div>
                 <div v-if="svc.subservices?.length" class="service-preview-subs">
                   <div v-for="(sub, sidx) in svc.subservices" :key="`${svc.name}-${sidx}`" class="service-preview-sub">
                     <span>{{ sub.name }}</span>
+                    <span>x{{ addonQuantityValue(sub?.quantity) }}</span>
                   </div>
                 </div>
               </div>
@@ -1364,6 +1444,34 @@ const selectedRoomIds = computed(() => {
 const selectedRooms = computed(() => rooms.value.filter(r => selectedRoomIds.value.includes(String(r.id))))
 const selectedRoom = computed(() => rooms.value.find(r => String(r.id) === String(form.value.room)) || null)
 const selectedItem = computed(() => form.value.booking_type === 'hall' ? selectedHall.value : selectedRoom.value)
+const normalizeAddonQuantity = (value) => {
+  const quantity = Number.parseInt(String(value ?? '').trim(), 10)
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1
+}
+const addonQuantityValue = (value) => normalizeAddonQuantity(value)
+const normalizeAdditionalServicesSelection = (value) => {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter(item => item && typeof item === 'object')
+    .map((item) => {
+      const normalized = {
+        name: String(item?.name || '').trim(),
+        quantity: normalizeAddonQuantity(item?.quantity),
+      }
+      const subs = Array.isArray(item?.subservices)
+        ? item.subservices
+          .filter(sub => sub && typeof sub === 'object')
+          .map(sub => ({
+            name: String(sub?.name || '').trim(),
+            quantity: normalizeAddonQuantity(sub?.quantity),
+          }))
+          .filter(sub => sub.name)
+        : []
+      if (subs.length) normalized.subservices = subs
+      return normalized
+    })
+    .filter(item => item.name)
+}
 const itemAdditionalServices = computed(() => {
   if (form.value.booking_type === 'room' && selectedRooms.value.length !== 1) return []
   return Array.isArray(selectedItem.value?.additional_services) ? selectedItem.value.additional_services : []
@@ -1493,18 +1601,20 @@ const pruneUnavailableSelectedRooms = () => {
 }
 const baseBookingAmount = computed(() => Number(daysCount.value || 0) * Number(pricePerUnit.value || 0))
 const selectedAddonsCount = computed(() => {
-  const selected = Array.isArray(form.value.additional_services_selected) ? form.value.additional_services_selected : []
+  const selected = normalizeAdditionalServicesSelection(form.value.additional_services_selected)
   let count = 0
   for (const item of selected) {
     const subs = Array.isArray(item?.subservices) ? item.subservices : []
-    count += subs.length > 0 ? subs.length : 1
+    count += subs.length > 0
+      ? subs.reduce((sum, sub) => sum + addonQuantityValue(sub?.quantity), 0)
+      : addonQuantityValue(item?.quantity)
   }
   return count
 })
 
 const addonsTotal = computed(() => {
   const services = itemAdditionalServices.value
-  const selected = Array.isArray(form.value.additional_services_selected) ? form.value.additional_services_selected : []
+  const selected = normalizeAdditionalServicesSelection(form.value.additional_services_selected)
   if (!services.length || !selected.length) return 0
 
   const serviceIndex = new Map(services.map(s => [String(s?.name || ''), s]))
@@ -1517,11 +1627,11 @@ const addonsTotal = computed(() => {
       const subs = Array.isArray(item?.subservices) ? item.subservices : []
       const subIndex = new Map((cfg.subservices || []).map(sub => [String(sub?.name || ''), Number(sub?.price || 0)]))
       for (const sub of subs) {
-        total += subIndex.get(String(sub?.name || '')) || 0
+        total += (subIndex.get(String(sub?.name || '')) || 0) * addonQuantityValue(sub?.quantity)
       }
       continue
     }
-    total += Number(cfg.price || 0)
+    total += Number(cfg.price || 0) * addonQuantityValue(item?.quantity)
   }
   return total
 })
@@ -1683,9 +1793,29 @@ const toggleSimpleService = (service) => {
   if (idx >= 0) {
     selected.splice(idx, 1)
   } else {
-    selected.push({ name })
+    selected.push({ name, quantity: 1 })
   }
   form.value.additional_services_selected = selected
+}
+
+const getServiceQuantity = (serviceName) => {
+  const item = (form.value.additional_services_selected || []).find(s => String(s?.name || '') === String(serviceName || ''))
+  return addonQuantityValue(item?.quantity)
+}
+
+const updateSimpleServiceQuantity = (serviceName, value) => {
+  const name = String(serviceName || '').trim()
+  if (!name) return
+  const selected = Array.isArray(form.value.additional_services_selected) ? [...form.value.additional_services_selected] : []
+  const item = selected.find(s => String(s?.name || '') === name)
+  if (!item) return
+  item.quantity = normalizeAddonQuantity(value)
+  form.value.additional_services_selected = selected
+}
+
+const changeSimpleServiceQuantity = (serviceName, delta) => {
+  const next = getServiceQuantity(serviceName) + Number(delta || 0)
+  updateSimpleServiceQuantity(serviceName, Math.max(1, next))
 }
 
 const isSubserviceSelected = (serviceName, subName) => {
@@ -1701,7 +1831,7 @@ const toggleSubservice = (serviceName, subName) => {
   const selected = Array.isArray(form.value.additional_services_selected) ? [...form.value.additional_services_selected] : []
   let item = selected.find(s => String(s?.name || '') === name)
   if (!item) {
-    item = { name, subservices: [{ name: sub }] }
+    item = { name, quantity: 1, subservices: [{ name: sub, quantity: 1 }] }
     selected.push(item)
     form.value.additional_services_selected = selected
     return
@@ -1711,7 +1841,7 @@ const toggleSubservice = (serviceName, subName) => {
   if (idx >= 0) {
     subs.splice(idx, 1)
   } else {
-    subs.push({ name: sub })
+    subs.push({ name: sub, quantity: 1 })
   }
   if (subs.length === 0) {
     form.value.additional_services_selected = selected.filter(s => String(s?.name || '') !== name)
@@ -1720,6 +1850,35 @@ const toggleSubservice = (serviceName, subName) => {
     form.value.additional_services_selected = selected
   }
 }
+
+const getSubserviceQuantity = (serviceName, subName) => {
+  const item = (form.value.additional_services_selected || []).find(s => String(s?.name || '') === String(serviceName || ''))
+  const sub = (Array.isArray(item?.subservices) ? item.subservices : []).find(s => String(s?.name || '') === String(subName || ''))
+  return addonQuantityValue(sub?.quantity)
+}
+
+const updateSubserviceQuantity = (serviceName, subName, value) => {
+  const name = String(serviceName || '').trim()
+  const sub = String(subName || '').trim()
+  if (!name || !sub) return
+  const selected = Array.isArray(form.value.additional_services_selected) ? [...form.value.additional_services_selected] : []
+  const item = selected.find(s => String(s?.name || '') === name)
+  if (!item) return
+  const subs = Array.isArray(item.subservices) ? [...item.subservices] : []
+  const target = subs.find(s => String(s?.name || '') === sub)
+  if (!target) return
+  target.quantity = normalizeAddonQuantity(value)
+  item.subservices = subs
+  form.value.additional_services_selected = selected
+}
+
+const changeSubserviceQuantity = (serviceName, subName, delta) => {
+  const next = getSubserviceQuantity(serviceName, subName) + Number(delta || 0)
+  updateSubserviceQuantity(serviceName, subName, Math.max(1, next))
+}
+
+const getServiceLineTotal = (service) => Number(service?.price || 0) * getServiceQuantity(service?.name)
+const getSubserviceLineTotal = (serviceName, sub) => Number(sub?.price || 0) * getSubserviceQuantity(serviceName, sub?.name)
 
 const resetQuickCustomerState = () => {
   customerSearch.value = ''
@@ -1926,9 +2085,64 @@ const {
 
 const saveBooking = async () => {
   savingBooking.value = true
+  const previewWindow = !isEditing.value && process.client
+    ? window.open('', '_blank', 'width=1180,height=920')
+    : null
+  if (previewWindow && !previewWindow.closed) {
+    try {
+      previewWindow.document.open('text/html', 'replace')
+      previewWindow.document.write(`<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Préparation du jeton</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .preview-loading {
+      width: min(520px, 100%);
+      padding: 28px;
+      border-radius: 24px;
+      border: 1px solid #dbe3ee;
+      background: #ffffff;
+      box-shadow: 0 24px 50px rgba(15, 23, 42, 0.1);
+      text-align: center;
+    }
+    .preview-loading strong {
+      display: block;
+      font-size: 1.15rem;
+      margin-bottom: 10px;
+    }
+    .preview-loading span {
+      color: #64748b;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-loading">
+    <strong>Préparation du jeton...</strong>
+    <span>La fenêtre d’aperçu reste ouverte pendant l’enregistrement de la réservation.</span>
+  </div>
+</body>
+</html>`)
+      previewWindow.document.close()
+    } catch {}
+  }
   try {
     const payload = buildBookingPayload()
     if (form.value.booking_type === 'room' && !selectedRoomIds.value.length) {
+      if (previewWindow && !previewWindow.closed) previewWindow.close()
       notify('Complétez les informations de réservation avant de continuer', 'warning')
       return
     }
@@ -1939,6 +2153,7 @@ const saveBooking = async () => {
       if (form.value.booking_type === 'room') {
         const unavailable = selectedRooms.value.filter(room => isRoomUnavailable(room.id))
         if (unavailable.length) {
+          if (previewWindow && !previewWindow.closed) previewWindow.close()
           notify(`Ces chambres ne sont plus disponibles: ${unavailable.map(room => room.room_number).join(', ')}`, 'warning')
           return
         }
@@ -1954,7 +2169,9 @@ const saveBooking = async () => {
         notify('Nouvelle réservation créée', 'success')
       }
       if (createdBooking) {
-        openReservationJetonPrintPreview(createdBooking, Boolean(response.data?.email_sent))
+        openReservationJetonPrintPreview(createdBooking, Boolean(response.data?.email_sent), previewWindow)
+      } else if (previewWindow && !previewWindow.closed) {
+        previewWindow.close()
       }
     }
     showFormModal.value = false
@@ -1962,6 +2179,7 @@ const saveBooking = async () => {
       fetchBookings()
     }
   } catch (error) {
+    if (previewWindow && !previewWindow.closed) previewWindow.close()
     const data = error?.response?.data || {}
     notify(extractApiErrorMessage(data) || 'Erreur lors de l\'enregistrement', 'danger')
   } finally {
@@ -2153,7 +2371,7 @@ const mapBookingToForm = (booking) => {
       rooms_selected: Array.isArray(booking?.room_ids) && booking.room_ids.length
         ? booking.room_ids.map(id => String(id))
         : (booking?.room ? [String(booking.room)] : []),
-      additional_services_selected: booking?.additional_services_selected || [],
+      additional_services_selected: normalizeAdditionalServicesSelection(booking?.additional_services_selected),
       event_type: 'Séjour',
       event_type_other: '',
     }
@@ -2169,7 +2387,7 @@ const mapBookingToForm = (booking) => {
       organization_name: booking?.organization_name || '',
       organization_contact_name: booking?.organization_contact_name || '',
       rooms_selected: [],
-      additional_services_selected: booking?.additional_services_selected || [],
+      additional_services_selected: normalizeAdditionalServicesSelection(booking?.additional_services_selected),
       event_type_other: '',
     }
   }
@@ -2184,7 +2402,7 @@ const mapBookingToForm = (booking) => {
     organization_name: booking?.organization_name || '',
     organization_contact_name: booking?.organization_contact_name || '',
     rooms_selected: [],
-    additional_services_selected: booking?.additional_services_selected || [],
+    additional_services_selected: normalizeAdditionalServicesSelection(booking?.additional_services_selected),
     event_type: 'Autres',
     event_type_other: rawEventType.startsWith(otherPrefix) ? rawEventType.slice(otherPrefix.length) : rawEventType,
   }
@@ -2203,6 +2421,7 @@ const buildBookingPayload = () => {
     : ''
   return {
     ...payload,
+    additional_services_selected: normalizeAdditionalServicesSelection(payload.additional_services_selected),
     customer: form.value.customer_kind === 'organization' ? null : (payload.customer || null),
     room: payload.booking_type === 'room' ? (payload.room || selectedRoomIds.value[0] || '') : '',
     room_ids: payload.booking_type === 'room' ? selectedRoomIds.value.map(id => Number(id)) : [],
@@ -2390,13 +2609,14 @@ const buildReservationJetonPdfHtml = (booking, emailSent = null) => {
   })
 }
 
-const openReservationJetonPrintPreview = (booking, emailSent = null) => {
+const openReservationJetonPrintPreview = (booking, emailSent = null, previewWindow = null) => {
   if (!process.client || !booking) return
   const html = buildReservationJetonPdfHtml(booking, emailSent)
   const ok = openPrintPreviewHtml({
     html,
     title: `Jeton ${getBookingDisplayId(booking)}`,
     autoPrint: false,
+    printWindow: previewWindow,
   })
   if (!ok) {
     notify('Impossible d’ouvrir l’aperçu d’impression du jeton', 'warning')
@@ -3468,17 +3688,35 @@ const printReservationJeton = async (booking) => {
 }
 
 .addon-item {
-  border: 1px solid var(--gray-200);
-  border-radius: 14px;
-  padding: 12px 14px;
-  background: var(--gray-50);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 22px;
+  padding: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
 }
 
 .addon-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 290px);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.addon-side {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.addon-side-top {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  align-items: center;
 }
 
 .addon-toggle {
@@ -3487,18 +3725,19 @@ const printReservationJeton = async (booking) => {
   align-items: center;
   gap: 12px;
   flex: 1;
-  min-height: 56px;
-  padding: 12px 14px;
-  border: 1px solid var(--gray-200);
-  border-radius: 16px;
+  min-height: 96px;
+  padding: 16px 18px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 20px;
   background: var(--white);
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
 
 .addon-toggle:hover {
-  border-color: var(--gray-300);
-  background: var(--gray-50);
+  border-color: rgba(59, 130, 246, 0.22);
+  background: #f8fbff;
+  transform: translateY(-1px);
 }
 
 .addon-toggle input {
@@ -3508,9 +3747,9 @@ const printReservationJeton = async (booking) => {
 }
 
 .addon-toggle.is-active {
-  border-color: #86efac;
-  background: color-mix(in srgb, #22c55e 12%, var(--white));
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.38);
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.1) 0%, rgba(255, 255, 255, 0.98) 100%);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1);
 }
 
 .toggle-switch {
@@ -3553,19 +3792,109 @@ const printReservationJeton = async (booking) => {
 
 .addon-toggle-copy strong {
   color: var(--gray-900);
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 800;
 }
 
 .addon-toggle-copy small {
   color: var(--gray-500);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   line-height: 1.35;
 }
 
 .addon-price {
   color: var(--gray-900);
   font-weight: 800;
+  white-space: nowrap;
+  font-size: 1.05rem;
+}
+
+.addon-unit {
+  color: var(--gray-500);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.addon-qty-control {
+  display: grid;
+  gap: 8px;
+}
+
+.addon-qty-control.is-disabled {
+  opacity: 0.72;
+}
+
+.addon-qty-label {
+  color: var(--gray-500);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.addon-stepper {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--gray-200);
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.addon-step-btn {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--gray-700);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.addon-step-btn:hover:not(:disabled) {
+  border-color: rgba(37, 99, 235, 0.28);
+  color: #2563eb;
+  background: #eff6ff;
+  transform: translateY(-1px);
+}
+
+.addon-step-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.addon-qty-input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--gray-900);
+  font-size: 1rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.addon-line-total {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 900;
   white-space: nowrap;
 }
 
@@ -3580,7 +3909,14 @@ const printReservationJeton = async (booking) => {
 .addon-subs {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+}
+
+.addon-sub-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 290px);
+  gap: 14px;
+  align-items: stretch;
 }
 
 .addon-sub-line {
@@ -3623,7 +3959,7 @@ html[data-admin-theme="dark"] .addons-section {
 
 html[data-admin-theme="dark"] .addon-item {
   border-color: rgba(51, 65, 85, 0.95);
-  background: rgba(15, 23, 42, 0.74);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.86) 0%, rgba(15, 23, 42, 0.76) 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
@@ -3639,7 +3975,7 @@ html[data-admin-theme="dark"] .addon-toggle:hover {
 
 html[data-admin-theme="dark"] .addon-toggle.is-active {
   border-color: rgba(34, 197, 94, 0.55);
-  background: rgba(20, 83, 45, 0.34);
+  background: linear-gradient(180deg, rgba(20, 83, 45, 0.4) 0%, rgba(15, 23, 42, 0.92) 100%);
   box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
 }
 
@@ -3654,6 +3990,37 @@ html[data-admin-theme="dark"] .toggle-knob {
 
 html[data-admin-theme="dark"] .addon-price {
   color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .addon-unit,
+html[data-admin-theme="dark"] .addon-qty-label {
+  color: #cbd5e1;
+}
+
+html[data-admin-theme="dark"] .addon-side,
+html[data-admin-theme="dark"] .addon-stepper,
+html[data-admin-theme="dark"] .addon-qty-control,
+html[data-admin-theme="dark"] .addon-qty-input {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(51, 65, 85, 0.95);
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .addon-step-btn {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(51, 65, 85, 0.95);
+  color: #e2e8f0;
+}
+
+html[data-admin-theme="dark"] .addon-step-btn:hover:not(:disabled) {
+  background: rgba(30, 64, 175, 0.18);
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #bfdbfe;
+}
+
+html[data-admin-theme="dark"] .addon-line-total {
+  background: rgba(30, 64, 175, 0.16);
+  color: #93c5fd;
 }
 
 html[data-admin-theme="dark"] .addon-sub-head .muted-line,
@@ -3878,11 +4245,22 @@ html[data-admin-theme="dark"] .selected-period-value {
     flex-direction: column;
     align-items: stretch;
   }
+  .addon-side,
+  .addon-sub-row {
+    grid-template-columns: 1fr;
+  }
+  .addon-line {
+    grid-template-columns: 1fr;
+  }
   .addon-sub-line {
     align-items: flex-start;
   }
   .addon-price {
-    padding-left: 62px;
+    padding-left: 0;
+  }
+  .addon-side-top {
+    flex-direction: column;
+    align-items: flex-start;
   }
   .room-selection-grid {
     grid-template-columns: 1fr;
