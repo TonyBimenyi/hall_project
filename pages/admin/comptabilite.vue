@@ -651,6 +651,7 @@ onMounted(async () => {
   padding: 0;
 }
 
+
 .page-header {
   display: flex;
   align-items: flex-start;
@@ -661,6 +662,7 @@ onMounted(async () => {
 }
 
 .page-header h1 {
+  font-size: 1.75rem;
   margin: 0 0 0.35rem;
 }
 
@@ -700,6 +702,9 @@ onMounted(async () => {
   left: 14px;
   transform: translateY(-50%);
   color: var(--gray-400);
+}
+.ledger-head h2{
+  font-size: 1.75rem;
 }
 
 .search-input-clean,
@@ -901,6 +906,12 @@ onMounted(async () => {
 .ledger-head .table-title {
   margin: 0 0 0.35rem;
 }
+
+.table-title{
+  font-size: 1.75 rem;
+}
+
+
 
 .ledger-subtitle {
   margin: 0;

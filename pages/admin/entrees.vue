@@ -726,6 +726,7 @@ onMounted(() => {
 
 .page-header h1,
 .table-topbar h2 {
+  font-size: 1.75rem;
   margin: 0 0 0.35rem;
 }
 
