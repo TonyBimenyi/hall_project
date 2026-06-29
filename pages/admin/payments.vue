@@ -537,7 +537,7 @@ import { canExportAdminExcel, canManagePayments as canManagePaymentsByRole, canS
 
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
-const { escapeHtml } = useDocumentBranding()
+const { escapeHtml, documentBranding } = useDocumentBranding()
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName, openPrintPreviewHtml } = useAdminExportDocuments()
 const { formatMoney, moneyInputModel } = useMoney()
 const { formatDateRange, formatDisplayDate, formatDateTime } = useDateFormat()
@@ -704,6 +704,8 @@ const buildInvoicePdfHtml = (payment) => {
   const paymentCode = getPaymentDisplayId(payment)
   const reservationCode = String(payment?.booking_code || '').trim() || `Reservation #${payment?.booking || '-'}`
   const paymentTypeLabel = payment?.kind === 'full' ? 'Paiement total' : 'Avance'
+  const businessTaxId = String(documentBranding?.taxId || '').trim() || '4003469600'
+  const businessRcNumber = String(documentBranding?.rcNumber || '').trim() || '0084351/26'
   const reservationTypeLabel = payment?.booking_type === 'room'
     ? ((Number(payment?.booking_room_count || 0) > 1) ? 'Chambres' : 'Chambre')
     : 'Salle'
@@ -714,6 +716,8 @@ const buildInvoicePdfHtml = (payment) => {
     ['Date', formatDisplayDate(payment?.date)],
     ['Client', payment?.booking_customer_name || 'Client'],
     ['Email client', payment?.booking_customer_email || '-'],
+    ['NIF', businessTaxId],
+    ['Numéro RC', businessRcNumber],
     ['Référence', payment?.reference || '-'],
     ['Méthode', payment?.method || '-'],
     ['Type', paymentTypeLabel],

@@ -15,6 +15,8 @@ DEFAULT_BRANDING = {
     'tagline': 'Reception & Evenementiel',
     'email': 'info@labertha-villa.com',
     'address': 'Karurama, Cibitoke, Bujumbura, Burundi',
+    'taxId': '4003469600',
+    'rcNumber': '0084351/26',
     'contacts': ['+257 66 47 66 43', '+257 76 65 39 31', 'info@labertha-villa.com'],
     'documents': {
         'invoiceTitle': 'Recu de paiement',
@@ -98,6 +100,8 @@ def _build_payment_invoice_html(payment, booking, branding):
         item_name = getattr(booking, 'room_display_summary', '') or item_name
     contacts = [str(item).strip() for item in (branding.get('contacts') or []) if str(item).strip()]
     contacts_text = ' | '.join(escape(item) for item in contacts) if contacts else '-'
+    tax_id = str(branding.get('taxId') or DEFAULT_BRANDING['taxId']).strip() or DEFAULT_BRANDING['taxId']
+    rc_number = str(branding.get('rcNumber') or DEFAULT_BRANDING['rcNumber']).strip() or DEFAULT_BRANDING['rcNumber']
 
     return f"""<!DOCTYPE html>
 <html lang="fr">
@@ -182,6 +186,8 @@ def _build_payment_invoice_html(payment, booking, branding):
       <div style="margin-top:28px;padding-top:20px;border-top:1px solid #e2e8f0;color:#475569;font-size:14px;line-height:1.7;">
         <div style="font-weight:700;color:#0f172a;margin-bottom:6px;">Adresse et contact</div>
         <div>{escape(branding.get('address') or DEFAULT_BRANDING['address'])}</div>
+        <div>NIF: {escape(tax_id)}</div>
+        <div>Numero RC: {escape(rc_number)}</div>
         <div>{contacts_text}</div>
       </div>
     </div>
@@ -201,6 +207,8 @@ def _build_payment_invoice_text(payment, booking, branding):
         item_label = 'Chambres' if len(getattr(booking, 'selected_room_ids', []) or []) > 1 else 'Chambre'
         item_name = getattr(booking, 'room_display_summary', '') or item_name
     contacts = [str(item).strip() for item in (branding.get('contacts') or []) if str(item).strip()]
+    tax_id = str(branding.get('taxId') or DEFAULT_BRANDING['taxId']).strip() or DEFAULT_BRANDING['taxId']
+    rc_number = str(branding.get('rcNumber') or DEFAULT_BRANDING['rcNumber']).strip() or DEFAULT_BRANDING['rcNumber']
     return (
         f"Bonjour {booking.customer_name or 'Client'},\n\n"
         "Votre paiement a bien ete enregistre. Voici votre facture de paiement.\n\n"
@@ -218,6 +226,8 @@ def _build_payment_invoice_text(payment, booking, branding):
         f"Total reservation : {_format_money(booking.total_price)}\n"
         f"Reste a payer : {_format_money(remaining)}\n\n"
         f"Adresse : {branding.get('address') or DEFAULT_BRANDING['address']}\n"
+        f"NIF : {tax_id}\n"
+        f"Numero RC : {rc_number}\n"
         f"Contacts : {' | '.join(contacts) if contacts else '-'}\n"
     )
 
