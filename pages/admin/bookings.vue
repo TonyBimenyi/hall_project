@@ -1180,13 +1180,25 @@ const fetchCalendarRanges = async () => {
       calendarRanges.value = Array.isArray(res.data) ? res.data : []
       return
     }
+    const seen = new Set()
     const ranges = []
     for (const roomId of selectedRoomIds.value) {
-      const res = await api.get('bookings/calendar/', { params: { room: roomId } })
-      const items = Array.isArray(res.data) ? res.data : []
-      ranges.push(...items)
+      const entries = roomBookingsIndex.value.get(String(roomId || '')) || []
+      for (const booking of entries) {
+        const key = `${roomId}:${booking.id}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        ranges.push({
+          start_date: booking.start_date,
+          end_date: booking.end_date,
+          room: roomId,
+          booking: booking.id,
+          status: booking.status,
+          code: booking.code,
+        })
+      }
     }
-    calendarRanges.value = ranges
+    calendarRanges.value = ranges.sort((left, right) => String(left.start_date || '').localeCompare(String(right.start_date || '')))
   } catch {
     calendarRanges.value = []
   }
@@ -1444,6 +1456,43 @@ const selectedRoomIds = computed(() => {
 const selectedRooms = computed(() => rooms.value.filter(r => selectedRoomIds.value.includes(String(r.id))))
 const selectedRoom = computed(() => rooms.value.find(r => String(r.id) === String(form.value.room)) || null)
 const selectedItem = computed(() => form.value.booking_type === 'hall' ? selectedHall.value : selectedRoom.value)
+const activeRoomBookings = computed(() => {
+  return (bookings.value || [])
+    .filter((booking) => booking.booking_type === 'room' && String(booking.status || '') !== 'cancelled' && Number(booking.id || 0) !== Number(form.value.id || 0))
+    .map((booking) => {
+      const roomIds = Array.isArray(booking.room_ids)
+        ? booking.room_ids.map(id => String(id || '').trim()).filter(Boolean)
+        : (booking.room ? [String(booking.room).trim()] : [])
+      return {
+        id: Number(booking.id || 0),
+        code: String(booking.code || '').trim(),
+        status: String(booking.status || '').trim(),
+        start_date: String(booking.start_date || '').slice(0, 10),
+        end_date: String(booking.end_date || '').slice(0, 10),
+        roomIds,
+      }
+    })
+    .filter(booking => booking.roomIds.length && booking.start_date && booking.end_date)
+})
+const roomBookingsIndex = computed(() => {
+  const map = new Map()
+  for (const booking of activeRoomBookings.value) {
+    for (const roomId of booking.roomIds) {
+      if (!map.has(roomId)) map.set(roomId, [])
+      map.get(roomId).push(booking)
+    }
+  }
+  return map
+})
+const sameStringArray = (left, right) => {
+  if (left === right) return true
+  if (!Array.isArray(left) || !Array.isArray(right)) return false
+  if (left.length !== right.length) return false
+  for (let i = 0; i < left.length; i += 1) {
+    if (String(left[i] || '') !== String(right[i] || '')) return false
+  }
+  return true
+}
 const normalizeAddonQuantity = (value) => {
   const quantity = Number.parseInt(String(value ?? '').trim(), 10)
   return Number.isFinite(quantity) && quantity > 0 ? quantity : 1
@@ -1532,18 +1581,10 @@ const roomAvailabilityMap = computed(() => {
   const end = String(form.value.end_date || '').slice(0, 10)
   for (const room of rooms.value) {
     const roomId = String(room?.id || '')
-    const unavailable = String(room?.status || '') === 'maintenance' || bookings.value.some((booking) => {
-      if (booking.booking_type !== 'room' || String(booking.status || '') === 'cancelled') return false
-      if (Number(booking.id) === Number(form.value.id || 0)) return false
-      const bookingRoomIds = Array.isArray(booking.room_ids)
-        ? booking.room_ids.map(id => String(id || '').trim()).filter(Boolean)
-        : (booking.room ? [String(booking.room)] : [])
-      if (!bookingRoomIds.includes(roomId)) return false
-      if (!start || !end) return false
-      const bookingStart = String(booking.start_date || '').slice(0, 10)
-      const bookingEnd = String(booking.end_date || '').slice(0, 10)
-      return Boolean(bookingStart && bookingEnd && bookingStart <= end && bookingEnd >= start)
-    })
+    const entries = roomBookingsIndex.value.get(roomId) || []
+    const unavailable = String(room?.status || '') === 'maintenance' || Boolean(
+      start && end && entries.some(booking => booking.start_date <= end && booking.end_date >= start)
+    )
     map.set(roomId, unavailable)
   }
   return map
@@ -1554,25 +1595,18 @@ const roomBookingConflictsMap = computed(() => {
   const end = String(form.value.end_date || '').slice(0, 10)
   for (const room of rooms.value) {
     const roomId = String(room?.id || '')
-    const conflicts = bookings.value.filter((booking) => {
-      if (booking.booking_type !== 'room' || String(booking.status || '') === 'cancelled') return false
-      if (Number(booking.id) === Number(form.value.id || 0)) return false
-      const bookingRoomIds = Array.isArray(booking.room_ids)
-        ? booking.room_ids.map(id => String(id || '').trim()).filter(Boolean)
-        : (booking.room ? [String(booking.room)] : [])
-      if (!bookingRoomIds.includes(roomId)) return false
-      const bookingStart = String(booking.start_date || '').slice(0, 10)
-      const bookingEnd = String(booking.end_date || '').slice(0, 10)
-      if (!bookingStart || !bookingEnd) return false
-      if (start && end) return bookingStart <= end && bookingEnd >= start
-      return true
-    }).map((booking) => ({
-      id: booking.id,
-      start_date: String(booking.start_date || '').slice(0, 10),
-      end_date: String(booking.end_date || '').slice(0, 10),
-      status: String(booking.status || ''),
-      code: booking.code || '',
-    }))
+    const conflicts = (roomBookingsIndex.value.get(roomId) || [])
+      .filter((booking) => {
+        if (!start || !end) return true
+        return booking.start_date <= end && booking.end_date >= start
+      })
+      .map((booking) => ({
+        id: booking.id,
+        start_date: booking.start_date,
+        end_date: booking.end_date,
+        status: booking.status,
+        code: booking.code,
+      }))
     map.set(roomId, conflicts)
   }
   return map
@@ -1638,13 +1672,20 @@ const addonsTotal = computed(() => {
 
 const syncPrimaryRoomSelection = () => {
   if (form.value.booking_type !== 'room') {
-    form.value.room = ''
-    form.value.rooms_selected = []
+    if (form.value.room) form.value.room = ''
+    if (Array.isArray(form.value.rooms_selected) && form.value.rooms_selected.length) {
+      form.value.rooms_selected = []
+    }
     return
   }
   const normalized = selectedRoomIds.value
-  form.value.rooms_selected = normalized
-  form.value.room = normalized[0] || ''
+  if (!sameStringArray(form.value.rooms_selected, normalized)) {
+    form.value.rooms_selected = normalized
+  }
+  const nextPrimaryRoom = normalized[0] || ''
+  if (String(form.value.room || '') !== nextPrimaryRoom) {
+    form.value.room = nextPrimaryRoom
+  }
 }
 
 const toggleRoomSelection = (roomId) => {
@@ -1658,12 +1699,9 @@ const toggleRoomSelection = (roomId) => {
     next.push(roomKey)
   }
   form.value.rooms_selected = next
-  syncPrimaryRoomSelection()
-  if (selectedRoomIds.value.length !== 1) {
+  if (next.length !== 1) {
     form.value.additional_services_selected = []
   }
-  fetchCalendarRanges()
-  calculatePrice()
 }
 
 const onCustomerKindChange = () => {
@@ -1759,7 +1797,7 @@ watch(
 )
 
 watch(
-  () => form.value.rooms_selected,
+  () => selectedRoomIds.value.join('|'),
   () => {
     if (!showFormModal.value || form.value.booking_type !== 'room') return
     syncPrimaryRoomSelection()
@@ -1769,7 +1807,7 @@ watch(
     fetchCalendarRanges()
     calculatePrice()
   },
-  { deep: true }
+  { immediate: false }
 )
 
 watch(

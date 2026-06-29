@@ -1,9 +1,9 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
-from .models import Hall, Booking, Personnel, Material, Expense, Payment, Notification, MagicLoginToken, AccountSecurityProfile, Room, Customer
+from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Notification, MagicLoginToken, AccountSecurityProfile, Room, Customer
 from .serializers import (
     HallSerializer, BookingSerializer, PersonnelSerializer,
-    MaterialSerializer, ExpenseSerializer, PaymentSerializer, NotificationSerializer, RoomSerializer, CustomerSerializer
+    MaterialSerializer, ExpenseSerializer, EntreeSerializer, PaymentSerializer, NotificationSerializer, RoomSerializer, CustomerSerializer
 )
 
 from rest_framework.views import APIView
@@ -1824,6 +1824,22 @@ class MaterialViewSet(viewsets.ModelViewSet):
 class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = Expense.objects.all().order_by('-id')
     serializer_class = ExpenseSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if _staff_role_key(getattr(self.request, 'user', None)) == 'receptionniste':
+            return queryset.filter(created_by=self.request.user)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=_actor(self.request))
+
+class EntreeViewSet(viewsets.ModelViewSet):
+    queryset = Entree.objects.all().order_by('-id')
+    serializer_class = EntreeSerializer
 
     def get_queryset(self):
         queryset = super().get_queryset()

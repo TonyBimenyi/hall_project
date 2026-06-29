@@ -11,6 +11,7 @@ router.register(r'bookings', views.BookingViewSet)
 router.register(r'personnel', views.PersonnelViewSet)
 router.register(r'materials', views.MaterialViewSet)
 router.register(r'expenses', views.ExpenseViewSet)
+router.register(r'entrees', views.EntreeViewSet)
 router.register(r'payments', views.PaymentViewSet)
 
 urlpatterns = [

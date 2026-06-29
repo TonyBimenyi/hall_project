@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from decimal import Decimal
 from django.db.models import Q
-from .models import Hall, Booking, Personnel, Material, Expense, Payment, Room, Notification, Customer
+from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Room, Notification, Customer
 
 def _user_label(user):
     if not user:
@@ -606,6 +606,32 @@ class ExpenseSerializer(serializers.ModelSerializer):
 
     def get_updated_by_name(self, obj):
         return _user_label(getattr(obj, 'updated_by', None))
+
+class EntreeSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Entree
+        fields = '__all__'
+
+    def get_created_by_name(self, obj):
+        return _user_label(getattr(obj, 'created_by', None))
+
+    def get_updated_by_name(self, obj):
+        return _user_label(getattr(obj, 'updated_by', None))
+
+    def validate(self, attrs):
+        amount = attrs.get('amount', getattr(self.instance, 'amount', None))
+        if amount is not None and Decimal(str(amount or 0)) <= 0:
+            raise serializers.ValidationError({'amount': 'Le montant doit être supérieur à 0'})
+        reference = str(attrs.get('reference', getattr(self.instance, 'reference', '')) or '').strip()
+        title = str(attrs.get('title', getattr(self.instance, 'title', '')) or '').strip()
+        if not reference:
+            raise serializers.ValidationError({'reference': 'La référence est requise'})
+        if not title:
+            raise serializers.ValidationError({'title': "L'intitulé est requis"})
+        return attrs
 
 class PaymentSerializer(serializers.ModelSerializer):
     booking_code = serializers.ReadOnlyField(source='booking.code')

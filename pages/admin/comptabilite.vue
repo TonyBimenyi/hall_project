@@ -54,6 +54,10 @@
         </select>
         <input v-if="preset === 'custom'" v-model="customStart" type="date" class="filter-input-clean" />
         <input v-if="preset === 'custom'" v-model="customEnd" type="date" class="filter-input-clean" />
+        <div class="current-balance-chip">
+          <span>Solde actuelle</span>
+          <strong :class="currentBalance >= 0 ? 'text-success' : 'text-danger'">{{ formatMoney(currentBalance) }}</strong>
+        </div>
       </div>
 
       <div class="filter-range-note">
@@ -71,6 +75,13 @@
           </div>
         </div>
         <div class="stat-card card">
+          <div class="stat-icon info"><i class="fas fa-money-check-dollar"></i></div>
+          <div class="stat-info">
+            <span class="label">Entrees manuelles</span>
+            <span class="value info">{{ formatMoney(totalManualEntrees) }}</span>
+          </div>
+        </div>
+        <div class="stat-card card">
           <div class="stat-icon danger"><i class="fas fa-arrow-trend-down"></i></div>
           <div class="stat-info">
             <span class="label">Depenses</span>
@@ -78,14 +89,7 @@
           </div>
         </div>
         <div class="stat-card card">
-          <div class="stat-icon primary"><i class="fas fa-scale-balanced"></i></div>
-          <div class="stat-info">
-            <span class="label">Solde net</span>
-            <span class="value" :class="netBalance >= 0 ? 'success' : 'danger'">{{ formatMoney(netBalance) }}</span>
-          </div>
-        </div>
-        <div class="stat-card card">
-          <div class="stat-icon info"><i class="fas fa-receipt"></i></div>
+          <div class="stat-icon primary"><i class="fas fa-receipt"></i></div>
           <div class="stat-info">
             <span class="label">Pieces</span>
             <span class="value info">{{ filteredEntries.length }}</span>
@@ -109,7 +113,7 @@
             <strong>{{ lastVoucherLabel }}</strong>
           </div>
           <div class="summary-chip">
-            <span class="summary-chip-label">Solde final</span>
+            <span class="summary-chip-label">Solde periode</span>
             <strong :class="netBalance >= 0 ? 'text-success' : 'text-danger'">{{ formatMoney(netBalance) }}</strong>
           </div>
         </div>
@@ -119,7 +123,7 @@
         <div class="ledger-head">
           <div>
             <h2 class="table-title">Grand livre comptable</h2>
-            <p class="ledger-subtitle">Recettes issues des paiements encaisses et depenses issues des sorties de caisse validees.</p>
+            <p class="ledger-subtitle">Recettes issues des paiements encaisses, des entrees manuelles et des depenses validees.</p>
           </div>
           <AdminAppTablePagination
             :start="entriesStartIndex"
@@ -282,12 +286,14 @@ const { buildHashSequenceMap } = useDisplayIds()
 
 const payments = ref([])
 const expenses = ref([])
+const entrees = ref([])
 const currentUser = ref({})
 const exportRef = ref(null)
 const exportingPdf = ref(false)
 const exportingXls = ref(false)
 const loadingPayments = ref(false)
 const loadingExpenses = ref(false)
+const loadingEntrees = ref(false)
 const search = ref('')
 const entryTypeFilter = ref('')
 const preset = ref('28d')
@@ -297,7 +303,7 @@ const isMobile = ref(false)
 const filtersOpen = ref(false)
 
 const canExportExcel = computed(() => canExportAdminExcel(currentUser.value))
-const isLoading = computed(() => loadingPayments.value || loadingExpenses.value)
+const isLoading = computed(() => loadingPayments.value || loadingExpenses.value || loadingEntrees.value)
 
 const toNumber = (value) => Number(value || 0)
 const pad = (value, size = 4) => String(value || 0).padStart(size, '0')
@@ -431,8 +437,34 @@ const expenseEntries = computed(() => {
     })
 })
 
+const entreeEntries = computed(() => {
+  return (entrees.value || [])
+    .filter(entree => String(entree?.status || '') === 'paid')
+    .map((entree) => {
+      const title = String(entree?.title || '').trim() || 'Entree manuelle'
+      const receivedFrom = String(entree?.received_from || '').trim()
+      return {
+        entryKey: `entree-${entree.id}`,
+        sourceType: 'entree',
+        movementType: 'recette',
+        typeLabel: 'Recette',
+        id: Number(entree?.id || 0),
+        date: String(entree?.date || entree?.created_at || '').slice(0, 10),
+        createdAt: String(entree?.created_at || entree?.date || ''),
+        reference: String(entree?.reference || entree?.code || '').trim() || 'Entree',
+        referenceHint: entree?.code ? `Code entree: ${entree.code}` : '',
+        title,
+        subtitle: [entree?.category || '', receivedFrom].filter(Boolean).join(' • '),
+        actor: String(entree?.created_by_name || entree?.received_by || 'Systeme').trim() || 'Systeme',
+        actorHint: String(entree?.received_by || '').trim() || '',
+        recette: toNumber(entree?.amount),
+        depense: 0,
+      }
+    })
+})
+
 const ledgerEntriesAsc = computed(() => {
-  return [...paymentEntries.value, ...expenseEntries.value]
+  return [...paymentEntries.value, ...entreeEntries.value, ...expenseEntries.value]
     .filter(entry => entry.date)
     .sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date)
@@ -495,6 +527,12 @@ const decoratedEntries = computed(() => {
 const totalRecettes = computed(() => decoratedEntries.value.reduce((sum, entry) => sum + Number(entry.recette || 0), 0))
 const totalDepenses = computed(() => decoratedEntries.value.reduce((sum, entry) => sum + Number(entry.depense || 0), 0))
 const netBalance = computed(() => totalRecettes.value - totalDepenses.value)
+const totalManualEntrees = computed(() => entreeEntries.value.reduce((sum, entry) => sum + Number(entry.recette || 0), 0))
+const currentBalance = computed(() => {
+  const recettes = [...paymentEntries.value, ...entreeEntries.value].reduce((sum, entry) => sum + Number(entry.recette || 0), 0)
+  const depenses = expenseEntries.value.reduce((sum, entry) => sum + Number(entry.depense || 0), 0)
+  return recettes - depenses
+})
 const firstVoucherLabel = computed(() => decoratedEntries.value[0]?.voucherNumber || 'Aucune')
 const lastVoucherLabel = computed(() => decoratedEntries.value[decoratedEntries.value.length - 1]?.voucherNumber || 'Aucune')
 
@@ -541,6 +579,18 @@ const fetchExpenses = async () => {
   }
 }
 
+const fetchEntrees = async () => {
+  loadingEntrees.value = true
+  try {
+    const { data } = await api.get('entrees/')
+    entrees.value = Array.isArray(data) ? data : []
+  } catch {
+    notify('Erreur lors du chargement des entrees comptables', 'danger')
+  } finally {
+    loadingEntrees.value = false
+  }
+}
+
 const exportXls = async () => {
   if (!canExportExcel.value || !exportRef.value) return
   exportingXls.value = true
@@ -560,7 +610,7 @@ const exportPdf = async () => {
   const html = buildPdfDocumentHtml({
     title: 'Comptabilite',
     documentTitle: buildExportFileName('comptabilite', 'pdf').replace(/\.pdf$/, ''),
-    subtitle: 'Journal comptable des recettes et depenses exporte depuis l’administration.',
+    subtitle: 'Journal comptable des recettes, entrees manuelles et depenses exporte depuis l’administration.',
     typeLabel: 'Comptabilite PDF',
     tableTitles: ['Grand livre comptable'],
     periodLabel: rangeStartYmd.value && rangeEndYmd.value ? `${rangeStartYmd.value} -> ${rangeEndYmd.value}` : 'Toutes les dates',
@@ -578,7 +628,7 @@ const exportPdf = async () => {
 
 onMounted(async () => {
   currentUser.value = getStoredUser()
-  await Promise.all([fetchPayments(), fetchExpenses()])
+  await Promise.all([fetchPayments(), fetchExpenses(), fetchEntrees()])
   if (process.client) {
     const update = () => {
       const nextIsMobile = window.innerWidth <= 992
@@ -688,9 +738,35 @@ onMounted(async () => {
 
 .filters-panel {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin-top: 14px;
+}
+
+.current-balance-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 16px;
+  border: 1px solid var(--gray-200);
+  border-radius: 14px;
+  background: var(--white);
+  white-space: nowrap;
+}
+
+.current-balance-chip span {
+  color: var(--gray-500);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.current-balance-chip strong {
+  color: var(--gray-900);
+  font-size: 1rem;
 }
 
 .filter-range-note {
@@ -884,6 +960,7 @@ onMounted(async () => {
 :global(html[data-admin-theme="dark"]) .filter-select-clean,
 :global(html[data-admin-theme="dark"]) .filter-input-clean,
 :global(html[data-admin-theme="dark"]) .filters-toggle,
+:global(html[data-admin-theme="dark"]) .current-balance-chip,
 :global(html[data-admin-theme="dark"]) .summary-chip,
 :global(html[data-admin-theme="dark"]) .ledger-card,
 :global(html[data-admin-theme="dark"]) .table-total-row td {
@@ -895,6 +972,7 @@ onMounted(async () => {
 :global(html[data-admin-theme="dark"]) .filter-range-note,
 :global(html[data-admin-theme="dark"]) .ledger-subtitle,
 :global(html[data-admin-theme="dark"]) .accounting-summary-main p,
+:global(html[data-admin-theme="dark"]) .current-balance-chip span,
 :global(html[data-admin-theme="dark"]) .summary-chip-label,
 :global(html[data-admin-theme="dark"]) .accounting-table .cell-sub,
 :global(html[data-admin-theme="dark"]) .actor-hint,
@@ -904,6 +982,7 @@ onMounted(async () => {
 
 :global(html[data-admin-theme="dark"]) .page-header h1,
 :global(html[data-admin-theme="dark"]) .accounting-summary-main h2,
+:global(html[data-admin-theme="dark"]) .current-balance-chip strong,
 :global(html[data-admin-theme="dark"]) .stat-info .value,
 :global(html[data-admin-theme="dark"]) .summary-chip strong,
 :global(html[data-admin-theme="dark"]) .accounting-table .cell-main,

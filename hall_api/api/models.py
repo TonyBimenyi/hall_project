@@ -400,6 +400,34 @@ class Expense(models.Model):
     def __str__(self):
         return self.description
 
+class Entree(models.Model):
+    STATUS_CHOICES = [
+        ('paid', 'Validee'),
+        ('pending', 'En attente'),
+    ]
+    date = models.DateField()
+    reference = models.CharField(max_length=80)
+    title = models.CharField(max_length=255)
+    category = models.CharField(max_length=100, blank=True, default='Autre')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    received_from = models.CharField(max_length=120, blank=True, default='')
+    received_by = models.CharField(max_length=120, blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='paid')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_entrees')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_entrees')
+    code = models.CharField(max_length=20, unique=True, editable=False, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = _next_monthly_code(Entree, 'LBE', self.created_at)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title or self.reference
+
 class Payment(models.Model):
     STATUS_CHOICES = [
         ('paid', 'Complété'),

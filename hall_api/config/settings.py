@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-1n@x%q^nl73*ywg879wh2!x!uvmn2wpt)3(c-1iit46!l(=c&p
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost','api.labertha-villa.com']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost','api.labertha-villa.com','testapi.labertha-villa.com']
 
 
 # Application definition
@@ -66,6 +66,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'https://labertha-villa.com',
     'https://www.labertha-villa.com',
+    'https://test.labertha-villa.com',
+    'https://www.test.labertha-villa.com',
 ]
 
 REST_FRAMEWORK = {
@@ -132,12 +134,31 @@ else:
         }
     }
 
+# TEST DATABASE CONFIG (MYSQL ONLY)
+
 # DATABASE CONFIG (MYSQL ONLY)
 # DATABASES = {
 #     'default': {
 #         'ENGINE': 'django.db.backends.mysql',
 #         'NAME': os.environ.get('MYSQL_DATABASE', 'c2802838c_labertha_hall_api'),
 #         'USER': os.environ.get('MYSQL_USER', 'c2802838c_labertha'),
+#         'PASSWORD': os.environ.get('MYSQL_PASSWORD', '@Shenyang1,'),
+#         'HOST': os.environ.get('MYSQL_HOST', '127.0.0.1'),
+#         'PORT': os.environ.get('MYSQL_PORT', '3306'),
+#         'OPTIONS': {
+#             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+#         }
+#     }
+# }
+
+# TEST DATABASE CONFIG (MYSQL ONLY)
+
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': os.environ.get('MYSQL_DATABASE', 'c2802838c_test_labertha'),
+#         'USER': os.environ.get('MYSQL_USER', 'c2802838c_test_labertha'),
 #         'PASSWORD': os.environ.get('MYSQL_PASSWORD', '@Shenyang1,'),
 #         'HOST': os.environ.get('MYSQL_HOST', '127.0.0.1'),
 #         'PORT': os.environ.get('MYSQL_PORT', '3306'),
