@@ -508,6 +508,45 @@ def _compute_booking_totals(item: Hall | Room, start_dt: date, end_dt: date, sel
     return base_total, addons_total, total, normalized_selected
 
 
+def _compute_room_booking_totals(selected_rooms, start_dt: date, end_dt: date, selected_services):
+    if end_dt < start_dt:
+        raise DjangoValidationError('La date fin doit être après la date début')
+    days = (end_dt - start_dt).days + 1
+    room_total = sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)
+    base_total = (Decimal(days) * room_total).quantize(Decimal('0.01'))
+
+    room_services_map = {}
+    if isinstance(selected_services, list) and selected_services:
+        has_room_groups = all(isinstance(item, dict) and ('room_id' in item or 'services' in item) for item in selected_services)
+        if has_room_groups:
+            for item in selected_services:
+                try:
+                    room_id = int(item.get('room_id'))
+                except (TypeError, ValueError):
+                    continue
+                room_services_map[room_id] = item.get('services') or []
+        elif len(selected_rooms) == 1:
+            room_services_map[selected_rooms[0].id] = selected_services
+
+    addons_total = Decimal('0.00')
+    normalized_selected = []
+    for room in selected_rooms:
+        room_services = room_services_map.get(room.id) or []
+        if not room_services:
+            continue
+        room_addons_total, normalized_room_services = _compute_addons_total(room, room_services)
+        addons_total += room_addons_total
+        if normalized_room_services:
+            normalized_selected.append({
+                'room_id': room.id,
+                'services': normalized_room_services,
+            })
+
+    addons_total = addons_total.quantize(Decimal('0.01'))
+    total = (base_total + addons_total).quantize(Decimal('0.01'))
+    return base_total, addons_total, total, normalized_selected
+
+
 def _normalize_booking_room_ids(booking):
     if not booking or getattr(booking, 'booking_type', '') != 'room':
         return []
@@ -1180,16 +1219,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             _, addons_total, total, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected)
         else:
             selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
-            addons_total = Decimal('0.00')
-            normalized_selected = []
-            total = Decimal('0.00')
-            if end_dt < start_dt:
-                raise DjangoValidationError('La date fin doit être après la date début')
-            days = (end_dt - start_dt).days + 1
-            room_total = sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)
-            total = (Decimal(days) * room_total).quantize(Decimal('0.01'))
-            if len(selected_rooms) == 1:
-                _, addons_total, total, normalized_selected = _compute_booking_totals(selected_rooms[0], start_dt, end_dt, selected)
+            _, addons_total, total, normalized_selected = _compute_room_booking_totals(selected_rooms, start_dt, end_dt, selected)
         save_kwargs = {
             'created_by': self.request.user,
             'updated_by': self.request.user,
@@ -1248,16 +1278,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             _, addons_total, total, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected)
         else:
             selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
-            addons_total = Decimal('0.00')
-            normalized_selected = []
-            total = Decimal('0.00')
-            if end_dt < start_dt:
-                raise DjangoValidationError('La date fin doit être après la date début')
-            days = (end_dt - start_dt).days + 1
-            room_total = sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)
-            total = (Decimal(days) * room_total).quantize(Decimal('0.01'))
-            if len(selected_rooms) == 1:
-                _, addons_total, total, normalized_selected = _compute_booking_totals(selected_rooms[0], start_dt, end_dt, selected)
+            _, addons_total, total, normalized_selected = _compute_room_booking_totals(selected_rooms, start_dt, end_dt, selected)
         save_kwargs = {
             'updated_by': _actor(self.request),
             'customer': resolved_customer,

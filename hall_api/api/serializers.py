@@ -378,10 +378,25 @@ class BookingSerializer(serializers.ModelSerializer):
                         'room_ids': f"Ces chambres ne sont pas disponibles pour cette période: {', '.join(str(room) for room in conflicts)}"
                     })
             selected_services = data.get('additional_services_selected', getattr(instance, 'additional_services_selected', []))
-            if len(normalized_room_ids) != 1 and selected_services:
-                raise serializers.ValidationError({
-                    'additional_services_selected': 'Les services additionnels sont disponibles uniquement pour une réservation avec une seule chambre'
-                })
+            if selected_services:
+                has_room_groups = all(isinstance(item, dict) and ('room_id' in item or 'services' in item) for item in selected_services)
+                if len(normalized_room_ids) > 1 and not has_room_groups:
+                    raise serializers.ValidationError({
+                        'additional_services_selected': 'Pour plusieurs chambres, les services doivent etre classes par chambre'
+                    })
+                if has_room_groups:
+                    seen_room_ids = set()
+                    for item in selected_services:
+                        room_id = item.get('room_id')
+                        if room_id not in normalized_room_ids:
+                            raise serializers.ValidationError({
+                                'additional_services_selected': "Un service est lie a une chambre qui n'appartient pas a la reservation"
+                            })
+                        if room_id in seen_room_ids:
+                            raise serializers.ValidationError({
+                                'additional_services_selected': 'Une chambre ne peut apparaitre qu une seule fois dans les services'
+                            })
+                        seen_room_ids.add(room_id)
 
         if customer_kind == 'organization' and not organization_name:
             raise serializers.ValidationError({'organization_name': "Le nom de l'organisation est requis"})
@@ -410,33 +425,54 @@ class BookingSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"La quantité doit être supérieure ou égale à 1 pour '{label}'")
             return quantity
 
+        def _normalize_service_items(items):
+            normalized_items = []
+            for item in items:
+                if not isinstance(item, dict):
+                    raise serializers.ValidationError('Format de service sélectionné invalide')
+                name = str(item.get('name') or '').strip()
+                if not name:
+                    raise serializers.ValidationError("Chaque service sélectionné doit avoir un nom")
+                quantity = _normalize_quantity(item.get('quantity', 1), label=name)
+
+                subservices = item.get('subservices') or []
+                if subservices and not isinstance(subservices, list):
+                    raise serializers.ValidationError(f"Sous-services invalides pour '{name}'")
+
+                normalized_subservices = []
+                for sub in subservices:
+                    if not isinstance(sub, dict):
+                        raise serializers.ValidationError(f"Sous-service invalide pour '{name}'")
+                    sub_name = str(sub.get('name') or '').strip()
+                    if not sub_name:
+                        raise serializers.ValidationError(f"Chaque sous-service de '{name}' doit avoir un nom")
+                    sub_quantity = _normalize_quantity(sub.get('quantity', 1), label=sub_name)
+                    normalized_subservices.append({'name': sub_name, 'quantity': sub_quantity})
+
+                payload = {'name': name, 'quantity': quantity}
+                if normalized_subservices:
+                    payload['subservices'] = normalized_subservices
+                normalized_items.append(payload)
+            return normalized_items
+
+        has_room_groups = any(isinstance(item, dict) and ('room_id' in item or 'services' in item) for item in value)
+        if not has_room_groups:
+            return _normalize_service_items(value)
+
         normalized = []
         for item in value:
             if not isinstance(item, dict):
-                raise serializers.ValidationError('Format de service sélectionné invalide')
-            name = str(item.get('name') or '').strip()
-            if not name:
-                raise serializers.ValidationError("Chaque service sélectionné doit avoir un nom")
-            quantity = _normalize_quantity(item.get('quantity', 1), label=name)
-
-            subservices = item.get('subservices') or []
-            if subservices and not isinstance(subservices, list):
-                raise serializers.ValidationError(f"Sous-services invalides pour '{name}'")
-
-            normalized_subservices = []
-            for sub in subservices:
-                if not isinstance(sub, dict):
-                    raise serializers.ValidationError(f"Sous-service invalide pour '{name}'")
-                sub_name = str(sub.get('name') or '').strip()
-                if not sub_name:
-                    raise serializers.ValidationError(f"Chaque sous-service de '{name}' doit avoir un nom")
-                sub_quantity = _normalize_quantity(sub.get('quantity', 1), label=sub_name)
-                normalized_subservices.append({'name': sub_name, 'quantity': sub_quantity})
-
-            payload = {'name': name, 'quantity': quantity}
-            if normalized_subservices:
-                payload['subservices'] = normalized_subservices
-            normalized.append(payload)
+                raise serializers.ValidationError('Format de groupe de services invalide')
+            try:
+                room_id = int(item.get('room_id'))
+            except (TypeError, ValueError):
+                raise serializers.ValidationError("Chaque groupe de services doit avoir une chambre valide")
+            services = item.get('services') or []
+            if services and not isinstance(services, list):
+                raise serializers.ValidationError('Les services d une chambre doivent etre une liste')
+            normalized_services = _normalize_service_items(services)
+            if normalized_services:
+                normalized.append({'room_id': room_id, 'services': normalized_services})
 
         return normalized
 
