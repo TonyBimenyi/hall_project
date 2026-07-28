@@ -988,10 +988,10 @@
     </AdminAppModal>
 
     <!-- View Modal -->
-    <AdminAppModal v-model="showViewModal" title="Détails de la réservation" width="640px">
+    <AdminAppModal v-model="showViewModal" title="Détails de la réservation" width="560px">
       <div v-if="selectedBooking" class="entity-view-modal">
         <div class="entity-view-hero">
-          <div class="entity-view-avatar">{{ String(selectedBooking.customer_name || 'RE').trim().slice(0, 2).toUpperCase() }}</div>
+          <div class="entity-view-avatar">{{ nameInitials(selectedBooking.customer_name) || 'RE' }}</div>
           <div class="entity-view-main">
             <div class="entity-view-code">{{ getBookingDisplayId(selectedBooking) }}</div>
             <h3>{{ selectedBooking.customer_name }}</h3>
@@ -1007,16 +1007,24 @@
           <section class="entity-view-card">
             <div class="entity-view-card-title">Réservation</div>
             <div class="entity-view-list">
-              <div class="entity-view-item"><span class="entity-view-label">Email</span><span class="entity-view-value">{{ selectedBooking.customer_email || '-' }}</span></div>
-              <div class="entity-view-item"><span class="entity-view-label">Téléphone</span><span class="entity-view-value">{{ selectedBooking.customer_phone || '-' }}</span></div>
-              <div v-if="selectedBooking.customer_kind === 'organization'" class="entity-view-item"><span class="entity-view-label">Organisation</span><span class="entity-view-value">{{ selectedBooking.organization_name || selectedBooking.customer_name || '-' }}</span></div>
-              <div v-if="selectedBooking.customer_kind === 'organization'" class="entity-view-item"><span class="entity-view-label">Contact</span><span class="entity-view-value">{{ selectedBooking.organization_contact_name || selectedBooking.guest_full_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">{{ selectedBooking.booking_type === 'hall' ? 'Salle' : 'Chambre' }}</span><span class="entity-view-value">{{ selectedBooking.booking_type === 'hall' ? selectedBooking.hall_name : selectedBooking.room_display || 'N/A' }}</span></div>
               <div v-if="selectedBooking.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Statut chambre</span><span class="entity-view-value">{{ roomStatusLabel(selectedBooking.room_status) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Événement</span><span class="entity-view-value">{{ selectedBooking.event_type }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedBooking.start_date, selectedBooking.end_date) }}</span></div>
+            </div>
+          </section>
+
+          <section class="entity-view-card">
+            <div class="entity-view-card-title">Client et Paiement</div>
+            <div class="entity-view-list">
+              <div class="entity-view-item"><span class="entity-view-label">Client</span><span class="entity-view-value">{{ selectedBooking.customer_name }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Email</span><span class="entity-view-value">{{ selectedBooking.customer_email || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Téléphone</span><span class="entity-view-value">{{ selectedBooking.customer_phone || '-' }}</span></div>
+              <div v-if="selectedBooking.customer_kind === 'organization'" class="entity-view-item"><span class="entity-view-label">Organisation</span><span class="entity-view-value">{{ selectedBooking.organization_name || selectedBooking.customer_name || '-' }}</span></div>
+              <div v-if="selectedBooking.customer_kind === 'organization'" class="entity-view-item"><span class="entity-view-label">Contact</span><span class="entity-view-value">{{ selectedBooking.organization_contact_name || selectedBooking.guest_full_name || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Montant total</span><span class="entity-view-value">{{ formatMoney(selectedBooking.total_price) }}</span></div>
               <div v-if="Number(selectedBooking.addons_total || 0) > 0" class="entity-view-item"><span class="entity-view-label">Services additionnels</span><span class="entity-view-value">{{ formatMoney(selectedBooking.addons_total) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ getStatusTranslation(selectedBooking.status) }}</span></div>
             </div>
           </section>
 
@@ -2674,6 +2682,22 @@ const getStatusTranslation = (status) => {
   return map[status] || status
 }
 
+const nameInitials = (name) => {
+  const value = String(name || '').trim()
+  if (!value) return ''
+  const words = value.split(/\s+/).filter(Boolean)
+  const pick = []
+  if (words.length >= 2) {
+    pick.push(words[0][0])
+    pick.push(words[words.length - 1][0])
+  } else {
+    const w = words[0] || ''
+    pick.push(w[0])
+    if (w[1]) pick.push(w[1])
+  }
+  return pick.filter(Boolean).map(c => String(c).toUpperCase()).join('.')
+}
+
 const getBadgeClass = (status) => {
   const map = {
     pending: 'badge-warning',
@@ -4089,60 +4113,130 @@ const printReservationJeton = async (booking) => {
 
 .addons-section {
   border-top: 1px solid var(--gray-200);
-  padding-top: 14px;
+  padding-top: 20px;
 }
 
 .addons-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 16px;
+  padding: 6px 2px 14px;
+  margin-bottom: 2px;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.94) 72%, rgba(255, 255, 255, 0) 100%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.addons-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0) 0%, rgba(148, 163, 184, 0.45) 50%, rgba(148, 163, 184, 0) 100%);
+}
+
+.addons-head strong {
+  font-size: 0.98rem;
+  letter-spacing: 0.01em;
+  color: var(--gray-900);
+  font-weight: 700;
 }
 
 .addons-total {
   color: var(--gray-900);
-  font-weight: 900;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
 }
 
 .addons-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  overflow: visible;
+}
+
+.addons-list .addon-item {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  padding: 18px 4px;
+  background: transparent;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+}
+
+.addons-list .addon-item:last-child {
+  border-bottom: none;
 }
 
 .room-addons-layout {
-  display: grid;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .room-addon-card {
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 26px;
-  padding: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  padding-top: 18px;
+}
+
+.room-addon-card:first-of-type {
+  border-top: none;
+  padding-top: 4px;
 }
 
 .room-addon-card-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 16px;
+  margin-bottom: 4px;
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 12px 4px 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(255, 255, 255, 0.96) 74%, rgba(255, 255, 255, 0) 100%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.room-addon-card-head::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0) 0%, rgba(148, 163, 184, 0.38) 50%, rgba(148, 163, 184, 0) 100%);
 }
 
 .room-addon-card-head strong {
   display: block;
   color: var(--gray-900);
   font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.005em;
 }
 
 .room-addon-card-head small {
   display: block;
-  margin-top: 4px;
+  margin-top: 5px;
   color: var(--gray-500);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .room-addon-card-meta {
@@ -4155,30 +4249,45 @@ const printReservationJeton = async (booking) => {
 .room-addon-count {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 11px;
   border-radius: 999px;
   background: rgba(37, 99, 235, 0.08);
   color: #1d4ed8;
-  font-weight: 800;
-  font-size: 0.82rem;
+  font-weight: 700;
+  font-size: 0.78rem;
+  border: 1px solid rgba(37, 99, 235, 0.12);
 }
 
 .room-addon-subtotal {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
+  min-height: 30px;
   padding: 0 12px;
   border-radius: 999px;
-  background: rgba(15, 118, 110, 0.1);
+  background: rgba(15, 118, 110, 0.08);
   color: #0f766e;
-  font-weight: 900;
-  font-size: 0.9rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+  border: 1px solid rgba(15, 118, 110, 0.15);
+  letter-spacing: 0.01em;
+}
+
+.room-addons-list {
+  overflow: visible;
 }
 
 .room-addons-list .addon-item {
   box-shadow: none;
-  background: rgba(255, 255, 255, 0.82);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 18px 4px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+}
+
+.room-addons-list .addon-item:last-child {
+  border-bottom: none;
 }
 
 .room-addon-empty {
@@ -4469,16 +4578,41 @@ html[data-admin-theme="dark"] .addons-section {
   border-top-color: rgba(51, 65, 85, 0.9);
 }
 
-html[data-admin-theme="dark"] .addon-item {
-  border-color: rgba(51, 65, 85, 0.95);
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.86) 0%, rgba(15, 23, 42, 0.76) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+html[data-admin-theme="dark"] .addons-head {
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.98) 0%, rgba(2, 6, 23, 0.94) 72%, rgba(2, 6, 23, 0) 100%);
+}
+
+html[data-admin-theme="dark"] .addons-head::after {
+  background: linear-gradient(90deg, rgba(51, 65, 85, 0) 0%, rgba(71, 85, 105, 0.6) 50%, rgba(51, 65, 85, 0) 100%);
+}
+
+html[data-admin-theme="dark"] .addons-head strong {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .addons-total {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .addons-list .addon-item,
+html[data-admin-theme="dark"] .room-addons-list .addon-item {
+  border-bottom-color: rgba(51, 65, 85, 0.85);
+  background: transparent;
+  box-shadow: none;
 }
 
 html[data-admin-theme="dark"] .room-addon-card {
-  border-color: rgba(51, 65, 85, 0.95);
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.82) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  border-top-color: rgba(51, 65, 85, 0.9);
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-admin-theme="dark"] .room-addon-card-head {
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.99) 0%, rgba(2, 6, 23, 0.96) 74%, rgba(2, 6, 23, 0) 100%);
+}
+
+html[data-admin-theme="dark"] .room-addon-card-head::after {
+  background: linear-gradient(90deg, rgba(51, 65, 85, 0) 0%, rgba(71, 85, 105, 0.55) 50%, rgba(51, 65, 85, 0) 100%);
 }
 
 html[data-admin-theme="dark"] .room-addon-card-head strong,
@@ -4494,11 +4628,13 @@ html[data-admin-theme="dark"] .room-addon-empty {
 html[data-admin-theme="dark"] .room-addon-count {
   background: rgba(30, 64, 175, 0.22);
   color: #bfdbfe;
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 html[data-admin-theme="dark"] .room-addon-subtotal {
   background: rgba(15, 118, 110, 0.2);
   color: #99f6e4;
+  border-color: rgba(20, 184, 166, 0.32);
 }
 
 html[data-admin-theme="dark"] .room-addon-empty {

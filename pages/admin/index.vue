@@ -6,9 +6,9 @@
           <i class="fas fa-gauge-high"></i>
           Tableau de bord
         </div>
-        <h1 class="hero-title">Pilotage hôtelier et administratif</h1>
+        <h1 class="hero-title">Plateforme de Pilotage LaBertha Villa</h1>
         <p class="hero-subtitle">
-          Supervisez la réception, l'occupation des chambres, les encaissements et les alertes clés dans un tableau de bord plus propre et plus moderne.
+          Supervision hotelier et administratif.
         </p>
 
         <div class="hero-actions">
@@ -33,235 +33,251 @@
             <span class="btn-label">Calendrier</span>
           </NuxtLink>
         </div>
+
+        <div class="hero-overview-grid">
+            <article class="focus-card card">
+                <div class="focus-head">
+                    <div>
+                        <h2>Réception du jour</h2>
+                        <p>Vue rapide pour l'accueil, les arrivées et les départs.</p>
+                    </div>
+                    <NuxtLink to="/admin/rooms" class="btn btn-outline btn-sm admin-head-btn">
+                        <i class="fas fa-arrow-right"></i>
+                        <span class="btn-label">Front desk</span>
+                    </NuxtLink>
+                </div>
+                <div class="focus-metrics three">
+                    <div class="focus-metric">
+                        <span>Arrivées attendues</span>
+                        <strong>{{ todayPendingArrivals }}</strong>
+                    </div>
+                    <div class="focus-metric">
+                        <span>Check-ins</span>
+                        <strong>{{ todaysCheckInsFormatted }}</strong>
+                    </div>
+                    <div class="focus-metric">
+                        <span>Check-outs</span>
+                        <strong>{{ todaysCheckOutsFormatted }}</strong>
+                    </div>
+                </div>
+                <div class="focus-list">
+                    <div class="focus-list-row">
+                        <span>Séjours en cours</span>
+                        <strong>{{ inHouseGuestsCount }}</strong>
+                    </div>
+                    <div class="focus-list-row">
+                        <span>Notifications à traiter</span>
+                        <strong>{{ unreadCount }}</strong>
+                    </div>
+                    <div class="focus-list-row">
+                        <span>Paiements en attente</span>
+                        <strong>{{ pendingPaymentsFormatted }}</strong>
+                    </div>
+                </div>
+            </article>
+
+            <article class="focus-card card accent">
+                <div class="focus-head">
+                    <div>
+                        <h2>Capacité chambres</h2>
+                        <p>Disponibilité, occupation et rotation ménage / maintenance.</p>
+                    </div>
+                    <span class="focus-badge">{{ roomOccupancyRateLabel }}</span>
+                </div>
+                <div class="occupancy-progress">
+                    <div class="occupancy-track">
+                        <span class="occupancy-fill" :style="{ width: occupancyProgressWidth }"></span>
+                    </div>
+                    <div class="occupancy-caption">
+                        <span>{{ occupiedRoomsTodayCount }} occupée(s)</span>
+                        <strong>{{ activeRoomsCount }} chambre(s) active(s)</strong>
+                    </div>
+                </div>
+                <div class="status-chip-grid">
+                    <div class="status-chip">
+                        <span>Disponible</span>
+                        <strong>{{ roomStatusCounts.available || 0 }}</strong>
+                    </div>
+                    <div class="status-chip info">
+                        <span>Réservée</span>
+                        <strong>{{ roomStatusCounts.reserved || 0 }}</strong>
+                    </div>
+                    <div class="status-chip success">
+                        <span>Occupée</span>
+                        <strong>{{ roomStatusCounts.occupied || 0 }}</strong>
+                    </div>
+                    <div class="status-chip warning">
+                        <span>Nettoyage</span>
+                        <strong>{{ roomStatusCounts.cleaning || 0 }}</strong>
+                    </div>
+                    <div class="status-chip danger">
+                        <span>Maintenance</span>
+                        <strong>{{ roomStatusCounts.maintenance || 0 }}</strong>
+                    </div>
+                </div>
+            </article>
+
+            <article class="focus-card card">
+                <div class="focus-head">
+                    <div>
+                        <h2>Encaissement & relance</h2>
+                        <p>Suivi des entrées de caisse et des soldes ouverts.</p>
+                    </div>
+                    <NuxtLink to="/admin/payments" class="btn btn-outline btn-sm admin-head-btn">
+                        <i class="fas fa-credit-card"></i>
+                        <span class="btn-label">Paiements</span>
+                    </NuxtLink>
+                </div>
+                <div class="focus-metrics">
+                    <div class="focus-metric">
+                        <span>Aujourd'hui</span>
+                        <strong>{{ formatMoney(revenueTodayAmount) }}</strong>
+                    </div>
+                    <div class="focus-metric">
+                        <span>7 derniers jours</span>
+                        <strong>{{ formatMoney(revenueWeekAmount) }}</strong>
+                    </div>
+                </div>
+                <div class="focus-list">
+                    <div class="focus-list-row">
+                        <span>Reste à encaisser chambres</span>
+                        <strong>{{ formatMoney(roomBalanceDueAmount) }}</strong>
+                    </div>
+                    <div class="focus-list-row">
+                        <span>Revenu total encaissé</span>
+                        <strong>{{ formatMoney(totalRevenueAmount) }}</strong>
+                    </div>
+                    <div class="focus-list-row">
+                        <span>Stock critique à suivre</span>
+                        <strong>{{ stockAlertsFormatted }}</strong>
+                    </div>
+                </div>
+            </article>
+        </div>
       </div>
+      <div class="hero-stats-cards">
+        <article class="stat-card card">
+          <div class="stat-icon primary"><i class="fas fa-calendar-day"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Aujourd'hui</span>
+            <strong class="stat-value">{{ todayYmd }}</strong>
+            <div class="stat-meta">{{ displayBookingsToday }} réservations</div>
+          </div>
+        </article>
 
-      <div class="hero-kpis">
-        <div class="kpi">
-          <div class="kpi-label">Aujourd'hui</div>
-          <div class="kpi-value">{{ todayYmd }}</div>
-          <div class="kpi-hint">{{ displayBookingsToday }} réservations</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">Arrivées hôtel</div>
-          <div class="kpi-value">{{ todayPendingArrivals }}</div>
-          <div class="kpi-hint">Clients attendus</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">Séjours en cours</div>
-          <div class="kpi-value">{{ inHouseGuestsCount }}</div>
-          <div class="kpi-hint">Clients hébergés</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">Encaissement jour</div>
-          <div class="kpi-value">{{ formatMoney(revenueTodayAmount) }}</div>
-          <div class="kpi-hint">{{ unreadCount }} notification(s)</div>
-        </div>
+        <article class="stat-card card">
+          <div class="stat-icon info"><i class="fas fa-right-to-bracket"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Arrivées hôtel</span>
+            <strong class="stat-value">{{ todayPendingArrivals }}</strong>
+            <div class="stat-meta">Clients attendus</div>
+          </div>
+        </article>
+
+        <article class="stat-card card">
+          <div class="stat-icon success"><i class="fas fa-bed"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Séjours en cours</span>
+            <strong class="stat-value">{{ inHouseGuestsCount }}</strong>
+            <div class="stat-meta">Clients hébergés</div>
+          </div>
+        </article>
+
+        <article class="stat-card card">
+          <div class="stat-icon warning"><i class="fas fa-wallet"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Encaissement jour</span>
+            <strong class="stat-value">{{ formatMoney(revenueTodayAmount) }}</strong>
+            <div class="stat-meta">{{ unreadCount }} notification(s)</div>
+          </div>
+        </article>
+
+        <article class="stat-card card">
+          <div class="stat-icon primary"><i class="fas fa-calendar-check"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Réservations (total)</span>
+            <strong class="stat-value">{{ totalBookingsFormatted }}</strong>
+            <div class="stat-meta">Toutes périodes</div>
+          </div>
+        </article>
+
+        <article class="stat-card card">
+          <div class="stat-icon info"><i class="fas fa-building"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Salles actives</span>
+            <strong class="stat-value">{{ activeHallsFormatted }}</strong>
+            <div class="stat-meta">Disponibles</div>
+          </div>
+        </article>
+
+        <article class="stat-card card">
+          <div class="stat-icon success"><i class="fas fa-bed"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Taux d'occupation chambres</span>
+            <strong class="stat-value">{{ roomOccupancyRateLabel }}</strong>
+            <div class="stat-meta">{{ occupiedRoomsTodayCount }} occupée(s) / {{ activeRoomsCount }} active(s)</div>
+          </div>
+        </article>
+
+        <article class="stat-card card">
+          <div class="stat-icon primary"><i class="fas fa-right-to-bracket"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Check-ins du jour</span>
+            <strong class="stat-value">{{ todaysCheckInsFormatted }}</strong>
+            <div class="stat-meta">Arrivées enregistrées</div>
+          </div>
+        </article>
+
+        <article class="stat-card card">
+          <div class="stat-icon warning"><i class="fas fa-right-from-bracket"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Check-outs du jour</span>
+            <strong class="stat-value">{{ todaysCheckOutsFormatted }}</strong>
+            <div class="stat-meta">Départs enregistrés</div>
+          </div>
+        </article>
+
+        <article class="stat-card card">
+          <div class="stat-icon warning"><i class="fas fa-hourglass-half"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Paiements en attente</span>
+            <strong class="stat-value">{{ pendingPaymentsFormatted }}</strong>
+            <div class="stat-meta">{{ pendingPaymentsCount > 0 ? 'À solder' : 'Tout est à jour' }}</div>
+          </div>
+        </article>
+
+        <article class="stat-card card">
+          <div class="stat-icon danger"><i class="fas fa-box-open"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Stock critique</span>
+            <strong class="stat-value">{{ stockAlertsFormatted }}</strong>
+            <div class="stat-meta">Rupture ou seuil</div>
+          </div>
+        </article>
+
+        <article v-if="showFinancialCards" class="stat-card card wide">
+          <div class="stat-icon success"><i class="fas fa-wallet"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Revenu total</span>
+            <strong class="stat-value">{{ formatMoney(totalRevenueAmount) }}</strong>
+            <div class="stat-meta">Depuis toujours</div>
+          </div>
+        </article>
+
+        <article v-if="showFinancialCards" class="stat-card card wide">
+          <div class="stat-icon danger"><i class="fas fa-money-bill-wave"></i></div>
+          <div class="stat-content">
+            <span class="stat-label">Dépenses du mois</span>
+            <strong class="stat-value">{{ formatMoney(monthlyExpensesAmount) }}</strong>
+            <div class="stat-meta">Mois en cours</div>
+          </div>
+        </article>
       </div>
     </section>
 
-    <section class="stats-grid">
-      <article class="stat-card card">
-        <div class="stat-icon primary"><i class="fas fa-calendar-check"></i></div>
-        <div class="stat-content">
-          <span class="stat-label">Réservations (total)</span>
-          <strong class="stat-value">{{ totalBookingsFormatted }}</strong>
-          <div class="stat-meta">Toutes périodes</div>
-        </div>
-      </article>
 
-      <article class="stat-card card">
-        <div class="stat-icon info"><i class="fas fa-building"></i></div>
-        <div class="stat-content">
-          <span class="stat-label">Salles actives</span>
-          <strong class="stat-value">{{ activeHallsFormatted }}</strong>
-          <div class="stat-meta">Disponibles</div>
-        </div>
-      </article>
 
-      <article class="stat-card card">
-        <div class="stat-icon success"><i class="fas fa-bed"></i></div>
-        <div class="stat-content">
-          <span class="stat-label">Taux d'occupation chambres</span>
-          <strong class="stat-value">{{ roomOccupancyRateLabel }}</strong>
-          <div class="stat-meta">{{ occupiedRoomsTodayCount }} occupée(s) / {{ activeRoomsCount }} active(s)</div>
-        </div>
-      </article>
 
-      <article class="stat-card card">
-        <div class="stat-icon primary"><i class="fas fa-right-to-bracket"></i></div>
-        <div class="stat-content">
-          <span class="stat-label">Check-ins du jour</span>
-          <strong class="stat-value">{{ todaysCheckInsFormatted }}</strong>
-          <div class="stat-meta">Arrivées enregistrées</div>
-        </div>
-      </article>
-
-      <article class="stat-card card">
-        <div class="stat-icon warning"><i class="fas fa-right-from-bracket"></i></div>
-        <div class="stat-content">
-          <span class="stat-label">Check-outs du jour</span>
-          <strong class="stat-value">{{ todaysCheckOutsFormatted }}</strong>
-          <div class="stat-meta">Départs enregistrés</div>
-        </div>
-      </article>
-
-      <article class="stat-card card">
-        <div class="stat-icon warning"><i class="fas fa-hourglass-half"></i></div>
-        <div class="stat-content">
-          <span class="stat-label">Paiements en attente</span>
-          <strong class="stat-value">{{ pendingPaymentsFormatted }}</strong>
-          <div class="stat-meta">{{ pendingPaymentsCount > 0 ? 'À solder' : 'Tout est à jour' }}</div>
-        </div>
-      </article>
-
-      <article class="stat-card card">
-        <div class="stat-icon danger"><i class="fas fa-box-open"></i></div>
-        <div class="stat-content">
-          <span class="stat-label">Stock critique</span>
-          <strong class="stat-value">{{ stockAlertsFormatted }}</strong>
-          <div class="stat-meta">Rupture ou seuil</div>
-        </div>
-      </article>
-
-      <article v-if="showFinancialCards" class="stat-card card wide">
-        <div class="stat-icon success"><i class="fas fa-wallet"></i></div>
-        <div class="stat-content">
-          <span class="stat-label">Revenu total</span>
-          <strong class="stat-value">{{ formatMoney(totalRevenueAmount) }}</strong>
-          <div class="stat-meta">Depuis toujours</div>
-        </div>
-      </article>
-
-      <article v-if="showFinancialCards" class="stat-card card wide">
-        <div class="stat-icon danger"><i class="fas fa-money-bill-wave"></i></div>
-        <div class="stat-content">
-          <span class="stat-label">Dépenses du mois</span>
-          <strong class="stat-value">{{ formatMoney(monthlyExpensesAmount) }}</strong>
-          <div class="stat-meta">Mois en cours</div>
-        </div>
-      </article>
-    </section>
-
-    <section class="hotel-overview-grid">
-      <article class="focus-card card">
-        <div class="focus-head">
-          <div>
-            <h2>Réception du jour</h2>
-            <p>Vue rapide pour l'accueil, les arrivées et les départs.</p>
-          </div>
-          <NuxtLink to="/admin/rooms" class="btn btn-outline btn-sm admin-head-btn">
-            <i class="fas fa-arrow-right"></i>
-            <span class="btn-label">Front desk</span>
-          </NuxtLink>
-        </div>
-        <div class="focus-metrics three">
-          <div class="focus-metric">
-            <span>Arrivées attendues</span>
-            <strong>{{ todayPendingArrivals }}</strong>
-          </div>
-          <div class="focus-metric">
-            <span>Check-ins</span>
-            <strong>{{ todaysCheckInsFormatted }}</strong>
-          </div>
-          <div class="focus-metric">
-            <span>Check-outs</span>
-            <strong>{{ todaysCheckOutsFormatted }}</strong>
-          </div>
-        </div>
-        <div class="focus-list">
-          <div class="focus-list-row">
-            <span>Séjours en cours</span>
-            <strong>{{ inHouseGuestsCount }}</strong>
-          </div>
-          <div class="focus-list-row">
-            <span>Notifications à traiter</span>
-            <strong>{{ unreadCount }}</strong>
-          </div>
-          <div class="focus-list-row">
-            <span>Paiements en attente</span>
-            <strong>{{ pendingPaymentsFormatted }}</strong>
-          </div>
-        </div>
-      </article>
-
-      <article class="focus-card card accent">
-        <div class="focus-head">
-          <div>
-            <h2>Capacité chambres</h2>
-            <p>Disponibilité, occupation et rotation ménage / maintenance.</p>
-          </div>
-          <span class="focus-badge">{{ roomOccupancyRateLabel }}</span>
-        </div>
-        <div class="occupancy-progress">
-          <div class="occupancy-track">
-            <span class="occupancy-fill" :style="{ width: occupancyProgressWidth }"></span>
-          </div>
-          <div class="occupancy-caption">
-            <span>{{ occupiedRoomsTodayCount }} occupée(s)</span>
-            <strong>{{ activeRoomsCount }} chambre(s) active(s)</strong>
-          </div>
-        </div>
-        <div class="status-chip-grid">
-          <div class="status-chip">
-            <span>Disponible</span>
-            <strong>{{ roomStatusCounts.available || 0 }}</strong>
-          </div>
-          <div class="status-chip info">
-            <span>Réservée</span>
-            <strong>{{ roomStatusCounts.reserved || 0 }}</strong>
-          </div>
-          <div class="status-chip success">
-            <span>Occupée</span>
-            <strong>{{ roomStatusCounts.occupied || 0 }}</strong>
-          </div>
-          <div class="status-chip warning">
-            <span>Nettoyage</span>
-            <strong>{{ roomStatusCounts.cleaning || 0 }}</strong>
-          </div>
-          <div class="status-chip danger">
-            <span>Maintenance</span>
-            <strong>{{ roomStatusCounts.maintenance || 0 }}</strong>
-          </div>
-        </div>
-      </article>
-
-      <article class="focus-card card">
-        <div class="focus-head">
-          <div>
-            <h2>Encaissement & relance</h2>
-            <p>Suivi des entrées de caisse et des soldes ouverts.</p>
-          </div>
-          <NuxtLink to="/admin/payments" class="btn btn-outline btn-sm admin-head-btn">
-            <i class="fas fa-credit-card"></i>
-            <span class="btn-label">Paiements</span>
-          </NuxtLink>
-        </div>
-        <div class="focus-metrics">
-          <div class="focus-metric">
-            <span>Aujourd'hui</span>
-            <strong>{{ formatMoney(revenueTodayAmount) }}</strong>
-          </div>
-          <div class="focus-metric">
-            <span>7 derniers jours</span>
-            <strong>{{ formatMoney(revenueWeekAmount) }}</strong>
-          </div>
-        </div>
-        <div class="focus-list">
-          <div class="focus-list-row">
-            <span>Reste à encaisser chambres</span>
-            <strong>{{ formatMoney(roomBalanceDueAmount) }}</strong>
-          </div>
-          <div class="focus-list-row">
-            <span>Revenu total encaissé</span>
-            <strong>{{ formatMoney(totalRevenueAmount) }}</strong>
-          </div>
-          <div class="focus-list-row">
-            <span>Stock critique à suivre</span>
-            <strong>{{ stockAlertsFormatted }}</strong>
-          </div>
-        </div>
-      </article>
-    </section>
 
     <section class="dashboard-grid">
       <div class="panel card">
@@ -824,13 +840,22 @@ onMounted(() => {
   border: 1px solid var(--gray-200);
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.88), rgba(212, 175, 55, 0.28));
   color: #ffffff;
-  display: grid;
-  grid-template-columns: 1.5fr 0.9fr;
+  display: flex;
+  flex-direction: column;
   gap: 0;
 }
 
 .hero-copy {
   padding: var(--space-6);
+}
+
+.hero-stats-cards {
+  padding: var(--space-6);
+  background: rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
 }
 
 .hero-badge {
@@ -869,20 +894,27 @@ onMounted(() => {
   gap: 10px;
 }
 
+.hero-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+}
+
 .hero-kpis {
   padding: var(--space-6);
   background: rgba(255, 255, 255, 0.06);
   border-left: 1px solid rgba(255, 255, 255, 0.14);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   align-content: start;
   gap: 10px;
 }
 
 .kpi {
   min-height: 0;
-  padding: 12px 14px;
-  border-radius: 16px;
+  padding: 5px 14px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
@@ -896,14 +928,14 @@ onMounted(() => {
 }
 
 .kpi-value {
-  margin-top: 8px;
+  
   font-size: 1.12rem;
   font-weight: 900;
   color: #ffffff;
 }
 
 .kpi-hint {
-  margin-top: 4px;
+
   color: rgba(255, 255, 255, 0.72);
   font-weight: 700;
   font-size: 0.78rem;
@@ -915,11 +947,7 @@ onMounted(() => {
   gap: var(--space-6);
 }
 
-.hotel-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-6);
-}
+
 
 .focus-card {
   padding: var(--space-5);

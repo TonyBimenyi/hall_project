@@ -1,0 +1,7 @@
+{
+  "name": "Labertha Villa",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "vue-vite"
+}
