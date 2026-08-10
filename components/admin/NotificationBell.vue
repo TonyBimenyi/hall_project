@@ -69,6 +69,8 @@ import {
   formatTimeAgo,
   markAsRead,
   markAllAsRead,
+  startNotificationsPolling,
+  stopNotificationsPolling,
   NOTIFICATION_TYPES
 } from '~/composables/useNotifications'
 
@@ -178,9 +180,11 @@ onMounted(() => {
   document.addEventListener('click', handleOutsideClick)
   window.addEventListener('resize', handleViewportChange)
   fetchNotifications().catch(() => {})
+  startNotificationsPolling()
 })
 
 onBeforeUnmount(() => {
+  stopNotificationsPolling()
   document.removeEventListener('click', handleOutsideClick)
   window.removeEventListener('resize', handleViewportChange)
 })

@@ -91,6 +91,30 @@ def _build_payment_invoice_html(payment, booking, branding):
     if remaining < 0:
         remaining = Decimal('0.00')
 
+    subtotal_ht = Decimal(str(getattr(booking, 'subtotal_ht', 0) or 0))
+    tva_amount = Decimal(str(getattr(booking, 'tva_amount', 0) or 0))
+    tva_rate = Decimal(str(getattr(booking, 'tva_rate', 0) or 0))
+    booking_type = str(getattr(booking, 'booking_type', '') or '').strip().lower()
+    tva_applies = booking_type == 'room'
+    if (not subtotal_ht or not tva_amount) and booking.total_price:
+        ttc = Decimal(str(booking.total_price or 0))
+        addons = Decimal(str(getattr(booking, 'addons_total', 0) or 0))
+        q = Decimal('0.01')
+        if tva_applies:
+            # TCSTH 5% ADDITIVE on base accommodation (rooms part only)
+            rate_fallback = Decimal('5.00')
+            mult = Decimal('0.05')
+            base_acc_ht = (ttc - addons).quantize(q)
+            if base_acc_ht < 0:
+                base_acc_ht = Decimal('0.00')
+            tva_amount = (base_acc_ht * mult).quantize(q)
+            subtotal_ht = (base_acc_ht + addons).quantize(q)
+            tva_rate = rate_fallback
+        else:
+            subtotal_ht = ttc.quantize(q)
+            tva_amount = Decimal('0.00')
+            tva_rate = Decimal('5.00')
+
     payment_code = (getattr(payment, 'code', '') or '').strip() or f"Paiement #{payment.pk}"
     booking_code = (getattr(booking, 'code', '') or '').strip() or f"Reservation #{booking.pk}"
     item_label = 'Salle'
@@ -170,11 +194,19 @@ def _build_payment_invoice_html(payment, booking, branding):
 
       <div style="padding:20px;border-radius:18px;background:#0f172a;color:#ffffff;">
         <div style="display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.12);">
-          <span style="opacity:0.8;">Montant paye</span>
+          <span style="opacity:0.8;">Sous-total HT (hebergement + services)</span>
+          <strong>{escape(_format_money(subtotal_ht))}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:16px;padding:12px 0 6px;border-bottom:1px solid rgba(255,255,255,0.12);">
+          <span style="opacity:0.8;">TCSTH {escape(str(int(tva_rate) if float(tva_rate) == int(tva_rate) else str(tva_rate)))}% (sur hebergement seulement)</span>
+          <strong style="color:#fbbf24;">{escape(_format_money(tva_amount))}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:16px;padding:12px 0 6px;border-bottom:1px solid rgba(255,255,255,0.12);">
+          <span style="opacity:0.8;">Montant paye (TTC)</span>
           <strong>{escape(_format_money(payment.amount))}</strong>
         </div>
         <div style="display:flex;justify-content:space-between;gap:16px;padding:12px 0 6px;border-bottom:1px solid rgba(255,255,255,0.12);">
-          <span style="opacity:0.8;">Total reservation</span>
+          <span style="opacity:0.8;">Total reservation (TTC)</span>
           <strong>{escape(_format_money(booking.total_price))}</strong>
         </div>
         <div style="display:flex;justify-content:space-between;gap:16px;padding:16px 0 4px;font-size:18px;font-weight:700;">
@@ -201,6 +233,31 @@ def _build_payment_invoice_text(payment, booking, branding):
     if remaining < 0:
         remaining = Decimal('0.00')
 
+    subtotal_ht = Decimal(str(getattr(booking, 'subtotal_ht', 0) or 0))
+    tva_amount = Decimal(str(getattr(booking, 'tva_amount', 0) or 0))
+    tva_rate = Decimal(str(getattr(booking, 'tva_rate', 0) or 0))
+    booking_type = str(getattr(booking, 'booking_type', '') or '').strip().lower()
+    tva_applies = booking_type == 'room'
+    if (not subtotal_ht or not tva_amount) and booking.total_price:
+        ttc = Decimal(str(booking.total_price or 0))
+        addons = Decimal(str(getattr(booking, 'addons_total', 0) or 0))
+        q = Decimal('0.01')
+        if tva_applies:
+            # TCSTH 5% ADDITIVE on base accommodation (rooms part only)
+            rate_fallback = Decimal('5.00')
+            mult = Decimal('0.05')
+            base_acc_ht = (ttc - addons).quantize(q)
+            if base_acc_ht < 0:
+                base_acc_ht = Decimal('0.00')
+            tva_amount = (base_acc_ht * mult).quantize(q)
+            subtotal_ht = (base_acc_ht + addons).quantize(q)
+            tva_rate = rate_fallback
+        else:
+            subtotal_ht = ttc.quantize(q)
+            tva_amount = Decimal('0.00')
+            tva_rate = Decimal('5.00')
+    tva_rate_label = str(int(tva_rate)) if float(tva_rate) == int(tva_rate) else str(tva_rate)
+
     item_label = 'Salle'
     item_name = getattr(getattr(booking, 'hall', None), 'name', '') or '-'
     if getattr(booking, 'booking_type', '') == 'room':
@@ -222,8 +279,10 @@ def _build_payment_invoice_text(payment, booking, branding):
         f"Email : {(booking.customer_email or '-').strip() or '-'}\n"
         f"{item_label} : {item_name}\n"
         f"Periode : {_format_period(booking.start_date, booking.end_date)}\n"
-        f"Montant paye : {_format_money(payment.amount)}\n"
-        f"Total reservation : {_format_money(booking.total_price)}\n"
+        f"Sous-total HT (hebergement + services) : {_format_money(subtotal_ht)}\n"
+        f"TCSTH {tva_rate_label}% (sur hebergement seulement) : {_format_money(tva_amount)}\n"
+        f"Montant paye (TTC) : {_format_money(payment.amount)}\n"
+        f"Total reservation (TTC) : {_format_money(booking.total_price)}\n"
         f"Reste a payer : {_format_money(remaining)}\n\n"
         f"Adresse : {branding.get('address') or DEFAULT_BRANDING['address']}\n"
         f"NIF : {tax_id}\n"

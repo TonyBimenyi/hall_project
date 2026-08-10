@@ -167,6 +167,49 @@
       </div>
     </div>
 
+    <div class="summary-cards mb-8">
+      <div class="summary-card card">
+        <div class="summary-icon tcsth-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+        <div>
+          <span class="label">TCSTH collecté (période)</span>
+          <span class="value tcsth-val">
+            <span v-if="isLoading" class="skeleton-line skeleton-w-70"></span>
+            <template v-else>+{{ formatMoney(reportTcsthCollected).replace(' Fbu', '') }} Fbu</template>
+          </span>
+        </div>
+      </div>
+      <div class="summary-card card">
+        <div class="summary-icon success"><i class="fas fa-circle-check"></i></div>
+        <div>
+          <span class="label">TCSTH payé à l'OBR</span>
+          <span class="value success">
+            <span v-if="isLoading" class="skeleton-line skeleton-w-70"></span>
+            <template v-else>{{ formatMoney(reportTcsthPaidToObr).replace(' Fbu', '') }} Fbu</template>
+          </span>
+        </div>
+      </div>
+      <div class="summary-card card">
+        <div class="summary-icon warning"><i class="fas fa-clock"></i></div>
+        <div>
+          <span class="label">TCSTH en attente (à verser)</span>
+          <span class="value warning">
+            <span v-if="isLoading" class="skeleton-line skeleton-w-70"></span>
+            <template v-else>{{ formatMoney(reportTcsthPending).replace(' Fbu', '') }} Fbu</template>
+          </span>
+        </div>
+      </div>
+      <div class="summary-card card">
+        <div class="summary-icon info"><i class="fas fa-scale-balanced"></i></div>
+        <div>
+          <span class="label">Chiffre HT nuitées (TCSTH)</span>
+          <span class="value info">
+            <span v-if="isLoading" class="skeleton-line skeleton-w-70"></span>
+            <template v-else>{{ formatMoney(reportTcsthHT).replace(' Fbu', '') }} Fbu</template>
+          </span>
+        </div>
+      </div>
+    </div>
+
     <section class="reports-hero card">
       <div class="reports-hero-copy">
         <div class="reports-hero-badge">
@@ -456,12 +499,105 @@
           </div>
         </div>
       </div>
+
+      <div class="chart-card card">
+        <div class="card-header">
+          <span>TCSTH par mois — Collecté vs Payé vs En attente</span>
+        </div>
+        <div class="card-subtitle">
+          <span>Taxe 5% sur nuitées (OBR Burundi)</span>
+        </div>
+        <div class="chart-content-clean">
+          <div class="chart-stack">
+            <div v-show="isLoading" class="skeleton-chart skeleton-overlay"></div>
+            <ClientOnly>
+              <div class="chart-canvas-wrap" :class="{ 'is-hidden': isLoading }">
+                <canvas ref="tcsthMonthlyEl" class="chart-canvas"></canvas>
+              </div>
+            </ClientOnly>
+            <div v-if="!isLoading && reportTcsthMonthly.length === 0" class="chart-empty-state">
+              <i class="fas fa-inbox"></i>
+              <strong>Aucune donnée TCSTH</strong>
+              <span class="muted">Enregistrez des réservations de type nuitée pour visualiser ce graphique.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-card card">
+        <div class="card-header">
+          <span>Cumul TCSTH (progression depuis début période)</span>
+        </div>
+        <div class="card-subtitle">
+          <span>Visualise la dette vers l'OBR vs montants déjà réglés</span>
+        </div>
+        <div class="chart-content-clean">
+          <div class="chart-stack">
+            <div v-show="isLoading" class="skeleton-chart skeleton-overlay"></div>
+            <ClientOnly>
+              <div class="chart-canvas-wrap" :class="{ 'is-hidden': isLoading }">
+                <canvas ref="tcsthCumulativeEl" class="chart-canvas"></canvas>
+              </div>
+            </ClientOnly>
+            <div v-if="!isLoading && reportTcsthCumulative.length === 0" class="chart-empty-state">
+              <i class="fas fa-chart-line"></i>
+              <strong>Historique insuffisant</strong>
+              <span class="muted">Le cumul s'affichera dès plusieurs mois de réservations disponibles.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-card card">
+        <div class="card-header">
+          <span>Chiffre d'affaires HT / TCSTH vs Autres (Halls / Services)</span>
+        </div>
+        <div class="card-subtitle">
+          <span>Comparaison nuitées soumises TCSTH 5% contre chiffre hors TCSTH</span>
+        </div>
+        <div class="chart-content-clean charts-stack">
+          <div class="chart-stack">
+            <div v-show="isLoading" class="skeleton-chart skeleton-overlay"></div>
+            <ClientOnly>
+              <div class="chart-canvas-wrap chart-canvas-sm" :class="{ 'is-hidden': isLoading }">
+                <canvas ref="tcsthSplitEl" class="chart-canvas"></canvas>
+              </div>
+            </ClientOnly>
+            <div v-show="!isLoading && (reportTcsthHT + reportNonTcsthHT) > 0" class="doughnut-center">
+              <div class="doughnut-center-main">{{ reportTcsthPercentage.toFixed(0) }}%</div>
+              <div class="doughnut-center-sub">TCSTH</div>
+            </div>
+            <div v-if="!isLoading && (reportTcsthHT + reportNonTcsthHT) === 0" class="chart-empty-state">
+              <i class="fas fa-chart-pie"></i>
+              <strong>Répartition vide</strong>
+              <span class="muted">Ajoutez des réservations pour voir la répartition CA HT.</span>
+            </div>
+          </div>
+          <div class="legend-clean">
+            <div class="legend-item">
+              <span class="dot" style="background:#d97706;"></span>
+              <div class="legend-info">
+                <span class="legend-label">CA HT Nuitées (TCSTH 5%)</span>
+                <span class="legend-val">{{ formatMoney(reportTcsthHT) }}</span>
+              </div>
+            </div>
+            <div class="legend-item">
+              <span class="dot" style="background:#0ea5e9;"></span>
+              <div class="legend-info">
+                <span class="legend-label">CA HT Autres (hors TCSTH)</span>
+                <span class="legend-val">{{ formatMoney(reportNonTcsthHT) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
   </div>
 </template>
 
 <script setup>
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, shallowRef } from 'vue'
 import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { useDocumentBranding } from '~/composables/useDocumentBranding'
@@ -509,7 +645,7 @@ const preset = ref('28d')
 const customStart = ref('')
 const customEnd = ref('')
 const paymentStatusFilter = ref('all')
-const bookingStatusFilter = ref('active')
+const bookingStatusFilter = ref('all')
 const groupBy = ref('auto')
 
 const revenueTotalsEl = ref(null)
@@ -520,6 +656,114 @@ const evolutionEl = ref(null)
 const bookingsEvolutionEl = ref(null)
 const bookingsByTypeEl = ref(null)
 const materialsByCategoryEl = ref(null)
+const tcsthMonthlyEl = ref(null)
+const tcsthCumulativeEl = ref(null)
+const tcsthSplitEl = ref(null)
+
+const TCSTH_RATE_PCT = 5
+const TCSTH_DIVISOR = 1 + (TCSTH_RATE_PCT / 100)
+const TCSTH_LS_KEY = 'hall_ui_tcsth_status_v1'
+const _tcsthRoundMoney = (n) => Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100
+const _tcsthExtractHT = (ttc) => {
+  const v = Number(ttc || 0)
+  return v > 0 ? _tcsthRoundMoney(v / TCSTH_DIVISOR) : 0
+}
+const _tcsthExtractTax = (ttc) => {
+  const v = Number(ttc || 0)
+  return v > 0 ? _tcsthRoundMoney(v - _tcsthExtractHT(v)) : 0
+}
+const _bookingIsHotelTcsth = (b) => String(b?.booking_type || '').toLowerCase() === 'room'
+const _tcsthReadAllObrPaid = () => {
+  if (!process.client) return {}
+  try {
+    const raw = localStorage.getItem(TCSTH_LS_KEY) || '{}'
+    return JSON.parse(raw) || {}
+  } catch { return {} }
+}
+const _tcsthBookingHT = (b) => Number(b?.subtotal_ht ?? _tcsthExtractHT(b?.total_price))
+const _tcsthBookingTax = (b) => Number(b?.tva_amount ?? _tcsthExtractTax(b?.total_price))
+const _nonTcsthBookingHT = (b) => {
+  const s = Number(b?.subtotal_ht || 0)
+  if (s > 0) return s
+  return _tcsthRoundMoney(Number(b?.total_price || 0))
+}
+const reportTcsthBookingsInRange = computed(() => {
+  return (filteredBookings.value || []).filter((b) => {
+    if (!_bookingIsHotelTcsth(b)) return false
+    const ref = b?.created_at || b?.start_date || b?.booking_date
+    const dt = ref ? new Date(ref) : null
+    if (!dt || Number.isNaN(dt.getTime())) return false
+    return true
+  })
+})
+const reportTcsthHT = computed(() => _tcsthRoundMoney(
+  reportTcsthBookingsInRange.value.reduce((s, b) => s + _tcsthBookingHT(b), 0)
+))
+const reportTcsthCollected = computed(() => _tcsthRoundMoney(
+  reportTcsthBookingsInRange.value.reduce((s, b) => s + _tcsthBookingTax(b), 0)
+))
+const reportTcsthMonthly = computed(() => {
+  const months = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+  const map = new Map()
+  for (const b of reportTcsthBookingsInRange.value) {
+    const ref = new Date(b.created_at || b.start_date)
+    const Y = ref.getFullYear()
+    const M = ref.getMonth()
+    const key = `${Y}-${String(M + 1).padStart(2, '0')}`
+    if (!map.has(key)) {
+      map.set(key, { key, label: `${months[M]} ${String(Y).slice(2)}`, year: Y, month: M, ht: 0, ttc: 0, tva: 0 })
+    }
+    const r = map.get(key)
+    r.ht += _tcsthBookingHT(b)
+    r.ttc += Number(b?.total_price || 0)
+    r.tva += _tcsthBookingTax(b)
+  }
+  const rows = Array.from(map.values()).map(r => ({
+    ...r,
+    ht: _tcsthRoundMoney(r.ht),
+    ttc: _tcsthRoundMoney(r.ttc),
+    tva: _tcsthRoundMoney(r.tva)
+  })).sort((a, b) => (a.year - b.year) || (a.month - b.month))
+  const paidAll = _tcsthReadAllObrPaid()
+  return rows.map(r => {
+    const paid = _tcsthRoundMoney(Number(paidAll[r.key]?.amount || (paidAll[r.key]?.paid ? r.tva : 0)))
+    const pending = _tcsthRoundMoney(Math.max(0, r.tva - paid))
+    return { ...r, obrPaid: paid, pending }
+  })
+})
+const reportTcsthPaidToObr = computed(() => _tcsthRoundMoney(
+  reportTcsthMonthly.value.reduce((s, r) => s + Number(r.obrPaid || 0), 0)
+))
+const reportTcsthPending = computed(() => _tcsthRoundMoney(
+  Math.max(0, reportTcsthCollected.value - reportTcsthPaidToObr.value)
+))
+const reportTcsthCumulative = computed(() => {
+  const months = reportTcsthMonthly.value
+  let cumCollected = 0
+  let cumPaid = 0
+  return months.map((r) => {
+    cumCollected += Number(r.tva || 0)
+    cumPaid += Number(r.obrPaid || 0)
+    return {
+      key: r.key,
+      label: r.label,
+      cumCollected: _tcsthRoundMoney(cumCollected),
+      cumPaid: _tcsthRoundMoney(cumPaid),
+      cumPending: _tcsthRoundMoney(Math.max(0, cumCollected - cumPaid)),
+    }
+  })
+})
+const reportNonTcsthBookingsInRange = computed(() => {
+  return (filteredBookings.value || []).filter((b) => !_bookingIsHotelTcsth(b))
+})
+const reportNonTcsthHT = computed(() => _tcsthRoundMoney(
+  reportNonTcsthBookingsInRange.value.reduce((s, b) => s + _nonTcsthBookingHT(b), 0)
+))
+const reportTcsthPercentage = computed(() => {
+  const total = reportTcsthHT.value + reportNonTcsthHT.value
+  if (!total) return 0
+  return 100 * reportTcsthHT.value / total
+})
 
 const isLoading = computed(() => loadingStats.value || loadingBookings.value || loadingPayments.value || loadingExpenses.value || loadingMaterials.value)
 
@@ -690,11 +934,11 @@ const bookingCounts = computed(() => {
 })
 
 const roomBookingsInRange = computed(() => {
-  return (filteredBookings.value || []).filter(booking => String(booking.booking_type || '') === 'room')
+  return (filteredBookings.value || []).filter(booking => String(booking.booking_type || '').toLowerCase() === 'room')
 })
 
 const hallBookingsInRange = computed(() => {
-  return (filteredBookings.value || []).filter(booking => String(booking.booking_type || '') !== 'room')
+  return (filteredBookings.value || []).filter(booking => String(booking.booking_type || '').toLowerCase() !== 'room')
 })
 
 const hotelRoomBookingsCount = computed(() => roomBookingsInRange.value.length)
@@ -1577,16 +1821,16 @@ const renderCharts = async () => {
         tooltip: { callbacks: { label: (ctx) => formatMoney(ctx.parsed.y) } }
       },
       scales: {
-        y: { ticks: { color: theme.muted, callback: (v) => formatMoney(v) }, grid: { color: theme.grid } },
+        y: { beginAtZero: true, ticks: { color: theme.muted, callback: (v) => formatMoney(v) }, grid: { color: theme.grid } },
         x: { ticks: { color: theme.muted }, grid: { display: false } }
       }
     }
   })
 
   const occ = occupationLegend.value
-  const occData = occ.length ? occ.map(i => i.percentage) : [1]
-  const occLabels = occ.length ? occ.map(i => i.type) : ['Aucune donnée']
-  const occColors = occ.length ? occ.map(i => i.color) : ['#e2e8f0']
+  const occData = occ.length ? occ.map(i => i.percentage) : []
+  const occLabels = occ.length ? occ.map(i => i.type) : []
+  const occColors = occ.length ? occ.map(i => i.color) : []
   await upsertChart('occupation', occupationEl.value, {
     type: 'doughnut',
     data: {
@@ -1607,15 +1851,15 @@ const renderCharts = async () => {
       animation: { duration: 900, easing: 'easeOutQuart' },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${Number(ctx.parsed || 0).toFixed(1)}%` } }
+        tooltip: { callbacks: { label: (ctx) => `${ctx.label || ''}: ${Number(ctx.parsed || 0).toFixed(1)}%` } }
       }
     }
   })
 
   const pm = paymentsByMethodLegend.value
-  const pmLabels = pm.length ? pm.map(r => r.label) : ['Aucune donnée']
-  const pmData = pm.length ? pm.map(r => r.count) : [0]
-  const pmColors = pm.length ? pm.map(r => r.color) : ['#e2e8f0']
+  const pmLabels = pm.length ? pm.map(r => r.label) : []
+  const pmData = pm.length ? pm.map(r => r.count) : []
+  const pmColors = pm.length ? pm.map(r => r.color) : []
   await upsertChart('paymentsByMethod', paymentsByMethodEl.value, {
     type: 'bar',
     data: {
@@ -1639,16 +1883,16 @@ const renderCharts = async () => {
         legend: { display: false }
       },
       scales: {
-        x: { ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
+        x: { beginAtZero: true, ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
         y: { ticks: { color: theme.muted }, grid: { display: false } }
       }
     }
   })
 
   const bs = bookingsByStatusLegend.value
-  const bsLabels = bs.length ? bs.map(r => r.label) : ['Aucune donnée']
-  const bsData = bs.length ? bs.map(r => r.count) : [0]
-  const bsColors = bs.length ? bs.map(r => r.color) : ['#e2e8f0']
+  const bsLabels = bs.length ? bs.map(r => r.label) : []
+  const bsData = bs.length ? bs.map(r => r.count) : []
+  const bsColors = bs.length ? bs.map(r => r.color) : []
   await upsertChart('bookingsByStatus', bookingsByStatusEl.value, {
     type: 'bar',
     data: {
@@ -1672,7 +1916,7 @@ const renderCharts = async () => {
         legend: { display: false }
       },
       scales: {
-        x: { ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
+        x: { beginAtZero: true, ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
         y: { ticks: { color: theme.muted }, grid: { display: false } }
       }
     }
@@ -1683,18 +1927,18 @@ const renderCharts = async () => {
   await upsertChart('evolution', evolutionEl.value, {
     type: 'bar',
     data: {
-      labels: evoHasAny ? evo.labels : ['Aucune donnée'],
+      labels: evoHasAny ? evo.labels : [],
       datasets: [
         {
           label: 'Revenus',
-          data: evoHasAny ? evo.revenues : [0],
+          data: evoHasAny ? evo.revenues : [],
           backgroundColor: 'rgba(34,197,94,0.75)',
           borderRadius: 8,
           borderSkipped: false,
         },
         {
           label: 'Dépenses',
-          data: evoHasAny ? evo.expenses : [0],
+          data: evoHasAny ? evo.expenses : [],
           backgroundColor: 'rgba(239,68,68,0.75)',
           borderRadius: 8,
           borderSkipped: false,
@@ -1707,10 +1951,10 @@ const renderCharts = async () => {
       animation: { duration: 900, easing: 'easeOutQuart' },
       plugins: {
         legend: { position: 'bottom', labels: { color: theme.muted } },
-        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y)}` } }
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y || 0)}` } }
       },
       scales: {
-        y: { ticks: { color: theme.muted, callback: (v) => formatMoney(v) }, grid: { color: theme.grid } },
+        y: { beginAtZero: true, ticks: { color: theme.muted, callback: (v) => formatMoney(v) }, grid: { color: theme.grid } },
         x: { ticks: { color: theme.muted }, grid: { display: false } }
       }
     }
@@ -1721,8 +1965,8 @@ const renderCharts = async () => {
   await upsertChart('bookingsEvolution', bookingsEvolutionEl.value, {
     type: 'bar',
     data: {
-      labels: beHasAny ? beType.labels : ['Aucune donnée'],
-      datasets: beHasAny ? beType.datasets : [{ label: 'Réservations', data: [0], backgroundColor: 'rgba(226,232,240,1)', borderRadius: 8, borderSkipped: false }]
+      labels: beHasAny ? beType.labels : [],
+      datasets: beHasAny ? beType.datasets : []
     },
     options: {
       responsive: true,
@@ -1732,7 +1976,7 @@ const renderCharts = async () => {
         legend: { position: 'bottom', labels: { color: theme.muted } }
       },
       scales: {
-        y: { stacked: true, ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
+        y: { beginAtZero: true, stacked: true, ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
         x: {
           stacked: true,
           grid: { display: false },
@@ -1743,9 +1987,9 @@ const renderCharts = async () => {
   })
 
   const bt = bookingsByTypeLegend.value
-  const btLabels = bt.length ? bt.map(r => r.label) : ['Aucune donnée']
-  const btData = bt.length ? bt.map(r => r.count) : [1]
-  const btColors = bt.length ? bt.map(r => r.color) : ['#e2e8f0']
+  const btLabels = bt.length ? bt.map(r => r.label) : []
+  const btData = bt.length ? bt.map(r => r.count) : []
+  const btColors = bt.length ? bt.map(r => r.color) : []
   await upsertChart('bookingsByType', bookingsByTypeEl.value, {
     type: 'doughnut',
     data: {
@@ -1775,14 +2019,12 @@ const renderCharts = async () => {
   await upsertChart('materialsByCategory', materialsByCategoryEl.value, {
     type: 'bar',
     data: {
-      labels: matsHas ? mats.map(r => r.category) : ['Aucune donnée'],
+      labels: matsHas ? mats.map(r => r.category) : [],
       datasets: matsHas ? [
         { label: 'Disponible', data: mats.map(r => r.available), backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 8, borderSkipped: false },
         { label: 'Endommagé', data: mats.map(r => r.damaged), backgroundColor: 'rgba(245,158,11,0.75)', borderRadius: 8, borderSkipped: false },
         { label: 'Perdu', data: mats.map(r => r.lost), backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 8, borderSkipped: false },
-      ] : [
-        { label: 'Matériels', data: [0], backgroundColor: 'rgba(226,232,240,1)', borderRadius: 8, borderSkipped: false }
-      ]
+      ] : []
     },
     options: {
       responsive: true,
@@ -1798,8 +2040,179 @@ const renderCharts = async () => {
         }
       },
       scales: {
-        x: { stacked: true, ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
+        x: { beginAtZero: true, stacked: true, ticks: { color: theme.muted, precision: 0 }, grid: { color: theme.grid } },
         y: { stacked: true, ticks: { color: theme.muted }, grid: { display: false } }
+      }
+    }
+  })
+
+  const tcsthM = reportTcsthMonthly.value
+  const tcsthMLabels = tcsthM.length ? tcsthM.map(r => r.label) : []
+  const tcsthMCollected = tcsthM.length ? tcsthM.map(r => Number(r.obrPaid || 0) + Number(r.pending || 0)) : []
+  const tcsthMObrPaid = tcsthM.length ? tcsthM.map(r => Number(r.obrPaid || 0)) : []
+  const tcsthMPending = tcsthM.length ? tcsthM.map(r => Number(r.pending || 0)) : []
+  await upsertChart('tcsthMonthly', tcsthMonthlyEl.value, {
+    type: 'bar',
+    data: {
+      labels: tcsthMLabels,
+      datasets: [
+        {
+          label: 'TCSTH payé à l\'OBR',
+          data: tcsthMObrPaid,
+          backgroundColor: 'rgba(34,197,94,0.82)',
+          borderRadius: 10,
+          borderSkipped: false,
+          stack: 'tcsth',
+        },
+        {
+          label: 'TCSTH en attente',
+          data: tcsthMPending,
+          backgroundColor: 'rgba(245,158,11,0.82)',
+          borderRadius: 10,
+          borderSkipped: false,
+          stack: 'tcsth',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 950, easing: 'easeOutQuart' },
+      plugins: {
+        legend: { position: 'bottom', labels: { color: theme.muted, usePointStyle: true } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const value = Number(ctx.parsed.y || 0)
+              if (ctx.dataset.label === 'TCSTH en attente') {
+                const totalIdx = ctx.dataIndex
+                const collected = (tcsthMCollected || [])[totalIdx] || value
+                return [
+                  `${ctx.dataset.label}: ${formatMoney(value)}`,
+                  `Total collecté: ${formatMoney(collected)}`
+                ]
+              }
+              return `${ctx.dataset.label}: ${formatMoney(value)}`
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: { color: theme.muted, callback: (v) => formatMoney(v) },
+          grid: { color: theme.grid }
+        },
+        x: {
+          stacked: true,
+          ticks: { color: theme.muted },
+          grid: { display: false }
+        }
+      }
+    }
+  })
+
+  const tcsthC = reportTcsthCumulative.value
+  const tcsthCLabels = tcsthC.length ? tcsthC.map(r => r.label) : []
+  await upsertChart('tcsthCumulative', tcsthCumulativeEl.value, {
+    type: 'line',
+    data: {
+      labels: tcsthCLabels,
+      datasets: [
+        {
+          label: 'TCSTH collecté (cumul)',
+          data: tcsthC.length ? tcsthC.map(r => Number(r.cumCollected || 0)) : [],
+          borderColor: 'rgba(217,119,6,1)',
+          backgroundColor: 'rgba(217,119,6,0.16)',
+          tension: 0.35,
+          fill: true,
+          borderWidth: 3,
+          pointRadius: 3.5,
+          pointBackgroundColor: 'rgba(217,119,6,1)',
+        },
+        {
+          label: 'TCSTH payé OBR (cumul)',
+          data: tcsthC.length ? tcsthC.map(r => Number(r.cumPaid || 0)) : [],
+          borderColor: 'rgba(34,197,94,1)',
+          backgroundColor: 'rgba(34,197,94,0.14)',
+          tension: 0.35,
+          fill: true,
+          borderWidth: 2.5,
+          pointRadius: 3,
+          pointBackgroundColor: 'rgba(34,197,94,1)',
+        },
+        {
+          label: 'Dette OBR (à verser)',
+          data: tcsthC.length ? tcsthC.map(r => Number(r.cumPending || 0)) : [],
+          borderColor: 'rgba(239,68,68,1)',
+          backgroundColor: 'rgba(239,68,68,0.10)',
+          borderDash: [5, 4],
+          tension: 0.35,
+          fill: true,
+          borderWidth: 2.2,
+          pointRadius: 2.8,
+          pointBackgroundColor: 'rgba(239,68,68,1)',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 950, easing: 'easeOutQuart' },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { color: theme.muted, usePointStyle: true } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y)}`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: theme.muted, callback: (v) => formatMoney(v) },
+          grid: { color: theme.grid }
+        },
+        x: {
+          ticks: { color: theme.muted },
+          grid: { display: false }
+        }
+      }
+    }
+  })
+
+  const splitHT = Math.max(0, Number(reportTcsthHT.value || 0))
+  const splitNonHT = Math.max(0, Number(reportNonTcsthHT.value || 0))
+  const splitHasData = (splitHT + splitNonHT) > 0
+  await upsertChart('tcsthSplit', tcsthSplitEl.value, {
+    type: 'doughnut',
+    data: {
+      labels: splitHasData ? ['CA HT Nuitées (TCSTH 5%)', 'CA HT Autres'] : [],
+      datasets: [
+        {
+          data: splitHasData ? [splitHT, splitNonHT] : [],
+          backgroundColor: splitHasData
+            ? ['rgba(217,119,6,0.88)', 'rgba(14,165,233,0.88)']
+            : [],
+          borderWidth: 0,
+          hoverOffset: 7,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '68%',
+      animation: { duration: 900, easing: 'easeOutQuart' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.label}: ${formatMoney(ctx.parsed || 0)}`
+          }
+        }
       }
     }
   })
@@ -1813,7 +2226,7 @@ watch([rangeStartYmd, rangeEndYmd], () => {
   }, 180)
 }, { immediate: true })
 
-watch([filteredBookings, filteredPayments, filteredExpenses, occupationLegend, paymentsByMethodLegend, bookingsByTypeLegend, bookingEvolutionTypes, materialsByCategoryLegend], () => {
+watch([filteredBookings, filteredPayments, filteredExpenses, occupationLegend, paymentsByMethodLegend, bookingsByTypeLegend, bookingEvolutionTypes, materialsByCategoryLegend, reportTcsthMonthly, reportTcsthCumulative, reportTcsthHT, reportNonTcsthHT], () => {
   scheduleRender()
 }, { deep: true })
 
@@ -1837,6 +2250,9 @@ watch(
     bookingsEvolutionEl.value,
     bookingsByTypeEl.value,
     materialsByCategoryEl.value,
+    tcsthMonthlyEl.value,
+    tcsthCumulativeEl.value,
+    tcsthSplitEl.value,
   ],
   (els) => {
     if (!process.client) return
@@ -2402,6 +2818,16 @@ onBeforeUnmount(() => {
 :global(html[data-admin-theme="dark"]) .summary-icon.primary { background: rgba(148, 163, 184, 0.16); color: #e2e8f0; }
 :global(html[data-admin-theme="dark"]) .summary-icon.info { background: rgba(14, 165, 233, 0.16); color: #38bdf8; }
 :global(html[data-admin-theme="dark"]) .summary-icon.warning { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+:global(html[data-admin-theme="dark"]) .summary-icon.tcsth-icon {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(251, 191, 36, 0.22));
+  border-color: rgba(245, 158, 11, 0.42);
+  color: #fbbf24;
+}
+:global(html[data-admin-theme="dark"]) .card-subtitle { color: #94a3b8; }
+
+:global(html[data-admin-theme="dark"]) .chart-empty-state i { color: var(--gray-500); }
+:global(html[data-admin-theme="dark"]) .chart-empty-state strong { color: var(--gray-200); }
+:global(html[data-admin-theme="dark"]) .chart-empty-state .muted { color: var(--gray-400); }
 
 :global(html[data-admin-theme="dark"]) .insight-chip,
 :global(html[data-admin-theme="dark"]) .panel-empty i {
@@ -2497,6 +2923,11 @@ onBeforeUnmount(() => {
 .summary-icon.primary { background: #f1f5f9; color: #0f172a; }
 .summary-icon.info { background: #f0f9ff; color: #0ea5e9; }
 .summary-icon.warning { background: #fffbeb; color: #f59e0b; }
+.summary-icon.tcsth-icon {
+  background: linear-gradient(135deg, rgba(217,119,6,0.12), rgba(245,158,11,0.22));
+  color: #92400e;
+  border: 1px solid rgba(245,158,11,0.32);
+}
 
 .label {
   display: block;
@@ -2518,11 +2949,30 @@ onBeforeUnmount(() => {
 .value.warning { color: #d97706; }
 .value.info { color: #0ea5e9; }
 .value.primary { color: #0f172a; }
+.value.tcsth-val {
+  background: linear-gradient(135deg, #b45309, #d97706);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
 
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
   gap: var(--space-8);
+}
+
+.card-wide {
+  grid-column: 1 / -1;
+}
+
+.card-subtitle {
+  padding: 0 20px 8px;
+  margin: -10px 0 0;
+  font-size: .8rem;
+  color: var(--gray-500);
+  font-weight: 600;
 }
 
 @media (max-width: 680px) {
@@ -2616,6 +3066,11 @@ onBeforeUnmount(() => {
   height: 240px;
 }
 
+.chart-canvas-wrap.chart-canvas-wide {
+  width: 100%;
+  height: 380px;
+}
+
 .chart-canvas {
   width: 100%;
   height: 100%;
@@ -2634,6 +3089,38 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   z-index: 2;
+}
+
+.chart-empty-state {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.chart-empty-state i {
+  font-size: 30px;
+  opacity: 0.55;
+  color: var(--gray-400);
+}
+
+.chart-empty-state strong {
+  font-size: 0.95rem;
+  color: var(--gray-700);
+  font-weight: 800;
+}
+
+.chart-empty-state .muted {
+  font-size: 0.78rem;
+  color: var(--gray-500);
+  max-width: 360px;
 }
 
 @keyframes skeleton-move {

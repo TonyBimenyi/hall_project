@@ -542,6 +542,44 @@ const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloa
 const { formatMoney, moneyInputModel } = useMoney()
 const { formatDateRange, formatDisplayDate, formatDateTime } = useDateFormat()
 
+const TVA_RATE_PCT_PAYMENTS = 5
+const TVA_DIVISOR_PAYMENTS = 1 + (TVA_RATE_PCT_PAYMENTS / 100)
+const _round2 = (n) => Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100
+const _tvaAppliesForPayment = (objOrType) => {
+  const t = typeof objOrType === 'string' ? objOrType : (objOrType?.booking_type || objOrType?.booking?.booking_type || (objOrType?.booking_type === 'hall' ? 'hall' : 'room'))
+  return String(t || '').toLowerCase() === 'room'
+}
+const paymentsExtractHT = (ttc, ctx = null) => {
+  const value = Number(ttc || 0)
+  const applies = ctx ? _tvaAppliesForPayment(ctx) : true
+  if (!applies || value <= 0) return value
+  return _round2(value / TVA_DIVISOR_PAYMENTS)
+}
+const paymentsExtractTVA = (ttc, ctx = null) => {
+  const value = Number(ttc || 0)
+  const applies = ctx ? _tvaAppliesForPayment(ctx) : true
+  if (!applies || value <= 0) return 0
+  return _round2(value - paymentsExtractHT(value, ctx))
+}
+const paymentBookingHT = (obj) => {
+  if (!obj) return 0
+  const explicit = obj.booking_subtotal_ht
+  if (explicit !== undefined && explicit !== null && explicit !== '') return Number(explicit)
+  return paymentsExtractHT(obj.booking_total_price, obj)
+}
+const paymentBookingTVA = (obj) => {
+  if (!obj) return 0
+  const explicit = obj.booking_tva_amount
+  if (explicit !== undefined && explicit !== null && explicit !== '') return Number(explicit)
+  return paymentsExtractTVA(obj.booking_total_price, obj)
+}
+const paymentBookingTVARate = (obj) => {
+  if (!obj) return TVA_RATE_PCT_PAYMENTS
+  const explicit = Number(obj.booking_tva_rate ?? NaN)
+  if (!isNaN(explicit)) return explicit
+  return _tvaAppliesForPayment(obj) ? TVA_RATE_PCT_PAYMENTS : 0
+}
+
 const payments = ref([])
 const bookings = ref([])
 const currentUser = ref({})
@@ -726,6 +764,12 @@ const buildInvoicePdfHtml = (payment) => {
     ['Période', periodLabel || '-'],
     ['Statut', translateStatus(payment?.status)],
     ['Montant payé', formatMoney(payment?.amount)],
+    ...(_tvaAppliesForPayment(payment)
+      ? [
+        ['Sous-total HT (hébergement + services)', formatMoney(paymentBookingHT(payment))],
+        [`TCSTH ${paymentBookingTVARate(payment)}% (sur hébergement seul)`, formatMoney(paymentBookingTVA(payment))],
+      ]
+      : []),
     ['Total réservation', formatMoney(payment?.booking_total_price)],
     ['Reste à payer', formatMoney(payment?.booking_remaining_amount)],
   ]

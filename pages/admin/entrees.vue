@@ -140,6 +140,9 @@
                   <i class="fas fa-ellipsis-vertical"></i>
                 </button>
                 <div v-if="openActionsId === entree.id" class="actions-menu" @click.stop>
+                  <button class="actions-item" @click="downloadEntryInvoice(entree)">
+                    <i class="fas fa-file-arrow-down"></i> Télécharger la facture
+                  </button>
                   <button class="actions-item" @click="viewEntree(entree)">
                     <i class="fas fa-eye"></i> Voir
                   </button>
@@ -220,6 +223,9 @@
                     <i class="fas fa-ellipsis-vertical"></i>
                   </button>
                   <div v-if="openActionsId === entree.id" class="actions-menu" @click.stop>
+                    <button class="actions-item" @click="downloadEntryInvoice(entree)">
+                      <i class="fas fa-file-arrow-down"></i> Télécharger la facture
+                    </button>
                     <button class="actions-item" @click="viewEntree(entree)">
                       <i class="fas fa-eye"></i> Voir
                     </button>
@@ -336,6 +342,9 @@
         </div>
       </div>
       <template #footer>
+        <button v-if="selectedEntree" class="btn btn-outline" @click="downloadEntryInvoice(selectedEntree)">
+          <i class="fas fa-file-arrow-down"></i> Télécharger la facture
+        </button>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
       </template>
     </AdminAppModal>
@@ -353,18 +362,22 @@
 </template>
 
 <script setup>
+import { ref, computed, onMounted } from 'vue'
+import { notify } from '~/composables/useNotification'
 import { api } from '~/composables/useApi'
 import { useMoney } from '~/composables/useMoney'
 import { usePagination } from '~/composables/usePagination'
 import { useDateFormat } from '~/composables/useDateFormat'
 import { useTableSort } from '~/composables/useTableSort'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
+import { useDocumentBranding } from '~/composables/useDocumentBranding'
 import { canExportAdminExcel, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
 
 const { formatMoney, moneyInputModel } = useMoney()
 const { formatDisplayDate } = useDateFormat()
+const { escapeHtml, documentBranding } = useDocumentBranding()
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
 
 const entrees = ref([])
@@ -473,6 +486,144 @@ const inRangeYmd = (ymd, start, end) => {
 }
 
 const getEntreeDisplayId = (entree) => entree?.code || 'LBE00000001'
+const buildPdfFileName = (prefix, identifier) => {
+  const normalizedIdentifier = String(identifier || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalizedIdentifier
+    ? `${prefix}-${normalizedIdentifier}.pdf`
+    : buildExportFileName(prefix, 'pdf')
+}
+const buildEntryInvoiceHtml = (entree) => {
+  const code = getEntreeDisplayId(entree)
+  const amount = Number(entree?.amount || 0)
+  const documentRef = String(entree?.reference || '').trim() || code
+  const businessTaxId = String(documentBranding?.taxId || '').trim() || '4003469600'
+  const businessRcNumber = String(documentBranding?.rcNumber || '').trim() || '0084351/26'
+
+  const etablissementRows = [
+    ['Établissement', String(documentBranding?.name || 'La Bertha')],
+    ['NIF', businessTaxId],
+    ['RC N°', businessRcNumber],
+    ['Adresse', String(documentBranding?.address || '-')],
+  ]
+  const entreeRows = [
+    ['N° document', documentRef],
+    ['Catégorie', String(entree?.category || 'Autre')],
+    ['Date', formatDisplayDate(entree?.date || entree?.created_at)],
+    ['Créé par', entree?.created_by_name || entree?.received_by || '-'],
+  ]
+  const clientRows = [
+    ['Reçu de', entree?.received_from || 'Client'],
+    ['Objet', entree?.title || 'Vente / Prestation'],
+    ['Statut', translateStatus(entree?.status)],
+  ]
+
+  return buildPdfDocumentHtml({
+    title: 'Facture de vente / encaissement',
+    documentTitle: `Facture ${code}`,
+    subtitle: 'Reçu officiel - Encaissement / vente.',
+    typeLabel: 'Facture',
+    headerEyebrow: 'Facture de vente',
+    headerReference: documentRef,
+    periodLabel: formatDisplayDate(entree?.date || entree?.created_at),
+    showMeta: false,
+    contentHtml: `
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+        <div class="section-card" style="margin:0;">
+          <div class="section-header"><h2>Établissement</h2></div>
+          <table>
+            <tbody>
+              ${etablissementRows.map(([k, v]) => `
+                <tr><td>${escapeHtml(k)}</td><td>${escapeHtml(String(v))}</td></tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="section-card" style="margin:0;">
+          <div class="section-header"><h2>Document</h2></div>
+          <table>
+            <tbody>
+              ${entreeRows.map(([k, v]) => `
+                <tr><td>${escapeHtml(k)}</td><td>${escapeHtml(String(v))}</td></tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section-card" style="margin-bottom: 14px;">
+        <div class="section-header"><h2>Informations client</h2></div>
+        <table>
+          <tbody>
+            ${clientRows.map(([k, v]) => `
+              <tr><td style="width:30%;">${escapeHtml(k)}</td><td>${escapeHtml(String(v))}</td></tr>
+            `).join('')}
+            ${entree?.notes ? `
+              <tr>
+                <td>Notes / Commentaires</td>
+                <td>${escapeHtml(String(entree.notes))}</td>
+              </tr>
+            ` : ''}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header"><h2>Détail de la facture</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:left;">Désignation</th>
+              <th style="text-align:right;">Qté</th>
+              <th style="text-align:right;">Prix unit.</th>
+              <th style="text-align:right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="text-align:left;">${escapeHtml(entree?.title || 'Vente / Prestation')}</td>
+              <td style="text-align:right;">1</td>
+              <td style="text-align:right;">${escapeHtml(formatMoney(amount))}</td>
+              <td style="text-align:right;">${escapeHtml(formatMoney(amount))}</td>
+            </tr>
+            <tr>
+              <td colspan="3" style="text-align:right; font-weight:700; font-size:1.05em;">Total à encaisser</td>
+              <td style="text-align:right; font-weight:700; font-size:1.05em;">${escapeHtml(formatMoney(amount))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-card" style="margin-top: 12px;">
+        <div class="section-header"><h2>Conditions</h2></div>
+        <p style="margin: 6px 0; color:#334155; font-size: 0.92rem; line-height:1.5;">
+          Reçu / facture généré automatiquement - Document valable sans signature manuscrite. Toute somme encaissée est définitive et non remboursable sauf conditions contractuelles contraires.
+        </p>
+      </div>
+    `,
+  })
+}
+const downloadEntryInvoice = async (entree) => {
+  if (!entree || !process.client) return
+  closeActions()
+  try {
+    const html = buildEntryInvoiceHtml(entree)
+    const ok = await downloadPdfHtml({
+      html,
+      fileName: buildPdfFileName('facture-vente', getEntreeDisplayId(entree)),
+    })
+    if (!ok) {
+      notify('Impossible de télécharger la facture PDF', 'warning')
+    }
+  } catch (e) {
+    console.error(e)
+    notify('Erreur génération facture', 'warning')
+  }
+}
 const categories = computed(() => Array.from(new Set((entrees.value || []).map(entree => String(entree?.category || '').trim()).filter(Boolean))).sort())
 
 const toggleActions = (id) => {

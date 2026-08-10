@@ -89,6 +89,13 @@
           </div>
         </div>
         <div class="stat-card card">
+          <div class="stat-icon" style="background:#fef3c7;color:#92400e;"><i class="fas fa-file-invoice-dollar"></i></div>
+          <div class="stat-info">
+            <span class="label">TCSTH collectée</span>
+            <span class="value" style="color:#92400e;">{{ formatMoney(totalTVACollectee) }}</span>
+          </div>
+        </div>
+        <div class="stat-card card">
           <div class="stat-icon primary"><i class="fas fa-receipt"></i></div>
           <div class="stat-info">
             <span class="label">Pieces</span>
@@ -181,6 +188,14 @@
                   <span class="k">Auteur</span>
                   <span class="v">{{ entry.actor }}</span>
                 </div>
+                <div class="admin-kv" v-if="entry.subtotal_ht > 0">
+                  <span class="k">Sous-total HT</span>
+                  <span class="v">{{ formatMoney(entry.subtotal_ht) }}</span>
+                </div>
+                <div class="admin-kv" v-if="entry.tva_amount > 0">
+                  <span class="k">TCSTH {{ entryTVARate(entry) }}% (hébergement)</span>
+                  <span class="v" style="color:#92400e;">{{ formatMoney(entry.tva_amount) }}</span>
+                </div>
                 <div class="admin-kv">
                   <span class="k">Recette</span>
                   <span class="v text-success">{{ entry.recette > 0 ? formatMoney(entry.recette) : '-' }}</span>
@@ -208,6 +223,8 @@
               <th>Reference</th>
               <th>Intitule</th>
               <th>Auteur</th>
+              <th>HT</th>
+              <th>TCSTH</th>
               <th>Recettes</th>
               <th>Depenses</th>
               <th>Solde</th>
@@ -221,6 +238,8 @@
                 <td><div class="skeleton-line skeleton-w-50"></div></td>
                 <td><div class="skeleton-line skeleton-w-80"></div></td>
                 <td><div class="skeleton-line skeleton-w-50"></div></td>
+                <td><div class="skeleton-line skeleton-w-35"></div></td>
+                <td><div class="skeleton-line skeleton-w-35"></div></td>
                 <td><div class="skeleton-line skeleton-w-35"></div></td>
                 <td><div class="skeleton-line skeleton-w-35"></div></td>
                 <td><div class="skeleton-line skeleton-w-40"></div></td>
@@ -245,18 +264,22 @@
                     <span v-if="entry.actorHint" class="actor-hint">{{ entry.actorHint }}</span>
                   </div>
                 </td>
+                <td class="amount-cell">{{ entry.subtotal_ht > 0 ? formatMoney(entry.subtotal_ht) : '-' }}</td>
+                <td class="amount-cell" style="color:#92400e;">{{ entry.tva_amount > 0 ? formatMoney(entry.tva_amount) : '-' }}</td>
                 <td class="amount-cell text-success">{{ entry.recette > 0 ? formatMoney(entry.recette) : '-' }}</td>
                 <td class="amount-cell text-danger">{{ entry.depense > 0 ? formatMoney(entry.depense) : '-' }}</td>
                 <td class="amount-cell" :class="entry.balance >= 0 ? 'text-success' : 'text-danger'">{{ formatMoney(entry.balance) }}</td>
               </tr>
               <tr v-if="filteredEntries.length === 0">
-                <td colspan="8" class="empty-cell">Aucune ecriture comptable sur cette periode.</td>
+                <td colspan="10" class="empty-cell">Aucune ecriture comptable sur cette periode.</td>
               </tr>
             </template>
           </tbody>
           <tfoot v-if="!isLoading && filteredEntries.length">
             <tr class="table-total-row">
               <td colspan="5">Totaux de la periode</td>
+              <td class="amount-cell">{{ formatMoney(totalHT) }}</td>
+              <td class="amount-cell" style="color:#92400e;">{{ formatMoney(totalTVACollectee) }}</td>
               <td class="amount-cell text-success">{{ formatMoney(totalRecettes) }}</td>
               <td class="amount-cell text-danger">{{ formatMoney(totalDepenses) }}</td>
               <td class="amount-cell" :class="netBalance >= 0 ? 'text-success' : 'text-danger'">{{ formatMoney(netBalance) }}</td>
@@ -283,6 +306,45 @@ const { formatMoney } = useMoney()
 const { formatDisplayDate } = useDateFormat()
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
 const { buildHashSequenceMap } = useDisplayIds()
+
+const COMPTA_TVA_PCT = 5
+const COMPTA_TVA_DIV = 1 + (COMPTA_TVA_PCT / 100)
+const _comptaRound = (n) => Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100
+const _tvaAppliesForEntry = (objOrType) => {
+  if (typeof objOrType === 'string') {
+    return String(objOrType || '').toLowerCase() === 'room'
+  }
+  const o = objOrType || {}
+  // Si booking_type explicit → le prendre
+  const bt = String(o.booking_type || '').toLowerCase()
+  if (bt === 'room' || bt === 'hall') return bt === 'room'
+  // Si sourceType autre que payment -> pas TVA (dépenses/entrées manuelles)
+  if (o.sourceType && o.sourceType !== 'payment') return false
+  // Si subtitle/itemLabel contient "Salle" ou event_type → hall
+  const sub = String(o.subtitle || '')
+  const title = String(o.title || '').toLowerCase()
+  if (sub.includes('Salle') || title.includes('salle')) return false
+  // Sinon défaut pour les paiements/booking: on applique (room)
+  return o.sourceType === 'payment'
+}
+const comptaExtractHT = (ttc, ctx = null) => {
+  const value = Number(ttc || 0)
+  const applies = ctx ? _tvaAppliesForEntry(ctx) : true
+  if (!applies || value <= 0) return value
+  return _comptaRound(value / COMPTA_TVA_DIV)
+}
+const comptaExtractTVA = (ttc, ctx = null) => {
+  const value = Number(ttc || 0)
+  const applies = ctx ? _tvaAppliesForEntry(ctx) : true
+  if (!applies || value <= 0) return 0
+  return _comptaRound(value - comptaExtractHT(value, ctx))
+}
+const entryTVARate = (entry) => {
+  if (!entry) return 0
+  const explicit = Number(entry?.tva_rate ?? NaN)
+  if (!isNaN(explicit) && explicit !== 0 && entry?.tva_amount > 0) return explicit
+  return _tvaAppliesForEntry(entry) ? COMPTA_TVA_PCT : 0
+}
 
 const payments = ref([])
 const expenses = ref([])
@@ -390,6 +452,13 @@ const paymentEntries = computed(() => {
         ? `Recette reservation ${bookingCode} - ${clientName}`
         : `Recette reservation - ${clientName}`
       const subtitle = [payment?.booking_event_type || '', itemLabel].filter(Boolean).join(' • ')
+      const amount = toNumber(payment?.amount)
+      const booking_type = String(payment?.booking_type || payment?.booking?.booking_type || '').toLowerCase() || ((itemLabel || '').includes('Salle') || (payment?.booking_event_type || '').trim() ? 'hall' : 'room')
+      const appliesTVA = booking_type === 'room'
+      const hasExplicitTVA = payment?.booking_tva_amount !== undefined && payment?.booking_tva_amount !== null && payment?.booking_tva_amount !== ''
+      const tva_amount = hasExplicitTVA ? toNumber(payment.booking_tva_amount) : (appliesTVA ? comptaExtractTVA(payment?.booking_total_price, { booking_type }) : 0)
+      const subtotal_ht = hasExplicitTVA ? toNumber(payment?.booking_subtotal_ht) : (appliesTVA ? comptaExtractHT(payment?.booking_total_price, { booking_type }) : toNumber(payment?.booking_total_price))
+      const tva_rate = hasExplicitTVA ? toNumber(payment?.booking_tva_rate) : (appliesTVA ? COMPTA_TVA_PCT : 0)
       return {
         entryKey: `payment-${payment.id}`,
         sourceType: 'payment',
@@ -404,8 +473,12 @@ const paymentEntries = computed(() => {
         subtitle,
         actor: String(payment?.created_by_name || payment?.updated_by_name || 'Systeme').trim() || 'Systeme',
         actorHint: String(payment?.method || '').trim() || '',
-        recette: toNumber(payment?.amount),
+        recette: amount,
         depense: 0,
+        subtotal_ht,
+        tva_amount,
+        tva_rate,
+        booking_type,
       }
     })
 })
@@ -433,6 +506,9 @@ const expenseEntries = computed(() => {
         actorHint: String(expense?.paid_by || '').trim() || '',
         recette: 0,
         depense: toNumber(expense?.amount),
+        subtotal_ht: 0,
+        tva_amount: 0,
+        tva_rate: 0,
       }
     })
 })
@@ -459,6 +535,9 @@ const entreeEntries = computed(() => {
         actorHint: String(entree?.received_by || '').trim() || '',
         recette: toNumber(entree?.amount),
         depense: 0,
+        subtotal_ht: 0,
+        tva_amount: 0,
+        tva_rate: 0,
       }
     })
 })
@@ -527,6 +606,8 @@ const decoratedEntries = computed(() => {
 const totalRecettes = computed(() => decoratedEntries.value.reduce((sum, entry) => sum + Number(entry.recette || 0), 0))
 const totalDepenses = computed(() => decoratedEntries.value.reduce((sum, entry) => sum + Number(entry.depense || 0), 0))
 const netBalance = computed(() => totalRecettes.value - totalDepenses.value)
+const totalHT = computed(() => decoratedEntries.value.reduce((sum, entry) => sum + Number(entry.subtotal_ht || 0), 0))
+const totalTVACollectee = computed(() => decoratedEntries.value.reduce((sum, entry) => sum + Number(entry.tva_amount || 0), 0))
 const totalManualEntrees = computed(() => entreeEntries.value.reduce((sum, entry) => sum + Number(entry.recette || 0), 0))
 const currentBalance = computed(() => {
   const recettes = [...paymentEntries.value, ...entreeEntries.value].reduce((sum, entry) => sum + Number(entry.recette || 0), 0)
@@ -787,7 +868,7 @@ onMounted(async () => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
 }
 

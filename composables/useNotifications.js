@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { api } from '~/composables/useApi'
+import { notify as toastNotify } from '~/composables/useNotification'
 
 const NOTIFICATION_TYPES = {
   SUCCESS: 'success',
@@ -12,6 +13,10 @@ const notifications = ref([])
 const loadingNotifications = ref(false)
 const notificationsLoaded = ref(false)
 const showNotificationsDropdown = ref(false)
+const pollingIntervalMs = 20000
+const pollingTimer = ref(null)
+const lastSeenCreatedAt = ref(null)
+const firstFetchDone = ref(false)
 
 const normalizeNotification = (item) => ({
   ...item,
@@ -24,15 +29,57 @@ const unreadNotifications = computed(() => filteredNotifications.value.filter((i
 const unreadCount = computed(() => unreadNotifications.value.length)
 const recentNotifications = computed(() => filteredNotifications.value.slice(0, 5))
 
-const fetchNotifications = async ({ force = false } = {}) => {
+const notifyForNewItems = (freshItems) => {
+  if (!firstFetchDone.value) return
+  if (!Array.isArray(freshItems) || freshItems.length === 0) return
+
+  const baseline = lastSeenCreatedAt.value ? new Date(lastSeenCreatedAt.value).getTime() : 0
+  const newArrivals = freshItems.filter((item) => {
+    const t = item?.created_at ? new Date(item.created_at).getTime() : 0
+    return t > 0 && t > baseline
+  })
+
+  if (newArrivals.length === 0) return
+
+  const firstNew = newArrivals[0]
+  const message = firstNew?.message || firstNew?.title || 'Nouvelle notification'
+  const toastType = firstNew?.type === NOTIFICATION_TYPES.WARNING
+    ? 'warning'
+    : firstNew?.type === NOTIFICATION_TYPES.DANGER
+      ? 'danger'
+      : firstNew?.type === NOTIFICATION_TYPES.SUCCESS
+        ? 'success'
+        : 'success'
+
+  toastNotify(newArrivals.length > 1 ? `${newArrivals.length} nouvelles notifications` : message, toastType, 4500)
+}
+
+const updateLastSeenTimestamp = (items) => {
+  if (!Array.isArray(items) || items.length === 0) return
+  let latest = lastSeenCreatedAt.value ? new Date(lastSeenCreatedAt.value).getTime() : 0
+  for (const item of items) {
+    const t = item?.created_at ? new Date(item.created_at).getTime() : 0
+    if (t > latest) latest = t
+  }
+  lastSeenCreatedAt.value = latest ? new Date(latest).toISOString() : null
+}
+
+const fetchNotifications = async ({ force = false, silent = false } = {}) => {
   if (loadingNotifications.value) return notifications.value
   if (notificationsLoaded.value && !force) return notifications.value
 
-  loadingNotifications.value = true
+  loadingNotifications.value = !silent
   try {
     const response = await api.get('notifications/')
     const items = Array.isArray(response?.data) ? response.data : []
-    notifications.value = items.map(normalizeNotification)
+    const normalized = items.map(normalizeNotification)
+    const previousCount = notifications.value.length
+    notifications.value = normalized
+    notifyForNewItems(normalized)
+    updateLastSeenTimestamp(normalized)
+    if (!firstFetchDone.value && (previousCount === 0 || force || silent)) {
+      firstFetchDone.value = true
+    }
     notificationsLoaded.value = true
   } catch (error) {
     if (force) {
@@ -47,6 +94,24 @@ const fetchNotifications = async ({ force = false } = {}) => {
 }
 
 const refreshNotifications = async () => fetchNotifications({ force: true })
+
+const startNotificationsPolling = () => {
+  if (!process.client) return
+  if (pollingTimer.value) return
+  pollingTimer.value = setInterval(async () => {
+    try {
+      await fetchNotifications({ force: true, silent: true })
+    } catch (e) {
+      /* ignore transient network errors during polling */
+    }
+  }, pollingIntervalMs)
+}
+
+const stopNotificationsPolling = () => {
+  if (!pollingTimer.value) return
+  clearInterval(pollingTimer.value)
+  pollingTimer.value = null
+}
 
 const markAsRead = async (notificationId) => {
   const notification = notifications.value.find((item) => item.id === notificationId)
@@ -115,4 +180,6 @@ export {
   formatTimeAgo,
   markAsRead,
   markAllAsRead,
+  startNotificationsPolling,
+  stopNotificationsPolling,
 }

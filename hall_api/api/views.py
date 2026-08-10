@@ -431,6 +431,21 @@ def _index_hall_additional_services(hall: Hall):
     return index
 
 
+TCSTH_RATE = Decimal('5.00')
+_TCSTH_MULT = Decimal('0.05')
+_TCSTH_Q = Decimal('0.01')
+TCSTH_APPLIES_TO = {'room'}
+
+
+def _compute_tcsth_from_base_rooms(base_rooms_ht, *, booking_type='room'):
+    base_rooms_ht = Decimal(str(base_rooms_ht or '0.00'))
+    applies = str(booking_type or '').strip().lower() in TCSTH_APPLIES_TO
+    if (not applies) or base_rooms_ht <= 0:
+        return base_rooms_ht.quantize(_TCSTH_Q), TCSTH_RATE, Decimal('0.00')
+    tcsth = (base_rooms_ht * _TCSTH_MULT).quantize(_TCSTH_Q)
+    return base_rooms_ht.quantize(_TCSTH_Q), TCSTH_RATE, tcsth
+
+
 def _compute_addons_total(item: Hall | Room, selected_services):
     selected_services = selected_services or []
     if not isinstance(selected_services, list):
@@ -493,58 +508,25 @@ def _compute_addons_total(item: Hall | Room, selected_services):
     return addons_total.quantize(Decimal('0.01')), normalized_selected
 
 
-def _compute_booking_totals(item: Hall | Room, start_dt: date, end_dt: date, selected_services):
+def _compute_booking_totals(item: Hall | Room, start_dt: date, end_dt: date, selected_services, *, booking_type=None):
     if end_dt < start_dt:
         raise DjangoValidationError('La date fin doit être après la date début')
     days = (end_dt - start_dt).days + 1
     if isinstance(item, Hall):
         base_total = (Decimal(days) * Decimal(str(item.price_per_day or '0.00'))).quantize(Decimal('0.01'))
+        resolved_type = 'hall'
     elif isinstance(item, Room):
         base_total = (Decimal(days) * Decimal(str(item.price_per_night or '0.00'))).quantize(Decimal('0.01'))
+        resolved_type = 'room'
     else:
         base_total = Decimal('0.00')
+        resolved_type = str(booking_type or '')
     addons_total, normalized_selected = _compute_addons_total(item, selected_services)
-    total = (base_total + addons_total).quantize(Decimal('0.01'))
-    return base_total, addons_total, total, normalized_selected
-
-
-def _compute_room_booking_totals(selected_rooms, start_dt: date, end_dt: date, selected_services):
-    if end_dt < start_dt:
-        raise DjangoValidationError('La date fin doit être après la date début')
-    days = (end_dt - start_dt).days + 1
-    room_total = sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)
-    base_total = (Decimal(days) * room_total).quantize(Decimal('0.01'))
-
-    room_services_map = {}
-    if isinstance(selected_services, list) and selected_services:
-        has_room_groups = all(isinstance(item, dict) and ('room_id' in item or 'services' in item) for item in selected_services)
-        if has_room_groups:
-            for item in selected_services:
-                try:
-                    room_id = int(item.get('room_id'))
-                except (TypeError, ValueError):
-                    continue
-                room_services_map[room_id] = item.get('services') or []
-        elif len(selected_rooms) == 1:
-            room_services_map[selected_rooms[0].id] = selected_services
-
-    addons_total = Decimal('0.00')
-    normalized_selected = []
-    for room in selected_rooms:
-        room_services = room_services_map.get(room.id) or []
-        if not room_services:
-            continue
-        room_addons_total, normalized_room_services = _compute_addons_total(room, room_services)
-        addons_total += room_addons_total
-        if normalized_room_services:
-            normalized_selected.append({
-                'room_id': room.id,
-                'services': normalized_room_services,
-            })
-
-    addons_total = addons_total.quantize(Decimal('0.01'))
-    total = (base_total + addons_total).quantize(Decimal('0.01'))
-    return base_total, addons_total, total, normalized_selected
+    final_type = str(booking_type or resolved_type or '').strip().lower()
+    tcsth_base, tva_rate, tcsth_amount = _compute_tcsth_from_base_rooms(base_total, booking_type=final_type)
+    subtotal_ht = (base_total + addons_total).quantize(Decimal('0.01'))
+    total = (base_total + addons_total + tcsth_amount).quantize(Decimal('0.01'))
+    return base_total, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tcsth_amount
 
 
 def _normalize_booking_room_ids(booking):
@@ -1216,16 +1198,29 @@ class BookingViewSet(viewsets.ModelViewSet):
         end_dt = serializer.validated_data.get('end_date')
         selected = serializer.validated_data.get('additional_services_selected') or []
         if booking_type == 'hall':
-            _, addons_total, total, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected)
+            _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount = _compute_booking_totals(hall, start_dt, end_dt, selected, booking_type=booking_type)
         else:
             selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
-            _, addons_total, total, normalized_selected = _compute_room_booking_totals(selected_rooms, start_dt, end_dt, selected)
+            if end_dt < start_dt:
+                raise DjangoValidationError('La date fin doit être après la date début')
+            days = (end_dt - start_dt).days + 1
+            base_accomodation_ht = (Decimal(days) * sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)).quantize(Decimal('0.01'))
+            if len(selected_rooms) == 1:
+                _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount = _compute_booking_totals(selected_rooms[0], start_dt, end_dt, selected, booking_type=booking_type)
+            else:
+                addons_total, normalized_selected = _compute_addons_total(selected_rooms[0], selected) if selected_rooms else (Decimal('0.00'), [])
+                _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
+                subtotal_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
+                total = (base_accomodation_ht + addons_total + tva_amount).quantize(Decimal('0.01'))
         save_kwargs = {
             'created_by': self.request.user,
             'updated_by': self.request.user,
             'customer': resolved_customer,
             'total_price': total,
             'addons_total': addons_total,
+            'subtotal_ht': subtotal_ht,
+            'tva_rate': tva_rate,
+            'tva_amount': tva_amount,
             'additional_services_selected': normalized_selected,
             'room_ids': room_ids if booking_type == 'room' else [],
         }
@@ -1275,15 +1270,28 @@ class BookingViewSet(viewsets.ModelViewSet):
         end_dt = serializer.validated_data.get('end_date', getattr(instance, 'end_date', None))
         selected = serializer.validated_data.get('additional_services_selected', getattr(instance, 'additional_services_selected', [])) or []
         if booking_type == 'hall':
-            _, addons_total, total, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected)
+            _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount = _compute_booking_totals(hall, start_dt, end_dt, selected, booking_type=booking_type)
         else:
             selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
-            _, addons_total, total, normalized_selected = _compute_room_booking_totals(selected_rooms, start_dt, end_dt, selected)
+            if end_dt < start_dt:
+                raise DjangoValidationError('La date fin doit être après la date début')
+            days = (end_dt - start_dt).days + 1
+            base_accomodation_ht = (Decimal(days) * sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)).quantize(Decimal('0.01'))
+            if len(selected_rooms) == 1:
+                _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount = _compute_booking_totals(selected_rooms[0], start_dt, end_dt, selected, booking_type=booking_type)
+            else:
+                addons_total, normalized_selected = _compute_addons_total(selected_rooms[0], selected) if selected_rooms else (Decimal('0.00'), [])
+                _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
+                subtotal_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
+                total = (base_accomodation_ht + addons_total + tva_amount).quantize(Decimal('0.01'))
         save_kwargs = {
             'updated_by': _actor(self.request),
             'customer': resolved_customer,
             'total_price': total,
             'addons_total': addons_total,
+            'subtotal_ht': subtotal_ht,
+            'tva_rate': tva_rate,
+            'tva_amount': tva_amount,
             'additional_services_selected': normalized_selected,
             'room_ids': room_ids if booking_type == 'room' else [],
         }
@@ -1421,7 +1429,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             return Response({'dates': 'Ces dates ne sont pas disponibles pour cette salle'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            _, addons_total, total_price, normalized_selected = _compute_booking_totals(hall, start_dt, end_dt, selected_services)
+            _, addons_total, total_price, normalized_selected, subtotal_ht, tva_rate, tva_amount = _compute_booking_totals(hall, start_dt, end_dt, selected_services, booking_type='hall')
         except DjangoValidationError as e:
             return Response({'additional_services_selected': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1461,6 +1469,9 @@ class BookingViewSet(viewsets.ModelViewSet):
             end_date=end_dt,
             total_price=total_price,
             addons_total=addons_total,
+            subtotal_ht=subtotal_ht,
+            tva_rate=tva_rate,
+            tva_amount=tva_amount,
             additional_services_selected=normalized_selected,
             status='pending',
             created_by=user,

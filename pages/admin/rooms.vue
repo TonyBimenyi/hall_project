@@ -164,6 +164,9 @@
                 <span :class="['status-pill', `status-${booking.room_status || 'reserved'}`]">{{ roomStatusLabel(booking.room_status || 'reserved') }}</span>
                 <span class="desk-mini">{{ booking.code || '-' }}</span>
                 <span class="desk-mini">{{ booking.guest_count || 0 }} pers.</span>
+                <span v-if="Number(booking.remaining_amount || 0) > 0" class="status-pill status-unpaid" title="Paiement en attente">
+                  <i class="fas fa-circle-exclamation"></i> En attente : {{ formatMoney(booking.remaining_amount) }}
+                </span>
               </div>
             </div>
             <div class="desk-item-actions">
@@ -785,6 +788,17 @@
           <div><strong>Période:</strong> {{ formatDateRange(selectedRoomStay.start_date, selectedRoomStay.end_date) }}</div>
         </div>
 
+        <div v-if="selectedRoomStay.action === 'check_in' && Number(selectedRoomStay.remaining_amount || 0) > 0" class="stay-modal-warning">
+          <div class="smw-icon"><i class="fas fa-triangle-exclamation"></i></div>
+          <div class="smw-body">
+            <strong>⚠️ Paiement incomplet</strong>
+            <p>Cette réservation a un solde restant de <strong>{{ formatMoney(selectedRoomStay.remaining_amount) }}</strong> à encaisser. Le check-in est autorisé, mais le règlement du reste à payer restera dû.</p>
+          </div>
+          <button v-if="Number(selectedRoomStay.remaining_amount || 0) > 0" type="button" class="btn btn-outline btn-sm smw-action" @click="() => { closeStayModal(); openPaymentForBooking(selectedRoomStay); }">
+            <i class="fas fa-coins"></i> Régler maintenant
+          </button>
+        </div>
+
         <template v-if="selectedRoomStay.action === 'check_in'">
           <div class="stay-modal-head">
             <div>
@@ -1102,12 +1116,12 @@ const roomStayEntries = computed(() => roomBookings.value.flatMap((booking) => {
     checked_out_at: stay.checked_out_at,
     guests: Array.isArray(stay.guests) ? stay.guests : [],
     guest_count: Number(stay.guest_count || 0),
-    can_check_in: Boolean(stay.can_check_in && booking.status === 'paid'),
+    can_check_in: Boolean(stay.can_check_in && ['paid','pending'].includes(String(booking.status || '')) && !booking.checked_in_at),
     can_check_out: Boolean(stay.can_check_out),
   }))
 }))
 const pendingArrivalBookings = computed(() => roomStayEntries.value
-  .filter((roomStay) => roomStay.booking_status === 'paid' && !roomStay.checked_in_at)
+  .filter((roomStay) => ['paid','pending'].includes(String(roomStay.booking_status || '')) && !roomStay.checked_in_at)
   .slice()
   .sort((a, b) => new Date(a?.start_date || 0) - new Date(b?.start_date || 0)))
 const inHouseBookings = computed(() => roomStayEntries.value
@@ -2421,6 +2435,20 @@ const deleteRoom = async () => {
   border-color: #fecaca;
 }
 
+.status-unpaid {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.75rem;
+}
+.status-unpaid i { font-size: .75rem; }
+
 .stat-info {
   display: flex;
   flex-direction: column;
@@ -2845,6 +2873,14 @@ const deleteRoom = async () => {
 :global(html[data-admin-theme="dark"]) .stay-modal-guest-line {
   color: #cbd5e1;
 }
+:global(html[data-admin-theme="dark"]) .stay-modal-warning {
+  background: rgba(146, 64, 14, 0.14);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+:global(html[data-admin-theme="dark"]) .stay-modal-warning .smw-body strong,
+:global(html[data-admin-theme="dark"]) .stay-modal-warning .smw-body p {
+  color: #fde68a;
+}
 
 :global(html[data-admin-theme="dark"]) .frontdesk-search-input:focus,
 :global(html[data-admin-theme="dark"]) .frontdesk-select:focus {
@@ -2872,7 +2908,15 @@ const deleteRoom = async () => {
   color: #bfdbfe;
 }
 
-:global(html[data-admin-theme="dark"]) .booking-summary,
+:global(html[data-admin-theme="dark"]) .booking-summary {
+  background: rgba(15, 23, 42, 0.78);
+  border-color: rgba(51, 65, 85, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  color: #cbd5e1;
+}
+:global(html[data-admin-theme="dark"]) .booking-summary strong {
+  color: #f1f5f9;
+}
 :global(html[data-admin-theme="dark"]) .form-hint,
 :global(html[data-admin-theme="dark"]) .entity-view-empty {
   color: #cbd5e1;
@@ -2920,13 +2964,13 @@ const deleteRoom = async () => {
 
 .booking-summary {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.45rem;
   margin-bottom: 1rem;
-  padding: 1rem;
-  border-radius: 18px;
-  border: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  color: #334155;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  color: var(--gray-700);
   font-size: 0.9rem;
 }
 
@@ -2955,6 +2999,56 @@ const deleteRoom = async () => {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+.stay-modal-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: .9rem 1rem;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+  background: color-mix(in srgb, var(--warning-bg) 85%, var(--warning) 6%);
+  margin-bottom: 1rem;
+}
+.stay-modal-warning .smw-icon {
+  flex: 0 0 auto;
+  width: 34px; height: 34px;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: var(--warning);
+  font-size: 1.05rem;
+}
+.stay-modal-warning .smw-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
+.stay-modal-warning .smw-body strong {
+  color: #92400e;
+  font-weight: 800;
+  font-size: .92rem;
+}
+.stay-modal-warning .smw-body p {
+  margin: 0;
+  color: #78350f;
+  font-size: .84rem;
+  line-height: 1.5;
+}
+.stay-modal-warning .smw-action {
+  flex: 0 0 auto;
+  align-self: center;
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  color: var(--warning);
+}
+.stay-modal-warning .smw-action:hover {
+  background: var(--warning);
+  color: var(--white);
+  border-color: var(--warning);
 }
 
 .stay-modal-head h3,
