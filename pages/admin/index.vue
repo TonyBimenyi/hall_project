@@ -2463,13 +2463,13 @@ onMounted(() => {
 
 .alert-card.danger {
   border-color: #f87171;
-  background: #fef2f2;
+  background: var(--gray-200);
   box-shadow: 0 3px 0 0 #fecaca;
 }
 
 .alert-card.warning {
   border-color: #fbbf24;
-  background: #fffbeb;
+  background: var(--gray-200);
   box-shadow: 0 3px 0 0 #fde68a;
 }
 
