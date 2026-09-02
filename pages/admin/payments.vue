@@ -409,6 +409,10 @@
           <div><strong>Type:</strong> {{ selectedBookingForForm.booking_type === 'room' ? 'Chambre' : 'Salle' }}</div>
           <div><strong>Unité:</strong> {{ bookingItemLabel(selectedBookingForForm) }}</div>
           <div><strong>Total:</strong> {{ formatMoney(selectedBookingForForm.total_price) }}</div>
+          <div v-if="Number(selectedBookingForForm.discount_amount || 0) > 0">
+            <strong>Remise:</strong> <span style="color: #059669; font-weight: 700;">-{{ formatMoney(selectedBookingForForm.discount_amount) }}</span>
+            <span v-if="selectedBookingForForm.discount_reason"> ({{ selectedBookingForForm.discount_reason }})</span>
+          </div>
           <div><strong>Déjà payé:</strong> {{ formatMoney(selectedBookingForForm.paid_amount) }}</div>
           <div><strong>Reste:</strong> {{ formatMoney(selectedBookingForForm.remaining_amount) }}</div>
           <div v-if="selectedBookingForForm.booking_type === 'room'"><strong>Client hébergé:</strong> {{ selectedBookingForForm.guest_full_name || selectedBookingForForm.customer_name }}</div>
@@ -768,6 +772,11 @@ const buildInvoicePdfHtml = (payment) => {
       ? [
         ['Sous-total HT (hébergement + services)', formatMoney(paymentBookingHT(payment))],
         [`TCSTH ${paymentBookingTVARate(payment)}% (sur hébergement seul)`, formatMoney(paymentBookingTVA(payment))],
+      ]
+      : []),
+    ...(Number(payment?.booking_discount_amount || 0) > 0
+      ? [
+        [`Remise accordée${payment?.booking_discount_reason ? ` (${payment.booking_discount_reason})` : ''}`, `-${formatMoney(payment?.booking_discount_amount)}`],
       ]
       : []),
     ['Total réservation', formatMoney(payment?.booking_total_price)],

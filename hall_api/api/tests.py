@@ -85,12 +85,48 @@ class BookingAddonsPricingTests(TestCase):
             {'name': 'Décoration', 'subservices': [{'name': 'Premium'}]},
         ]
 
-        base_total, addons_total, total, normalized_selected = _compute_booking_totals(hall, start, end, selected)
+        base_total, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount, discount = _compute_booking_totals(hall, start, end, selected)
         self.assertEqual(str(base_total), '200000.00')
         self.assertEqual(str(addons_total), '85000.00')
         self.assertEqual(str(total), '285000.00')
+        self.assertEqual(str(discount), '0.00')
         self.assertEqual(normalized_selected[0]['name'], 'Sonorisation')
         self.assertEqual(normalized_selected[1]['name'], 'Décoration')
+
+
+class BookingDiscountPricingTests(TestCase):
+    def setUp(self):
+        self.hall = Hall.objects.create(
+            name='Salle Remise',
+            capacity=150,
+            price_per_day='100000.00',
+        )
+
+    def test_compute_totals_with_discount(self):
+        start = timezone.localdate() + timedelta(days=5)
+        end = start + timedelta(days=1)  # 2 days -> 200 000
+        discount_amount = 30000
+
+        base_total, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount, discount = _compute_booking_totals(
+            self.hall, start, end, [], discount_amount=discount_amount
+        )
+        self.assertEqual(str(base_total), '200000.00')
+        self.assertEqual(str(discount), '30000.00')
+        self.assertEqual(str(subtotal_ht), '170000.00')
+        self.assertEqual(str(total), '170000.00')
+
+    def test_discount_cannot_exceed_total(self):
+        start = timezone.localdate() + timedelta(days=5)
+        end = start  # 1 day -> 100 000
+        discount_amount = 250000  # greater than 100 000
+
+        base_total, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount, discount = _compute_booking_totals(
+            self.hall, start, end, [], discount_amount=discount_amount
+        )
+        self.assertEqual(str(base_total), '100000.00')
+        self.assertEqual(str(discount), '100000.00')
+        self.assertEqual(str(subtotal_ht), '0.00')
+        self.assertEqual(str(total), '0.00')
 
 
 class PaymentInvoiceEmailTests(TestCase):
@@ -162,3 +198,37 @@ class PaymentInvoiceEmailTests(TestCase):
         self.assertFalse(response.data['invoice_email_sent'])
         self.assertEqual(Payment.objects.count(), 1)
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_sends_invoice_email_with_discount_breakdown(self):
+        booking = Booking.objects.create(
+            hall=self.hall,
+            customer_name='Client Remise',
+            customer_email='remise@example.com',
+            event_type='Gala',
+            start_date=timezone.localdate() + timedelta(days=20),
+            end_date=timezone.localdate() + timedelta(days=20),
+            total_price='120000.00',
+            discount_amount='30000.00',
+            discount_reason='Promotion speciale',
+            status='confirmed',
+        )
+
+        response = self.client.post('/api/payments/', {
+            'booking': booking.id,
+            'date': str(timezone.localdate()),
+            'reference': 'REF-REMISE-001',
+            'amount': '120000.00',
+            'method': 'Virement',
+            'kind': 'full',
+            'status': 'paid',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data['invoice_email_sent'])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Remise accordée', mail.outbox[0].body)
+        self.assertIn('30 000.00 Fbu', mail.outbox[0].body)
+        self.assertIn('Promotion speciale', mail.outbox[0].body)
+        html_content = mail.outbox[0].alternatives[0][0]
+        self.assertIn('Remise accordée', html_content)
+        self.assertIn('Promotion speciale', html_content)

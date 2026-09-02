@@ -276,7 +276,14 @@
               </td>
               <td>{{ booking.event_type }}</td>
               <td class="date-cell">{{ formatDateRange(booking.start_date, booking.end_date) }}</td>
-              <td class="amount-cell">{{ formatMoney(booking.total_price) }}</td>
+              <td class="amount-cell">
+                <div class="booking-amount-box">
+                  <span class="booking-amount-val">{{ formatMoney(booking.total_price) }}</span>
+                  <span v-if="Number(booking.discount_amount || 0) > 0" class="discount-table-badge" :title="`Remise: -${formatMoney(booking.discount_amount)}${booking.discount_reason ? ` (${booking.discount_reason})` : ''}`">
+                    <i class="fas fa-tag"></i> -{{ formatMoney(booking.discount_amount) }}
+                  </span>
+                </div>
+              </td>
               <td>
                 <span :class="['badge', getBadgeClass(booking.status)]">
                   {{ getStatusTranslation(booking.status) }}
@@ -319,7 +326,7 @@
     </div>
 
     <!-- Modals -->
-    <AdminAppModal v-model="showFormModal" :title="isEditing ? 'Modifier la réservation' : 'Nouvelle réservation'" width="760px">
+    <AdminAppModal v-model="showFormModal" :title="isEditing ? 'Modifier la réservation' : 'Nouvelle réservation'" width="980px">
       <form @submit.prevent="saveBooking" class="admin-form booking-form-shell">
         <div class="booking-form-hero">
           <div class="booking-form-hero-copy">
@@ -791,19 +798,150 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Montant (Fbu)</label>
-              <input
-                v-model="totalPriceInput"
-                inputmode="numeric"
-                type="text"
-                class="form-input"
-                :disabled="!isEditing"
-                :readonly="!isEditing"
-                required
-              />
-              <small class="form-hint" v-if="daysCount > 0">{{ daysCount }} {{ form.booking_type === 'hall' ? 'jour(s)' : 'nuit(s)' }} à {{ formatMoney(pricePerUnit) }}/{{ form.booking_type === 'hall' ? 'jour' : 'nuit' }}</small>
-              <small class="form-hint" v-if="!isEditing">Montant calcule automatiquement selon la salle et la periode.</small>
+            <!-- Modern Financial & Discount Card -->
+            <div class="pricing-discount-panel form-group full">
+              <div class="pdp-header">
+                <div class="pdp-header-left">
+                  <div class="pdp-icon-box">
+                    <i class="fas fa-percent"></i>
+                  </div>
+                  <div>
+                    <h5 class="pdp-title">Remise & Tarification Finale</h5>
+                    <p class="pdp-subtitle">Appliquez une réduction et vérifiez le montant total net calculé.</p>
+                  </div>
+                </div>
+                <div class="pdp-header-badge">
+                  <span v-if="Number(form.discount_amount || 0) > 0" class="pdp-discount-active-badge">
+                    <i class="fas fa-tag"></i> Remise active: -{{ formatMoney(form.discount_amount) }}
+                  </span>
+                  <span v-else class="pdp-discount-inactive-badge">
+                    <i class="fas fa-check-circle"></i> Tarif standard
+                  </span>
+                </div>
+              </div>
+
+              <div class="pdp-body-grid">
+                <!-- Left: Discount Controls -->
+                <div class="pdp-control-card">
+                  <div class="pdp-field-group">
+                    <div class="pdp-field-header">
+                      <label class="pdp-label">
+                        <i class="fas fa-tag" style="color: #10b981;"></i>
+                        <span>Remise accordée</span>
+                      </label>
+                      <button
+                        v-if="Number(form.discount_amount || 0) > 0"
+                        type="button"
+                        class="pdp-clear-btn"
+                        @click="clearDiscount"
+                        title="Effacer la remise"
+                      >
+                        <i class="fas fa-times-circle"></i> Réinitialiser
+                      </button>
+                    </div>
+
+                    <div class="pdp-input-wrapper">
+                      <span class="pdp-input-icon"><i class="fas fa-minus" style="color: #10b981;"></i></span>
+                      <input
+                        v-model="discountAmountInput"
+                        inputmode="numeric"
+                        type="text"
+                        class="pdp-input pdp-input-amount"
+                        placeholder="0"
+                      />
+                      <span class="pdp-input-suffix">FBU</span>
+                    </div>
+
+                    <!-- Quick % Discount Presets -->
+                    <div class="pdp-presets">
+                      <span class="pdp-presets-label">Raccourcis:</span>
+                      <div class="pdp-presets-list">
+                        <button
+                          v-for="pct in [5, 10, 15, 20, 25]"
+                          :key="pct"
+                          type="button"
+                          class="pdp-preset-btn"
+                          :class="{ 'is-active': Number(grossBookingAmount) > 0 && Math.round(Number(grossBookingAmount) * (pct / 100)) === Number(form.discount_amount || 0) }"
+                          @click="applyQuickDiscountPercent(pct)"
+                        >
+                          {{ pct }}%
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="pdp-field-group pdp-reason-group">
+                    <label class="pdp-label">
+                      <i class="fas fa-comment-dots" style="color: #94a3b8;"></i>
+                      <span>Motif de la remise (optionnel)</span>
+                    </label>
+                    <div class="pdp-input-wrapper">
+                      <input
+                        v-model="form.discount_reason"
+                        type="text"
+                        class="pdp-input pdp-input-reason"
+                        placeholder="Ex: Client fidèle, Accord commercial, Promotion..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Right: Final Total Hero Card -->
+                <div class="pdp-hero-card">
+                  <div class="pdp-hero-top">
+                    <span class="pdp-hero-label">
+                      <i class="fas fa-receipt"></i> Montant Net Final
+                    </span>
+                    <span v-if="isEditing" class="pdp-edit-badge">
+                      <i class="fas fa-pen"></i> Mode édition
+                    </span>
+                    <span v-else class="pdp-auto-badge">
+                      <i class="fas fa-bolt"></i> Calcul auto
+                    </span>
+                  </div>
+
+                  <div class="pdp-hero-amount-box">
+                    <template v-if="isEditing">
+                      <div class="pdp-input-wrapper pdp-edit-total-wrap">
+                        <input
+                          v-model="totalPriceInput"
+                          inputmode="numeric"
+                          type="text"
+                          class="pdp-input pdp-hero-edit-input"
+                          required
+                        />
+                        <span class="pdp-input-suffix pdp-hero-suffix">FBU</span>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <div class="pdp-hero-val-wrap">
+                        <span class="pdp-hero-val">{{ formatMoney(form.total_price || 0) }}</span>
+                      </div>
+                    </template>
+                  </div>
+
+                  <!-- Mini Financial Summary Strip -->
+                  <div class="pdp-mini-summary">
+                    <div class="pdp-summary-row">
+                      <span class="pdp-summary-k">Montant brut</span>
+                      <span class="pdp-summary-v">{{ formatMoney(grossBookingAmount) }}</span>
+                    </div>
+                    <div v-if="Number(form.discount_amount || 0) > 0" class="pdp-summary-row pdp-summary-discount">
+                      <span class="pdp-summary-k"><i class="fas fa-tag"></i> Déduction remise</span>
+                      <span class="pdp-summary-v">-{{ formatMoney(form.discount_amount) }}</span>
+                    </div>
+                    <div class="pdp-summary-row" v-if="daysCount > 0">
+                      <span class="pdp-summary-k">Tarif de base</span>
+                      <span class="pdp-summary-v">{{ daysCount }} {{ form.booking_type === 'hall' ? 'jour(s)' : 'nuit(s)' }} × {{ formatMoney(pricePerUnit) }}</span>
+                    </div>
+                  </div>
+
+                  <div class="pdp-hero-hint">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Montant synchronisé automatiquement selon la période, les services et la remise.</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -816,25 +954,39 @@
               <template v-if="formAppliesTVA">
                 <span class="breakdown-line"><span class="breakdown-label">Hébergement (HT)</span><span class="breakdown-value">{{ formatMoney(formBaseAccomodationHT) }}</span></span>
                 <span class="breakdown-line" v-if="formAddonsAmount > 0"><span class="breakdown-label">Services additionnels</span><span class="breakdown-value">{{ formatMoney(formAddonsAmount) }}</span></span>
-                <span class="breakdown-line dotted"><span class="breakdown-label">Sous-total HT</span><span class="breakdown-value">{{ formatMoney(formSubtotalHT) }}</span></span>
+                <span class="breakdown-line dotted"><span class="breakdown-label">Sous-total brut HT</span><span class="breakdown-value">{{ formatMoney(formBaseAccomodationHT + formAddonsAmount) }}</span></span>
+                <span class="breakdown-line discount-line" v-if="Number(form.discount_amount || 0) > 0">
+                  <span class="breakdown-label"><i class="fas fa-tag"></i> Remise accordée {{ form.discount_reason ? `(${form.discount_reason})` : '' }}</span>
+                  <span class="breakdown-value discount-value">-{{ formatMoney(form.discount_amount) }}</span>
+                </span>
+                <span class="breakdown-line dotted" v-if="Number(form.discount_amount || 0) > 0"><span class="breakdown-label">Sous-total net HT</span><span class="breakdown-value">{{ formatMoney(formSubtotalHT) }}</span></span>
                 <span class="breakdown-line tcsth-line"><span class="breakdown-label">TCSTH {{ TVA_RATE_PCT }}% (sur hébergement seul)</span><span class="breakdown-value tcsth-value">{{ formatMoney(formTvaAmount) }}</span></span>
                 <span class="breakdown-line breakdown-total-line"><span class="breakdown-label">Total TTC</span><span class="breakdown-value">{{ formatMoney(form.total_price || 0) }}</span></span>
               </template>
               <template v-else>
                 <span class="breakdown-line" v-if="baseBookingAmount > 0"><span class="breakdown-label">Salle (jour)</span><span class="breakdown-value">{{ formatMoney(baseBookingAmount) }}</span></span>
                 <span class="breakdown-line" v-if="formAddonsAmount > 0"><span class="breakdown-label">Services additionnels</span><span class="breakdown-value">{{ formatMoney(formAddonsAmount) }}</span></span>
-                <span class="breakdown-line breakdown-total-line"><span class="breakdown-label">Montant total</span><span class="breakdown-value">{{ formatMoney(form.total_price || 0) }}</span></span>
+                <span class="breakdown-line dotted" v-if="Number(form.discount_amount || 0) > 0"><span class="breakdown-label">Sous-total brut</span><span class="breakdown-value">{{ formatMoney(baseBookingAmount + formAddonsAmount) }}</span></span>
+                <span class="breakdown-line discount-line" v-if="Number(form.discount_amount || 0) > 0">
+                  <span class="breakdown-label"><i class="fas fa-tag"></i> Remise accordée {{ form.discount_reason ? `(${form.discount_reason})` : '' }}</span>
+                  <span class="breakdown-value discount-value">-{{ formatMoney(form.discount_amount) }}</span>
+                </span>
+                <span class="breakdown-line breakdown-total-line"><span class="breakdown-label">Montant total net</span><span class="breakdown-value">{{ formatMoney(form.total_price || 0) }}</span></span>
               </template>
             </div>
             <small class="booking-total-hint">
               <template v-if="formAppliesTVA">TCSTH 5% (Taxe Consommation Services Tarifs Hébergement) — s'applique UNIQUEMENT sur l'hébergement (nuitées). Les services additionnels ne sont pas soumis à cette taxe.</template>
-              <template v-else>Le montant total se met à jour automatiquement selon la salle, la période et les services ajoutés.</template>
+              <template v-else>Le montant total se met à jour automatiquement selon la salle, la période, les services ajoutés et la remise éventuelle.</template>
             </small>
           </div>
           <div class="booking-total-meta">
             <div class="booking-total-chip">
               <span class="chip-label">Base</span>
               <strong>{{ formatMoney(baseBookingAmount) }}</strong>
+            </div>
+            <div class="booking-total-chip" v-if="Number(form.discount_amount || 0) > 0">
+              <span class="chip-label">Remise</span>
+              <strong style="color: #059669;">-{{ formatMoney(form.discount_amount) }}</strong>
             </div>
             <div class="booking-total-chip">
               <span class="chip-label">Quantité services</span>
@@ -887,6 +1039,17 @@
               <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedBooking.start_date, selectedBooking.end_date) }}</span></div>
               <div v-if="_tvaAppliesFor(selectedBooking)" class="entity-view-item"><span class="entity-view-label">Sous-total HT</span><span class="entity-view-value">{{ formatMoney(selectedBookingSubtotalHT) }}</span></div>
               <div v-if="_tvaAppliesFor(selectedBooking)" class="entity-view-item"><span class="entity-view-label">TCSTH {{ selectedBookingTvaRate }}% (sur hébergement)</span><span class="entity-view-value" style="color:#92400e;font-weight:700;">{{ formatMoney(selectedBookingTvaAmount) }}</span></div>
+              <div v-if="Number(selectedBooking.discount_amount || 0) > 0" class="entity-view-item">
+                <span class="entity-view-label">Total brut</span>
+                <span class="entity-view-value">{{ formatMoney(Number(selectedBooking.total_price || 0) + Number(selectedBooking.discount_amount || 0)) }}</span>
+              </div>
+              <div v-if="Number(selectedBooking.discount_amount || 0) > 0" class="entity-view-item">
+                <span class="entity-view-label">Remise accordée</span>
+                <span class="entity-view-value discount-text-highlight">
+                  -{{ formatMoney(selectedBooking.discount_amount) }}
+                  <span v-if="selectedBooking.discount_reason" class="discount-sub-reason">({{ selectedBooking.discount_reason }})</span>
+                </span>
+              </div>
               <div class="entity-view-item"><span class="entity-view-label">{{ _tvaAppliesFor(selectedBooking) ? 'Montant total TTC' : 'Montant total' }}</span><span class="entity-view-value">{{ formatMoney(selectedBooking.total_price) }}</span></div>
               <div v-if="Number(selectedBooking.addons_total || 0) > 0" class="entity-view-item"><span class="entity-view-label">Services additionnels (inclus TTC)</span><span class="entity-view-value">{{ formatMoney(selectedBooking.addons_total) }}</span></div>
             </div>
@@ -1324,6 +1487,8 @@ const createEmptyBookingForm = () => ({
   start_date: '',
   end_date: '',
   additional_services_selected: [],
+  discount_amount: 0,
+  discount_reason: '',
   total_price: 0,
   status: 'pending'
 })
@@ -1342,6 +1507,7 @@ const form = ref(createEmptyBookingForm())
 const quickCustomerForm = ref(createEmptyQuickCustomerForm())
 const isOtherEventType = computed(() => form.value.event_type === 'Autres')
 const totalPriceInput = moneyInputModel(form, 'total_price')
+const discountAmountInput = moneyInputModel(form, 'discount_amount')
 const minAmountInput = computed({
   get: () => (minAmount.value === null || minAmount.value === '' ? '' : formatNumberSpaces(minAmount.value)),
   set: (value) => {
@@ -1703,10 +1869,12 @@ const formAddonsAmount = computed(() => {
   return Number(addonsTotal.value || 0)
 })
 const formSubtotalHT = computed(() => {
+  const discount = Math.max(0, Number(form.value.discount_amount || 0))
   if (form.value.booking_type === 'hall') {
     return Number(form.value.total_price || 0)
   }
-  return _roundMoney(Number(formBaseAccomodationHT.value) + Number(formAddonsAmount.value))
+  const grossHT = Number(formBaseAccomodationHT.value) + Number(formAddonsAmount.value)
+  return _roundMoney(Math.max(0, grossHT - discount))
 })
 const formTvaAmount = computed(() => {
   if (!formAppliesTVA.value) return 0
@@ -1716,6 +1884,29 @@ const formTvaAmount = computed(() => {
   return _roundMoney(Number(formBaseAccomodationHT.value) * (TVA_RATE_PCT / 100))
 })
 const formAppliesTVA = computed(() => _tvaAppliesFor(form.value?.booking_type || 'room'))
+
+const grossBookingAmount = computed(() => {
+  if (form.value.booking_type === 'hall') {
+    return Number(baseBookingAmount.value || 0) + Number(addonsTotal.value || 0)
+  }
+  return Number(formBaseAccomodationHT.value || 0) + Number(formAddonsAmount.value || 0) + Number(formTvaAmount.value || 0)
+})
+
+const applyQuickDiscountPercent = (pct) => {
+  const gross = Number(grossBookingAmount.value || 0)
+  if (gross <= 0) return
+  form.value.discount_amount = Math.round(gross * (pct / 100))
+  if (!form.value.discount_reason || form.value.discount_reason.startsWith('Remise ')) {
+    form.value.discount_reason = `Remise ${pct}%`
+  }
+  calculatePrice()
+}
+
+const clearDiscount = () => {
+  form.value.discount_amount = 0
+  form.value.discount_reason = ''
+  calculatePrice()
+}
 
 const selectedBookingSubtotalHT = computed(() => {
   if (!selectedBooking.value) return 0
@@ -1843,10 +2034,12 @@ const onItemChange = () => {
 }
 
 const calculatePrice = () => {
+  const discount = Math.max(0, Number(form.value.discount_amount || 0))
   if (!form.value.start_date || !form.value.end_date) {
     daysCount.value = 0
     pricePerUnit.value = 0
-    form.value.total_price = Number(addonsTotal.value || 0)
+    const gross = Number(addonsTotal.value || 0)
+    form.value.total_price = Math.max(0, gross - discount)
     return
   }
 
@@ -1859,7 +2052,8 @@ const calculatePrice = () => {
   if (form.value.booking_type === 'hall') {
     const hallPrice = Number(selectedHall.value?.price_per_day || 0)
     pricePerUnit.value = hallPrice
-    form.value.total_price = (diffDays * hallPrice) + Number(addonsTotal.value || 0)
+    const gross = (diffDays * hallPrice) + Number(addonsTotal.value || 0)
+    form.value.total_price = Math.max(0, gross - discount)
     return
   }
 
@@ -1869,11 +2063,12 @@ const calculatePrice = () => {
   const baseAccomodationHT = diffDays * totalRoomRate
   const addons = selectedRooms.value.length === 1 ? Number(addonsTotal.value || 0) : 0
   const tcsthAmount = (form.value.booking_type === 'room') ? _roundMoney(baseAccomodationHT * (TVA_RATE_PCT / 100)) : 0
-  form.value.total_price = baseAccomodationHT + addons + tcsthAmount
+  const gross = baseAccomodationHT + addons + tcsthAmount
+  form.value.total_price = Math.max(0, gross - discount)
 }
 
 watch(
-  () => form.value.additional_services_selected,
+  () => [form.value.additional_services_selected, form.value.discount_amount],
   () => calculatePrice(),
   { deep: true }
 )
@@ -2552,6 +2747,8 @@ const mapBookingToForm = (booking) => {
         ? booking.room_ids.map(id => String(id))
         : (booking?.room ? [String(booking.room)] : []),
       additional_services_selected: normalizeAdditionalServicesSelection(booking?.additional_services_selected),
+      discount_amount: Number(booking?.discount_amount || 0),
+      discount_reason: String(booking?.discount_reason || ''),
       event_type: 'Séjour',
       event_type_other: '',
     }
@@ -2568,6 +2765,8 @@ const mapBookingToForm = (booking) => {
       organization_contact_name: booking?.organization_contact_name || '',
       rooms_selected: [],
       additional_services_selected: normalizeAdditionalServicesSelection(booking?.additional_services_selected),
+      discount_amount: Number(booking?.discount_amount || 0),
+      discount_reason: String(booking?.discount_reason || ''),
       event_type_other: '',
     }
   }
@@ -2583,6 +2782,8 @@ const mapBookingToForm = (booking) => {
     organization_contact_name: booking?.organization_contact_name || '',
     rooms_selected: [],
     additional_services_selected: normalizeAdditionalServicesSelection(booking?.additional_services_selected),
+    discount_amount: Number(booking?.discount_amount || 0),
+    discount_reason: String(booking?.discount_reason || ''),
     event_type: 'Autres',
     event_type_other: rawEventType.startsWith(otherPrefix) ? rawEventType.slice(otherPrefix.length) : rawEventType,
   }
@@ -2601,6 +2802,8 @@ const buildBookingPayload = () => {
     : ''
   return {
     ...payload,
+    discount_amount: Math.max(0, Number(payload.discount_amount || 0)),
+    discount_reason: String(payload.discount_reason || '').trim(),
     additional_services_selected: normalizeAdditionalServicesSelection(payload.additional_services_selected),
     customer: form.value.customer_kind === 'organization' ? null : (payload.customer || null),
     room: payload.booking_type === 'room' ? (payload.room || selectedRoomIds.value[0] || '') : '',
@@ -2648,11 +2851,20 @@ const buildReservationJetonPdfHtml = (booking, emailSent = null) => {
       : []),
     ['Email client', emailValue],
   ]
+  const discountVal = Number(booking?.discount_amount || 0)
+  const totalVal = Number(booking?.total_price || 0)
+  const grossVal = totalVal + discountVal
   const reservationRows = [
     [bookedItemLabel, bookedItemName || '-'],
     ['Evénement', booking?.event_type || '-'],
     ['Période', periodLabel || '-'],
-    ['Montant', formatMoney(booking?.total_price)],
+    ...(discountVal > 0
+      ? [
+        ['Montant brut', formatMoney(grossVal)],
+        [`Remise accordée${booking?.discount_reason ? ` (${booking.discount_reason})` : ''}`, `-${formatMoney(discountVal)}`],
+        ['Montant net', formatMoney(totalVal)],
+      ]
+      : [['Montant', formatMoney(totalVal)]]),
     ['Statut', getStatusTranslation(booking?.status)],
   ]
   const followUpRows = [
@@ -4530,4 +4742,596 @@ html[data-admin-theme="dark"] .selected-period-value {
 .text-cta-table i { font-size: 0.74rem; }
 
 :global(html[data-admin-theme="dark"]) .text-cta-table { color: #fbbf24; }
+
+.booking-amount-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.booking-amount-val {
+  font-weight: 700;
+}
+
+.discount-table-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.discount-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #6ee7b7;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-left: 8px;
+}
+
+.breakdown-line.discount-line {
+  background: rgba(16, 185, 129, 0.08);
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: #047857;
+  font-weight: 600;
+}
+
+.discount-value {
+  color: #059669;
+  font-weight: 700;
+}
+
+.discount-text-highlight {
+  color: #059669;
+  font-weight: 700;
+}
+
+.discount-sub-reason {
+  display: block;
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: normal;
+}
+
+:global(html[data-admin-theme="dark"]) .discount-table-badge {
+  background: rgba(5, 150, 105, 0.2);
+  color: #34d399;
+  border-color: rgba(5, 150, 105, 0.4);
+}
+
+:global(html[data-admin-theme="dark"]) .discount-badge-pill {
+  background: rgba(5, 150, 105, 0.2);
+  color: #34d399;
+  border-color: rgba(5, 150, 105, 0.4);
+}
+
+:global(html[data-admin-theme="dark"]) .breakdown-line.discount-line {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+:global(html[data-admin-theme="dark"]) .discount-value,
+:global(html[data-admin-theme="dark"]) .discount-text-highlight {
+  color: #34d399;
+}
+
+:global(html[data-admin-theme="dark"]) .discount-sub-reason {
+  color: #94a3b8;
+}
+
+/* --- Modern Pricing & Discount Panel (PDP) --- */
+.pricing-discount-panel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 1.25rem;
+  margin-top: 0.75rem;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
+}
+
+.pdp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 1rem;
+}
+
+.pdp-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pdp-icon-box {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+}
+
+.pdp-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.pdp-subtitle {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.pdp-discount-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #047857;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 999px;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+}
+
+.pdp-discount-inactive-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.pdp-body-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 1.15rem;
+}
+
+.pdp-control-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.pdp-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.pdp-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.pdp-clear-btn {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  font-size: 0.73rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.pdp-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.pdp-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pdp-input {
+  width: 100%;
+  height: 42px;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0 3.2rem 0 2.2rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  transition: all 0.2s ease;
+}
+
+.pdp-input:focus {
+  border-color: #10b981;
+  background: #ffffff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.pdp-input-reason {
+  padding: 0 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.pdp-input-reason:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.pdp-input-icon {
+  position: absolute;
+  left: 10px;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.pdp-input-suffix {
+  position: absolute;
+  right: 8px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 3px 6px;
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+
+.pdp-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.pdp-presets-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.pdp-presets-list {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.pdp-preset-btn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdp-preset-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.pdp-preset-btn.is-active {
+  background: #059669;
+  color: #ffffff;
+  border-color: #059669;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+}
+
+.pdp-hero-card {
+  background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 1.1rem;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.25);
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.pdp-hero-card::before {
+  content: '';
+  position: absolute;
+  top: -30px;
+  right: -30px;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0) 70%);
+  pointer-events: none;
+}
+
+.pdp-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.pdp-hero-label {
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pdp-auto-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pdp-edit-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pdp-hero-amount-box {
+  margin-bottom: 0.75rem;
+}
+
+.pdp-hero-val-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.pdp-hero-val {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.pdp-edit-total-wrap .pdp-hero-edit-input {
+  background: #0f172a;
+  border-color: #3b82f6;
+  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.pdp-hero-suffix {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+.pdp-mini-summary {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 0.65rem;
+}
+
+.pdp-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.73rem;
+}
+
+.pdp-summary-k {
+  color: #94a3b8;
+}
+
+.pdp-summary-v {
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
+.pdp-summary-discount .pdp-summary-k,
+.pdp-summary-discount .pdp-summary-v {
+  color: #34d399;
+  font-weight: 800;
+}
+
+.pdp-hero-hint {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  line-height: 1.3;
+}
+
+/* --- Dark Mode for Pricing & Discount Panel --- */
+:global(html[data-admin-theme="dark"]) .pricing-discount-panel {
+  background: linear-gradient(135deg, #0f172a 0%, #111c34 100%);
+  border-color: #334155;
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.34);
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-header {
+  border-bottom-color: #334155;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-title {
+  color: #f8fafc;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-subtitle {
+  color: #94a3b8;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-control-card {
+  background: #0b1329;
+  border-color: #334155;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-label {
+  color: #e2e8f0;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-input {
+  background: #0b1329;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-input:focus {
+  border-color: #10b981;
+  background: #070d1e;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-input-reason:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-input-suffix {
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-discount-inactive-badge {
+  background: #162033;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-discount-active-badge {
+  background: #123128;
+  border-color: #1f7a55;
+  color: #6ee7b7;
+  box-shadow: none;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-preset-btn {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-preset-btn:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-preset-btn.is-active {
+  background: #059669;
+  color: #ffffff;
+  border-color: #10b981;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-hero-card {
+  background: linear-gradient(145deg, #0b1329 0%, #172554 100%);
+  border-color: #31528f;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-mini-summary {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-auto-badge {
+  background: #172554;
+  border-color: #31528f;
+  color: #93c5fd;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-edit-badge {
+  background: #3b2b12;
+  border-color: #9a6b1f;
+  color: #fcd34d;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-hero-suffix {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-clear-btn:hover {
+  background: #3f1d24;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-input-icon,
+:global(html[data-admin-theme="dark"]) .pdp-presets-label,
+:global(html[data-admin-theme="dark"]) .pdp-summary-k,
+:global(html[data-admin-theme="dark"]) .pdp-hero-hint {
+  color: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .pdp-body-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

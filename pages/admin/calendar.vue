@@ -103,6 +103,8 @@
             <div class="entity-view-card-title">Résumé</div>
             <div class="entity-view-list">
               <div class="entity-view-item"><span class="entity-view-label">Client</span><span class="entity-view-value">{{ selectedEvent.customer_name }}</span></div>
+              <div v-if="Number(selectedEvent.discount_amount || 0) > 0" class="entity-view-item"><span class="entity-view-label">Total brut</span><span class="entity-view-value">{{ formatMoney(Number(selectedEvent.total_price || 0) + Number(selectedEvent.discount_amount || 0)) }}</span></div>
+              <div v-if="Number(selectedEvent.discount_amount || 0) > 0" class="entity-view-item"><span class="entity-view-label">Remise</span><span class="entity-view-value" style="color: #059669; font-weight: 700;">-{{ formatMoney(selectedEvent.discount_amount) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Montant</span><span class="entity-view-value">{{ formatMoney(selectedEvent.total_price) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ translateStatus(selectedEvent.status) }}</span></div>
             </div>

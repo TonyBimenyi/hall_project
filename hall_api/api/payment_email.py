@@ -127,6 +127,13 @@ def _build_payment_invoice_html(payment, booking, branding):
     tax_id = str(branding.get('taxId') or DEFAULT_BRANDING['taxId']).strip() or DEFAULT_BRANDING['taxId']
     rc_number = str(branding.get('rcNumber') or DEFAULT_BRANDING['rcNumber']).strip() or DEFAULT_BRANDING['rcNumber']
 
+    discount_amount = Decimal(str(getattr(booking, 'discount_amount', 0) or 0))
+    discount_reason = str(getattr(booking, 'discount_reason', '') or '').strip()
+    discount_html = f'''<div style="display:flex;justify-content:space-between;gap:16px;padding:12px 0 6px;border-bottom:1px solid rgba(255,255,255,0.12);">
+          <span style="opacity:0.8;">Remise accordée{f" ({escape(discount_reason)})" if discount_reason else ""}</span>
+          <strong style="color:#34d399;">-{escape(_format_money(discount_amount))}</strong>
+        </div>''' if discount_amount > 0 else ''
+
     return f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -201,6 +208,7 @@ def _build_payment_invoice_html(payment, booking, branding):
           <span style="opacity:0.8;">TCSTH {escape(str(int(tva_rate) if float(tva_rate) == int(tva_rate) else str(tva_rate)))}% (sur hebergement seulement)</span>
           <strong style="color:#fbbf24;">{escape(_format_money(tva_amount))}</strong>
         </div>
+        {discount_html}
         <div style="display:flex;justify-content:space-between;gap:16px;padding:12px 0 6px;border-bottom:1px solid rgba(255,255,255,0.12);">
           <span style="opacity:0.8;">Montant paye (TTC)</span>
           <strong>{escape(_format_money(payment.amount))}</strong>
@@ -257,6 +265,9 @@ def _build_payment_invoice_text(payment, booking, branding):
             tva_amount = Decimal('0.00')
             tva_rate = Decimal('5.00')
     tva_rate_label = str(int(tva_rate)) if float(tva_rate) == int(tva_rate) else str(tva_rate)
+    discount_amount = Decimal(str(getattr(booking, 'discount_amount', 0) or 0))
+    discount_reason = str(getattr(booking, 'discount_reason', '') or '').strip()
+    discount_text_line = f"Remise accordée : -{_format_money(discount_amount)}{f' ({discount_reason})' if discount_reason else ''}\n" if discount_amount > 0 else ""
 
     item_label = 'Salle'
     item_name = getattr(getattr(booking, 'hall', None), 'name', '') or '-'
@@ -281,6 +292,7 @@ def _build_payment_invoice_text(payment, booking, branding):
         f"Periode : {_format_period(booking.start_date, booking.end_date)}\n"
         f"Sous-total HT (hebergement + services) : {_format_money(subtotal_ht)}\n"
         f"TCSTH {tva_rate_label}% (sur hebergement seulement) : {_format_money(tva_amount)}\n"
+        f"{discount_text_line}"
         f"Montant paye (TTC) : {_format_money(payment.amount)}\n"
         f"Total reservation (TTC) : {_format_money(booking.total_price)}\n"
         f"Reste a payer : {_format_money(remaining)}\n\n"

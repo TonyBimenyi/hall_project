@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db.models import Q
 from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Room, Notification, Customer
 
@@ -245,6 +245,7 @@ class BookingSerializer(serializers.ModelSerializer):
     in_house_room_count = serializers.SerializerMethodField()
     completed_room_count = serializers.SerializerMethodField()
     remaining_amount = serializers.SerializerMethodField()
+    gross_total = serializers.SerializerMethodField()
     created_by = serializers.ReadOnlyField(source='created_by_id')
     created_by_name = serializers.SerializerMethodField()
     updated_by_name = serializers.SerializerMethodField()
@@ -447,6 +448,22 @@ class BookingSerializer(serializers.ModelSerializer):
         if remaining < 0:
             remaining = Decimal('0.00')
         return remaining
+
+    def get_gross_total(self, obj):
+        total = obj.total_price or Decimal('0.00')
+        discount = obj.discount_amount or Decimal('0.00')
+        return total + discount
+
+    def validate_discount_amount(self, value):
+        if value is None:
+            return Decimal('0.00')
+        try:
+            val = Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            raise serializers.ValidationError('Montant de remise invalide')
+        if val < Decimal('0.00'):
+            raise serializers.ValidationError('Le montant de remise ne peut pas être négatif')
+        return val
 
     def get_created_by_name(self, obj):
         return _user_label(getattr(obj, 'created_by', None))
@@ -652,6 +669,11 @@ class PaymentSerializer(serializers.ModelSerializer):
     booking_end_date = serializers.ReadOnlyField(source='booking.end_date')
     booking_total_price = serializers.ReadOnlyField(source='booking.total_price')
     booking_paid_amount = serializers.ReadOnlyField(source='booking.paid_amount')
+    booking_discount_amount = serializers.ReadOnlyField(source='booking.discount_amount')
+    booking_discount_reason = serializers.ReadOnlyField(source='booking.discount_reason')
+    booking_subtotal_ht = serializers.ReadOnlyField(source='booking.subtotal_ht')
+    booking_tva_amount = serializers.ReadOnlyField(source='booking.tva_amount')
+    booking_tva_rate = serializers.ReadOnlyField(source='booking.tva_rate')
     booking_remaining_amount = serializers.SerializerMethodField()
     room_action = serializers.ChoiceField(
         choices=[('none', 'Aucune action'), ('check_in', 'Check-in'), ('check_out', 'Check-out')],

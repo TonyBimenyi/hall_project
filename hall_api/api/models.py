@@ -155,6 +155,8 @@ class Booking(models.Model):
     checked_out_at = models.DateTimeField(null=True, blank=True)
     total_price = models.DecimalField(max_digits=12, decimal_places=2)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    discount_reason = models.CharField(max_length=255, blank=True, default='')
     addons_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     subtotal_ht = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     tva_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('10.00'))

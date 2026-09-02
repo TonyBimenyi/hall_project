@@ -692,6 +692,17 @@
               <div class="entity-view-item"><span class="entity-view-label">Email</span><span class="entity-view-value">{{ selectedDeskBooking.customer_email || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Chambre</span><span class="entity-view-value">{{ selectedDeskBooking.room_display || '-' }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedDeskBooking.start_date, selectedDeskBooking.end_date) }}</span></div>
+              <div v-if="Number(selectedDeskBooking.discount_amount || 0) > 0" class="entity-view-item">
+                <span class="entity-view-label">Montant brut</span>
+                <span class="entity-view-value">{{ formatMoney(Number(selectedDeskBooking.total_price || 0) + Number(selectedDeskBooking.discount_amount || 0)) }}</span>
+              </div>
+              <div v-if="Number(selectedDeskBooking.discount_amount || 0) > 0" class="entity-view-item">
+                <span class="entity-view-label">Remise accordée</span>
+                <span class="entity-view-value" style="color: #059669; font-weight: 700;">
+                  -{{ formatMoney(selectedDeskBooking.discount_amount) }}
+                  <span v-if="selectedDeskBooking.discount_reason" style="display:block; font-size:0.8rem; color:#64748b; font-weight:normal;">({{ selectedDeskBooking.discount_reason }})</span>
+                </span>
+              </div>
               <div class="entity-view-item"><span class="entity-view-label">Montant total</span><span class="entity-view-value">{{ formatMoney(selectedDeskBooking.total_price) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Déjà paye</span><span class="entity-view-value">{{ formatMoney(selectedDeskBooking.paid_amount) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Reste</span><span class="entity-view-value">{{ formatMoney(selectedDeskBooking.remaining_amount) }}</span></div>
@@ -731,6 +742,10 @@
           <div><strong>Client:</strong> {{ selectedDeskBooking.customer_name }}</div>
           <div><strong>Chambre:</strong> {{ selectedDeskBooking.room_display || '-' }}</div>
           <div><strong>Total:</strong> {{ formatMoney(selectedDeskBooking.total_price) }}</div>
+          <div v-if="Number(selectedDeskBooking.discount_amount || 0) > 0">
+            <strong>Remise:</strong> <span style="color: #059669; font-weight: 700;">-{{ formatMoney(selectedDeskBooking.discount_amount) }}</span>
+            <span v-if="selectedDeskBooking.discount_reason"> ({{ selectedDeskBooking.discount_reason }})</span>
+          </div>
           <div><strong>Déjà paye:</strong> {{ formatMoney(selectedDeskBooking.paid_amount) }}</div>
           <div><strong>Reste:</strong> {{ formatMoney(selectedDeskBooking.remaining_amount) }}</div>
         </div>
@@ -1548,6 +1563,11 @@ const buildDeskPaymentPrintHtml = (payment) => {
     [reservationTypeLabel, deskPaymentBookingItemLabel(payment) || '-'],
     ['Période', periodLabel || '-'],
     ['Montant payé', formatMoney(payment?.amount)],
+    ...((Number(payment?.booking_discount_amount || selectedDeskBooking.value?.discount_amount || 0) > 0)
+      ? [
+        ['Remise accordée', `-${formatMoney(payment?.booking_discount_amount || selectedDeskBooking.value?.discount_amount)}${payment?.booking_discount_reason || selectedDeskBooking.value?.discount_reason ? ` (${payment?.booking_discount_reason || selectedDeskBooking.value?.discount_reason})` : ''}`],
+      ]
+      : []),
     ['Total réservation', formatMoney(payment?.booking_total_price)],
     ['Reste à payer', formatMoney(payment?.booking_remaining_amount)],
   ]

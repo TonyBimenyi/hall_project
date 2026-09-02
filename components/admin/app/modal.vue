@@ -102,6 +102,38 @@ defineEmits(['update:modelValue'])
   gap: var(--space-4);
 }
 
+:global(html[data-admin-theme="dark"]) .modal-overlay {
+  background: rgba(2, 6, 23, 0.78);
+}
+
+:global(html[data-admin-theme="dark"]) .modal-content {
+  background: #081224;
+  border-color: #334155;
+  box-shadow: 0 28px 60px rgba(2, 6, 23, 0.55);
+}
+
+:global(html[data-admin-theme="dark"]) .modal-header,
+:global(html[data-admin-theme="dark"]) .modal-footer {
+  border-color: #1e293b;
+}
+
+:global(html[data-admin-theme="dark"]) .modal-header h3 {
+  color: #f8fafc;
+}
+
+:global(html[data-admin-theme="dark"]) .modal-body {
+  color: #e2e8f0;
+}
+
+:global(html[data-admin-theme="dark"]) .close-btn {
+  color: #94a3b8;
+}
+
+:global(html[data-admin-theme="dark"]) .close-btn:hover {
+  background: #162033;
+  color: #fda4af;
+}
+
 /* Animations */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

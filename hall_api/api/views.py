@@ -508,7 +508,7 @@ def _compute_addons_total(item: Hall | Room, selected_services):
     return addons_total.quantize(Decimal('0.01')), normalized_selected
 
 
-def _compute_booking_totals(item: Hall | Room, start_dt: date, end_dt: date, selected_services, *, booking_type=None):
+def _compute_booking_totals(item: Hall | Room, start_dt: date, end_dt: date, selected_services, *, booking_type=None, discount_amount=Decimal('0.00')):
     if end_dt < start_dt:
         raise DjangoValidationError('La date fin doit être après la date début')
     days = (end_dt - start_dt).days + 1
@@ -524,9 +524,19 @@ def _compute_booking_totals(item: Hall | Room, start_dt: date, end_dt: date, sel
     addons_total, normalized_selected = _compute_addons_total(item, selected_services)
     final_type = str(booking_type or resolved_type or '').strip().lower()
     tcsth_base, tva_rate, tcsth_amount = _compute_tcsth_from_base_rooms(base_total, booking_type=final_type)
-    subtotal_ht = (base_total + addons_total).quantize(Decimal('0.01'))
-    total = (base_total + addons_total + tcsth_amount).quantize(Decimal('0.01'))
-    return base_total, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tcsth_amount
+    gross_ht = (base_total + addons_total).quantize(Decimal('0.01'))
+    gross_total = (gross_ht + tcsth_amount).quantize(Decimal('0.01'))
+    try:
+        discount = Decimal(str(discount_amount or '0.00')).quantize(Decimal('0.01'))
+    except Exception:
+        discount = Decimal('0.00')
+    if discount < 0:
+        discount = Decimal('0.00')
+    if discount > gross_total:
+        discount = gross_total
+    subtotal_ht = max(Decimal('0.00'), (gross_ht - discount)).quantize(Decimal('0.01'))
+    total = max(Decimal('0.00'), (gross_total - discount)).quantize(Decimal('0.01'))
+    return base_total, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tcsth_amount, discount
 
 
 def _normalize_booking_room_ids(booking):
@@ -1190,6 +1200,8 @@ class BookingViewSet(viewsets.ModelViewSet):
                 identity_number=guest_id_number,
                 actor=_actor(self.request),
             )
+        discount_amount = serializer.validated_data.get('discount_amount', Decimal('0.00'))
+        discount_reason = serializer.validated_data.get('discount_reason', '')
         booking_type = serializer.validated_data.get('booking_type', 'hall')
         hall = serializer.validated_data.get('hall')
         room = serializer.validated_data.get('room')
@@ -1198,7 +1210,9 @@ class BookingViewSet(viewsets.ModelViewSet):
         end_dt = serializer.validated_data.get('end_date')
         selected = serializer.validated_data.get('additional_services_selected') or []
         if booking_type == 'hall':
-            _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount = _compute_booking_totals(hall, start_dt, end_dt, selected, booking_type=booking_type)
+            _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount, applied_discount = _compute_booking_totals(
+                hall, start_dt, end_dt, selected, booking_type=booking_type, discount_amount=discount_amount
+            )
         else:
             selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
             if end_dt < start_dt:
@@ -1206,17 +1220,31 @@ class BookingViewSet(viewsets.ModelViewSet):
             days = (end_dt - start_dt).days + 1
             base_accomodation_ht = (Decimal(days) * sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)).quantize(Decimal('0.01'))
             if len(selected_rooms) == 1:
-                _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount = _compute_booking_totals(selected_rooms[0], start_dt, end_dt, selected, booking_type=booking_type)
+                _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount, applied_discount = _compute_booking_totals(
+                    selected_rooms[0], start_dt, end_dt, selected, booking_type=booking_type, discount_amount=discount_amount
+                )
             else:
                 addons_total, normalized_selected = _compute_addons_total(selected_rooms[0], selected) if selected_rooms else (Decimal('0.00'), [])
                 _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
-                subtotal_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
-                total = (base_accomodation_ht + addons_total + tva_amount).quantize(Decimal('0.01'))
+                gross_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
+                gross_total = (gross_ht + tva_amount).quantize(Decimal('0.01'))
+                try:
+                    applied_discount = Decimal(str(discount_amount or '0.00')).quantize(Decimal('0.01'))
+                except Exception:
+                    applied_discount = Decimal('0.00')
+                if applied_discount < 0:
+                    applied_discount = Decimal('0.00')
+                if applied_discount > gross_total:
+                    applied_discount = gross_total
+                subtotal_ht = max(Decimal('0.00'), (gross_ht - applied_discount)).quantize(Decimal('0.01'))
+                total = max(Decimal('0.00'), (gross_total - applied_discount)).quantize(Decimal('0.01'))
         save_kwargs = {
             'created_by': self.request.user,
             'updated_by': self.request.user,
             'customer': resolved_customer,
             'total_price': total,
+            'discount_amount': applied_discount,
+            'discount_reason': str(discount_reason or '').strip(),
             'addons_total': addons_total,
             'subtotal_ht': subtotal_ht,
             'tva_rate': tva_rate,
@@ -1262,6 +1290,8 @@ class BookingViewSet(viewsets.ModelViewSet):
                 identity_number=guest_id_number,
                 actor=_actor(self.request),
             )
+        discount_amount = serializer.validated_data.get('discount_amount', getattr(instance, 'discount_amount', Decimal('0.00')))
+        discount_reason = serializer.validated_data.get('discount_reason', getattr(instance, 'discount_reason', ''))
         booking_type = serializer.validated_data.get('booking_type', getattr(instance, 'booking_type', 'hall'))
         hall = serializer.validated_data.get('hall', getattr(instance, 'hall', None))
         room = serializer.validated_data.get('room', getattr(instance, 'room', None))
@@ -1270,7 +1300,9 @@ class BookingViewSet(viewsets.ModelViewSet):
         end_dt = serializer.validated_data.get('end_date', getattr(instance, 'end_date', None))
         selected = serializer.validated_data.get('additional_services_selected', getattr(instance, 'additional_services_selected', [])) or []
         if booking_type == 'hall':
-            _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount = _compute_booking_totals(hall, start_dt, end_dt, selected, booking_type=booking_type)
+            _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount, applied_discount = _compute_booking_totals(
+                hall, start_dt, end_dt, selected, booking_type=booking_type, discount_amount=discount_amount
+            )
         else:
             selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
             if end_dt < start_dt:
@@ -1278,16 +1310,30 @@ class BookingViewSet(viewsets.ModelViewSet):
             days = (end_dt - start_dt).days + 1
             base_accomodation_ht = (Decimal(days) * sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)).quantize(Decimal('0.01'))
             if len(selected_rooms) == 1:
-                _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount = _compute_booking_totals(selected_rooms[0], start_dt, end_dt, selected, booking_type=booking_type)
+                _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount, applied_discount = _compute_booking_totals(
+                    selected_rooms[0], start_dt, end_dt, selected, booking_type=booking_type, discount_amount=discount_amount
+                )
             else:
                 addons_total, normalized_selected = _compute_addons_total(selected_rooms[0], selected) if selected_rooms else (Decimal('0.00'), [])
                 _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
-                subtotal_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
-                total = (base_accomodation_ht + addons_total + tva_amount).quantize(Decimal('0.01'))
+                gross_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
+                gross_total = (gross_ht + tva_amount).quantize(Decimal('0.01'))
+                try:
+                    applied_discount = Decimal(str(discount_amount or '0.00')).quantize(Decimal('0.01'))
+                except Exception:
+                    applied_discount = Decimal('0.00')
+                if applied_discount < 0:
+                    applied_discount = Decimal('0.00')
+                if applied_discount > gross_total:
+                    applied_discount = gross_total
+                subtotal_ht = max(Decimal('0.00'), (gross_ht - applied_discount)).quantize(Decimal('0.01'))
+                total = max(Decimal('0.00'), (gross_total - applied_discount)).quantize(Decimal('0.01'))
         save_kwargs = {
             'updated_by': _actor(self.request),
             'customer': resolved_customer,
             'total_price': total,
+            'discount_amount': applied_discount,
+            'discount_reason': str(discount_reason or '').strip(),
             'addons_total': addons_total,
             'subtotal_ht': subtotal_ht,
             'tva_rate': tva_rate,
