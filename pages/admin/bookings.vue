@@ -326,7 +326,7 @@
     </div>
 
     <!-- Modals -->
-    <AdminAppModal v-model="showFormModal" :title="isEditing ? 'Modifier la réservation' : 'Nouvelle réservation'" width="980px">
+    <AdminAppModal v-model="showFormModal" :title="isEditing ? 'Modifier la réservation' : 'Nouvelle réservation'" width="760px">
       <form @submit.prevent="saveBooking" class="admin-form booking-form-shell">
         <div class="booking-form-hero">
           <div class="booking-form-hero-copy">
@@ -665,12 +665,112 @@
               </div>
             </div>
 
-            <div v-if="itemAdditionalServices.length" class="form-group full addons-section">
+            <div v-if="showRoomAddonsSection" class="form-group full addons-section room-addons-section">
+              <div class="addons-head">
+                <strong>Services par chambre</strong>
+                <span v-if="addonsTotal > 0" class="addons-total">+ {{ formatMoney(addonsTotal) }}</span>
+              </div>
+              <div class="room-service-groups">
+                <section
+                  v-for="group in roomServiceGroups"
+                  :key="`room-services-${group.room.id}`"
+                  class="room-service-group"
+                >
+                  <div class="room-service-group-head">
+                    <div>
+                      <strong>{{ group.room.room_number }} - {{ group.room.name }}</strong>
+                      <small>{{ roomStatusLabel(group.room.status) }}</small>
+                    </div>
+                    <span class="room-service-group-count">{{ group.services.length }} service{{ group.services.length > 1 ? 's' : '' }}</span>
+                  </div>
+
+                  <div v-if="group.services.length" class="room-service-flex">
+                    <template v-for="service in group.services" :key="`${group.room.id}-${service.name}`">
+                      <article v-if="!service.has_subservices" class="room-service-card" :class="{ 'is-active': isRoomServiceSelected(group.room.id, service.name) }">
+                        <div class="room-service-card-top">
+                          <strong>{{ service.name }}</strong>
+                          <span>{{ formatMoney(service.price) }}</span>
+                        </div>
+                        <div class="room-service-card-bottom">
+                          <small>Quantité</small>
+                          <div class="room-service-stepper">
+                            <button
+                              type="button"
+                              class="room-service-step-btn"
+                              :disabled="getRoomServiceQuantity(group.room.id, service.name) <= 0"
+                              @click="changeRoomServiceQuantity(group.room.id, service, -1)"
+                            >
+                              <i class="fas fa-minus"></i>
+                            </button>
+                            <span class="room-service-qty">{{ getRoomServiceQuantity(group.room.id, service.name) }}</span>
+                            <button
+                              type="button"
+                              class="room-service-step-btn"
+                              @click="changeRoomServiceQuantity(group.room.id, service, 1)"
+                            >
+                              <i class="fas fa-plus"></i>
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+
+                      <article v-else class="room-service-card room-service-card-stack">
+                        <div class="room-service-card-top">
+                          <strong>{{ service.name }}</strong>
+                          <span>Sous-services</span>
+                        </div>
+                        <div class="room-subservice-flex">
+                          <div
+                            v-for="sub in (service.subservices || [])"
+                            :key="`${group.room.id}-${service.name}-${sub.name}`"
+                            class="room-subservice-card"
+                            :class="{ 'is-active': isRoomSubserviceSelected(group.room.id, service.name, sub.name) }"
+                          >
+                            <div class="room-subservice-top">
+                              <strong>{{ sub.name }}</strong>
+                              <span>{{ formatMoney(sub.price) }}</span>
+                            </div>
+                            <div class="room-service-card-bottom">
+                              <small>Quantité</small>
+                              <div class="room-service-stepper">
+                                <button
+                                  type="button"
+                                  class="room-service-step-btn"
+                                  :disabled="getRoomSubserviceQuantity(group.room.id, service.name, sub.name) <= 0"
+                                  @click="changeRoomSubserviceQuantity(group.room.id, service.name, sub, -1)"
+                                >
+                                  <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="room-service-qty">{{ getRoomSubserviceQuantity(group.room.id, service.name, sub.name) }}</span>
+                                <button
+                                  type="button"
+                                  class="room-service-step-btn"
+                                  @click="changeRoomSubserviceQuantity(group.room.id, service.name, sub, 1)"
+                                >
+                                  <i class="fas fa-plus"></i>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    </template>
+                  </div>
+
+                  <div v-else class="addons-empty-state room-addons-empty">
+                    <strong>Aucun service sur cette chambre</strong>
+                    <small>Ajoutez les services depuis la fiche de la chambre pour les rendre disponibles ici.</small>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div v-if="showHallAddonsSection" class="form-group full addons-section">
               <div class="addons-head">
                 <strong>Services additionnels</strong>
                 <span v-if="addonsTotal > 0" class="addons-total">+ {{ formatMoney(addonsTotal) }}</span>
               </div>
-              <div class="addons-list">
+              <div v-if="itemAdditionalServices.length" class="addons-list">
                 <div v-for="service in itemAdditionalServices" :key="service.name" class="addon-item">
                   <div v-if="!service.has_subservices" class="addon-line">
                     <label :class="['addon-toggle', { 'is-active': isServiceSelected(service.name) }]">
@@ -796,6 +896,10 @@
                   </div>
                 </div>
               </div>
+              <div v-else class="addons-empty-state">
+                <strong>{{ addonsEmptyTitle }}</strong>
+                <small>{{ addonsEmptyHint }}</small>
+              </div>
             </div>
 
             <!-- Modern Financial & Discount Card -->
@@ -806,23 +910,29 @@
                     <i class="fas fa-percent"></i>
                   </div>
                   <div>
-                    <h5 class="pdp-title">Remise & Tarification Finale</h5>
-                    <p class="pdp-subtitle">Appliquez une réduction et vérifiez le montant total net calculé.</p>
+                    <h5 class="pdp-title">{{ canManageBookingDiscount ? 'Remise & Tarification Finale' : 'Tarification Finale' }}</h5>
+                    <p class="pdp-subtitle">{{ canManageBookingDiscount ? 'Appliquez une réduction et vérifiez le montant total net calculé.' : 'Vérifiez le montant total net calculé pour cette réservation.' }}</p>
                   </div>
                 </div>
-                <div class="pdp-header-badge">
-                  <span v-if="Number(form.discount_amount || 0) > 0" class="pdp-discount-active-badge">
-                    <i class="fas fa-tag"></i> Remise active: -{{ formatMoney(form.discount_amount) }}
+                <label v-if="canManageBookingDiscount" class="pdp-discount-toggle" :class="{ 'is-active': discountEnabled }">
+                  <input
+                    type="checkbox"
+                    :checked="discountEnabled"
+                    @change="setDiscountEnabled($event.target.checked)"
+                  />
+                  <span class="pdp-discount-toggle-track" aria-hidden="true">
+                    <span class="pdp-discount-toggle-knob"></span>
                   </span>
-                  <span v-else class="pdp-discount-inactive-badge">
-                    <i class="fas fa-check-circle"></i> Tarif standard
+                  <span class="pdp-discount-toggle-copy">
+                    <strong>{{ discountEnabled ? 'Remise activée' : 'Tarif standard' }}</strong>
+                    <small>{{ discountEnabled ? 'Afficher les champs de remise' : 'Aucune remise appliquée' }}</small>
                   </span>
-                </div>
+                </label>
               </div>
 
-              <div class="pdp-body-grid">
+              <div class="pdp-body-grid" :class="{ 'is-discount-disabled': !showDiscountEditor }">
                 <!-- Left: Discount Controls -->
-                <div class="pdp-control-card">
+                <div v-if="showDiscountEditor" class="pdp-control-card">
                   <div class="pdp-field-group">
                     <div class="pdp-field-header">
                       <label class="pdp-label">
@@ -926,7 +1036,7 @@
                       <span class="pdp-summary-k">Montant brut</span>
                       <span class="pdp-summary-v">{{ formatMoney(grossBookingAmount) }}</span>
                     </div>
-                    <div v-if="Number(form.discount_amount || 0) > 0" class="pdp-summary-row pdp-summary-discount">
+                    <div v-if="canManageBookingDiscount && Number(form.discount_amount || 0) > 0" class="pdp-summary-row pdp-summary-discount">
                       <span class="pdp-summary-k"><i class="fas fa-tag"></i> Déduction remise</span>
                       <span class="pdp-summary-v">-{{ formatMoney(form.discount_amount) }}</span>
                     </div>
@@ -955,19 +1065,19 @@
                 <span class="breakdown-line"><span class="breakdown-label">Hébergement (HT)</span><span class="breakdown-value">{{ formatMoney(formBaseAccomodationHT) }}</span></span>
                 <span class="breakdown-line" v-if="formAddonsAmount > 0"><span class="breakdown-label">Services additionnels</span><span class="breakdown-value">{{ formatMoney(formAddonsAmount) }}</span></span>
                 <span class="breakdown-line dotted"><span class="breakdown-label">Sous-total brut HT</span><span class="breakdown-value">{{ formatMoney(formBaseAccomodationHT + formAddonsAmount) }}</span></span>
-                <span class="breakdown-line discount-line" v-if="Number(form.discount_amount || 0) > 0">
+                <span class="breakdown-line discount-line" v-if="canManageBookingDiscount && Number(form.discount_amount || 0) > 0">
                   <span class="breakdown-label"><i class="fas fa-tag"></i> Remise accordée {{ form.discount_reason ? `(${form.discount_reason})` : '' }}</span>
                   <span class="breakdown-value discount-value">-{{ formatMoney(form.discount_amount) }}</span>
                 </span>
-                <span class="breakdown-line dotted" v-if="Number(form.discount_amount || 0) > 0"><span class="breakdown-label">Sous-total net HT</span><span class="breakdown-value">{{ formatMoney(formSubtotalHT) }}</span></span>
+                <span class="breakdown-line dotted" v-if="canManageBookingDiscount && Number(form.discount_amount || 0) > 0"><span class="breakdown-label">Sous-total net HT</span><span class="breakdown-value">{{ formatMoney(formSubtotalHT) }}</span></span>
                 <span class="breakdown-line tcsth-line"><span class="breakdown-label">TCSTH {{ TVA_RATE_PCT }}% (sur hébergement seul)</span><span class="breakdown-value tcsth-value">{{ formatMoney(formTvaAmount) }}</span></span>
                 <span class="breakdown-line breakdown-total-line"><span class="breakdown-label">Total TTC</span><span class="breakdown-value">{{ formatMoney(form.total_price || 0) }}</span></span>
               </template>
               <template v-else>
                 <span class="breakdown-line" v-if="baseBookingAmount > 0"><span class="breakdown-label">Salle (jour)</span><span class="breakdown-value">{{ formatMoney(baseBookingAmount) }}</span></span>
                 <span class="breakdown-line" v-if="formAddonsAmount > 0"><span class="breakdown-label">Services additionnels</span><span class="breakdown-value">{{ formatMoney(formAddonsAmount) }}</span></span>
-                <span class="breakdown-line dotted" v-if="Number(form.discount_amount || 0) > 0"><span class="breakdown-label">Sous-total brut</span><span class="breakdown-value">{{ formatMoney(baseBookingAmount + formAddonsAmount) }}</span></span>
-                <span class="breakdown-line discount-line" v-if="Number(form.discount_amount || 0) > 0">
+                <span class="breakdown-line dotted" v-if="canManageBookingDiscount && Number(form.discount_amount || 0) > 0"><span class="breakdown-label">Sous-total brut</span><span class="breakdown-value">{{ formatMoney(baseBookingAmount + formAddonsAmount) }}</span></span>
+                <span class="breakdown-line discount-line" v-if="canManageBookingDiscount && Number(form.discount_amount || 0) > 0">
                   <span class="breakdown-label"><i class="fas fa-tag"></i> Remise accordée {{ form.discount_reason ? `(${form.discount_reason})` : '' }}</span>
                   <span class="breakdown-value discount-value">-{{ formatMoney(form.discount_amount) }}</span>
                 </span>
@@ -984,7 +1094,7 @@
               <span class="chip-label">Base</span>
               <strong>{{ formatMoney(baseBookingAmount) }}</strong>
             </div>
-            <div class="booking-total-chip" v-if="Number(form.discount_amount || 0) > 0">
+            <div class="booking-total-chip" v-if="canManageBookingDiscount && Number(form.discount_amount || 0) > 0">
               <span class="chip-label">Remise</span>
               <strong style="color: #059669;">-{{ formatMoney(form.discount_amount) }}</strong>
             </div>
@@ -1131,7 +1241,7 @@ import { useDateFormat } from '~/composables/useDateFormat'
 import { useTableSort } from '~/composables/useTableSort'
 import { useDocumentBranding } from '~/composables/useDocumentBranding'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
-import { canDeleteBookings as canDeleteBookingsByRole, canExportAdminExcel, getStoredUser } from '~/composables/useRoleAccess'
+import { canDeleteBookings as canDeleteBookingsByRole, canExportAdminExcel, getRoleKey, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
 const route = useRoute()
@@ -1198,6 +1308,7 @@ const maxAmount = ref(null)
 const currentUser = ref({})
 const canDeleteBookings = computed(() => canDeleteBookingsByRole(currentUser.value))
 const canExportExcel = computed(() => canExportAdminExcel(currentUser.value))
+const canManageBookingDiscount = computed(() => ['super_admin', 'proprietaire', 'gestionnaire', 'gerant'].includes(getRoleKey(currentUser.value)))
 
 const toYmd = (date) => {
   const d = (date instanceof Date) ? date : new Date(date)
@@ -1505,6 +1616,8 @@ const createEmptyQuickCustomerForm = () => ({
 
 const form = ref(createEmptyBookingForm())
 const quickCustomerForm = ref(createEmptyQuickCustomerForm())
+const discountEnabled = ref(false)
+const showDiscountEditor = computed(() => canManageBookingDiscount.value && discountEnabled.value)
 const isOtherEventType = computed(() => form.value.event_type === 'Autres')
 const totalPriceInput = moneyInputModel(form, 'total_price')
 const discountAmountInput = moneyInputModel(form, 'discount_amount')
@@ -1680,7 +1793,6 @@ const selectedRoomIds = computed(() => {
 })
 const selectedRooms = computed(() => rooms.value.filter(r => selectedRoomIds.value.includes(String(r.id))))
 const selectedRoom = computed(() => rooms.value.find(r => String(r.id) === String(form.value.room)) || null)
-const selectedItem = computed(() => form.value.booking_type === 'hall' ? selectedHall.value : selectedRoom.value)
 const activeRoomBookings = computed(() => {
   return (bookings.value || [])
     .filter((booking) => booking.booking_type === 'room' && String(booking.status || '') !== 'cancelled' && Number(booking.id || 0) !== Number(form.value.id || 0))
@@ -1732,6 +1844,8 @@ const normalizeAdditionalServicesSelection = (value) => {
         name: String(item?.name || '').trim(),
         quantity: normalizeAddonQuantity(item?.quantity),
       }
+      const roomId = String(item?.room_id || '').trim()
+      if (roomId) normalized.room_id = roomId
       const subs = Array.isArray(item?.subservices)
         ? item.subservices
           .filter(sub => sub && typeof sub === 'object')
@@ -1746,9 +1860,93 @@ const normalizeAdditionalServicesSelection = (value) => {
     })
     .filter(item => item.name)
 }
+const normalizeAdditionalServicesCatalog = (value) => {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((service) => {
+      const name = String(service?.name || '').trim()
+      if (!name) return null
+      const hasSubservices = Boolean(service?.has_subservices)
+      const normalized = {
+        name,
+        price: Number(service?.price || 0),
+        has_subservices: hasSubservices,
+      }
+      if (hasSubservices) {
+        normalized.subservices = Array.isArray(service?.subservices)
+          ? service.subservices
+            .map((subservice) => {
+              const subName = String(subservice?.name || '').trim()
+              if (!subName) return null
+              return {
+                name: subName,
+                price: Number(subservice?.price || 0),
+              }
+            })
+            .filter(Boolean)
+          : []
+      } else {
+        normalized.subservices = []
+      }
+      return normalized
+    })
+    .filter(Boolean)
+}
+const mergeAdditionalServicesCatalogs = (items) => {
+  const merged = new Map()
+  for (const item of Array.isArray(items) ? items : []) {
+    for (const service of normalizeAdditionalServicesCatalog(item?.additional_services)) {
+      const name = String(service?.name || '').trim()
+      if (!name) continue
+      if (!merged.has(name)) {
+        merged.set(name, {
+          name,
+          price: 0,
+          has_subservices: Boolean(service?.has_subservices),
+          subservices: [],
+        })
+      }
+      const target = merged.get(name)
+      target.has_subservices = target.has_subservices || Boolean(service?.has_subservices)
+      if (service?.has_subservices) {
+        const subMap = new Map((target.subservices || []).map(sub => [String(sub?.name || ''), { ...sub }]))
+        for (const subservice of Array.isArray(service?.subservices) ? service.subservices : []) {
+          const subName = String(subservice?.name || '').trim()
+          if (!subName) continue
+          const existing = subMap.get(subName) || { name: subName, price: 0 }
+          existing.price = Number(existing.price || 0) + Number(subservice?.price || 0)
+          subMap.set(subName, existing)
+        }
+        target.subservices = Array.from(subMap.values())
+      } else if (!target.has_subservices) {
+        target.price = Number(target.price || 0) + Number(service?.price || 0)
+      }
+    }
+  }
+  return Array.from(merged.values())
+}
 const itemAdditionalServices = computed(() => {
-  if (form.value.booking_type === 'room' && selectedRooms.value.length !== 1) return []
-  return Array.isArray(selectedItem.value?.additional_services) ? selectedItem.value.additional_services : []
+  if (form.value.booking_type === 'room') {
+    return mergeAdditionalServicesCatalogs(selectedRooms.value)
+  }
+  return normalizeAdditionalServicesCatalog(selectedHall.value?.additional_services)
+})
+const roomServiceGroups = computed(() => (
+  selectedRooms.value.map(room => ({
+    room,
+    services: normalizeAdditionalServicesCatalog(room?.additional_services),
+  }))
+))
+const showRoomAddonsSection = computed(() => form.value.booking_type === 'room' && selectedRooms.value.length > 0)
+const showHallAddonsSection = computed(() => form.value.booking_type === 'hall' && Boolean(selectedHall.value))
+const addonsEmptyTitle = computed(() => {
+  if (form.value.booking_type === 'room') return 'Aucun service additionnel sur cette chambre'
+  return 'Aucun service additionnel sur cette salle'
+})
+const addonsEmptyHint = computed(() => {
+  if (form.value.booking_type === 'room' && selectedRooms.value.length > 1) return 'Les services affichés ci-dessous regroupent ceux disponibles sur les chambres sélectionnées.'
+  if (form.value.booking_type === 'room') return 'Ajoutez les services depuis la fiche de la chambre pour les rendre disponibles ici.'
+  return 'Ajoutez les services depuis la fiche de la salle pour les rendre disponibles ici.'
 })
 const customerFullName = computed(() => `${String(form.value.customer_first_name || '').trim()} ${String(form.value.customer_last_name || '').trim()}`.trim())
 const organizationContactName = computed(() => String(form.value.organization_contact_name || '').trim())
@@ -1854,9 +2052,6 @@ const pruneUnavailableSelectedRooms = () => {
   if (next.length === selectedRoomIds.value.length) return
   form.value.rooms_selected = next
   syncPrimaryRoomSelection()
-  if (selectedRoomIds.value.length !== 1) {
-    form.value.additional_services_selected = []
-  }
 }
 const baseBookingAmount = computed(() => Number(daysCount.value || 0) * Number(pricePerUnit.value || 0))
 
@@ -1865,7 +2060,6 @@ const formBaseAccomodationHT = computed(() => {
   return Number(daysCount.value || 0) * Number(pricePerUnit.value || 0)
 })
 const formAddonsAmount = computed(() => {
-  if (form.value.booking_type === 'room' && selectedRooms.value.length !== 1) return 0
   return Number(addonsTotal.value || 0)
 })
 const formSubtotalHT = computed(() => {
@@ -1893,8 +2087,10 @@ const grossBookingAmount = computed(() => {
 })
 
 const applyQuickDiscountPercent = (pct) => {
+  if (!canManageBookingDiscount.value) return
   const gross = Number(grossBookingAmount.value || 0)
   if (gross <= 0) return
+  discountEnabled.value = true
   form.value.discount_amount = Math.round(gross * (pct / 100))
   if (!form.value.discount_reason || form.value.discount_reason.startsWith('Remise ')) {
     form.value.discount_reason = `Remise ${pct}%`
@@ -1906,6 +2102,13 @@ const clearDiscount = () => {
   form.value.discount_amount = 0
   form.value.discount_reason = ''
   calculatePrice()
+}
+
+const setDiscountEnabled = (value) => {
+  if (!canManageBookingDiscount.value) return
+  const nextValue = Boolean(value)
+  discountEnabled.value = nextValue
+  if (!nextValue) clearDiscount()
 }
 
 const selectedBookingSubtotalHT = computed(() => {
@@ -1933,11 +2136,8 @@ const selectedAddonsCount = computed(() => {
   return count
 })
 
-const addonsTotal = computed(() => {
-  const services = itemAdditionalServices.value
-  const selected = normalizeAdditionalServicesSelection(form.value.additional_services_selected)
+const computeCatalogServicesTotal = (services, selected) => {
   if (!services.length || !selected.length) return 0
-
   const serviceIndex = new Map(services.map(s => [String(s?.name || ''), s]))
   let total = 0
   for (const item of selected) {
@@ -1955,6 +2155,19 @@ const addonsTotal = computed(() => {
     total += Number(cfg.price || 0) * addonQuantityValue(item?.quantity)
   }
   return total
+}
+
+const addonsTotal = computed(() => {
+  const selected = normalizeAdditionalServicesSelection(form.value.additional_services_selected)
+  if (!selected.length) return 0
+  if (form.value.booking_type === 'room') {
+    return roomServiceGroups.value.reduce((sum, group) => {
+      const roomKey = String(group.room?.id || '')
+      const roomSelected = selected.filter(item => String(item?.room_id || '') === roomKey)
+      return sum + computeCatalogServicesTotal(group.services, roomSelected)
+    }, 0)
+  }
+  return computeCatalogServicesTotal(itemAdditionalServices.value, selected)
 })
 
 const syncPrimaryRoomSelection = () => {
@@ -1986,9 +2199,6 @@ const toggleRoomSelection = (roomId) => {
     next.push(roomKey)
   }
   form.value.rooms_selected = next
-  if (next.length !== 1) {
-    form.value.additional_services_selected = []
-  }
 }
 
 const onCustomerKindChange = () => {
@@ -2061,7 +2271,7 @@ const calculatePrice = () => {
   const singleRoomRate = Number(selectedRoom.value?.price_per_night || 0)
   pricePerUnit.value = selectedRooms.value.length > 1 ? totalRoomRate : singleRoomRate
   const baseAccomodationHT = diffDays * totalRoomRate
-  const addons = selectedRooms.value.length === 1 ? Number(addonsTotal.value || 0) : 0
+  const addons = Number(addonsTotal.value || 0)
   const tcsthAmount = (form.value.booking_type === 'room') ? _roundMoney(baseAccomodationHT * (TVA_RATE_PCT / 100)) : 0
   const gross = baseAccomodationHT + addons + tcsthAmount
   form.value.total_price = Math.max(0, gross - discount)
@@ -2092,10 +2302,13 @@ watch(
   () => selectedRoomIds.value.join('|'),
   () => {
     if (!showFormModal.value || form.value.booking_type !== 'room') return
+    const activeRoomIds = new Set(selectedRoomIds.value.map(id => String(id)))
+    form.value.additional_services_selected = normalizeAdditionalServicesSelection(form.value.additional_services_selected)
+      .filter(item => {
+        const roomId = String(item?.room_id || '')
+        return !roomId || activeRoomIds.has(roomId)
+      })
     syncPrimaryRoomSelection()
-    if (selectedRoomIds.value.length !== 1) {
-      form.value.additional_services_selected = []
-    }
     fetchCalendarRanges()
     calculatePrice()
   },
@@ -2152,6 +2365,91 @@ const isSubserviceSelected = (serviceName, subName) => {
   const item = (form.value.additional_services_selected || []).find(s => String(s?.name || '') === String(serviceName || ''))
   const subs = Array.isArray(item?.subservices) ? item.subservices : []
   return subs.some(sub => String(sub?.name || '') === String(subName || ''))
+}
+
+const cloneAdditionalServicesSelected = () => (
+  normalizeAdditionalServicesSelection(form.value.additional_services_selected).map(item => ({
+    ...item,
+    subservices: Array.isArray(item.subservices) ? item.subservices.map(sub => ({ ...sub })) : [],
+  }))
+)
+
+const findRoomServiceItem = (roomId, serviceName) => {
+  const roomKey = String(roomId || '')
+  return (form.value.additional_services_selected || []).find(item => (
+    String(item?.room_id || '') === roomKey &&
+    String(item?.name || '') === String(serviceName || '')
+  ))
+}
+
+const isRoomServiceSelected = (roomId, serviceName) => Boolean(findRoomServiceItem(roomId, serviceName))
+
+const getRoomServiceQuantity = (roomId, serviceName) => {
+  const item = findRoomServiceItem(roomId, serviceName)
+  return item ? addonQuantityValue(item?.quantity) : 0
+}
+
+const changeRoomServiceQuantity = (roomId, service, delta) => {
+  const roomKey = String(roomId || '')
+  const name = String(service?.name || '').trim()
+  if (!roomKey || !name) return
+  const selected = cloneAdditionalServicesSelected()
+  const index = selected.findIndex(item => String(item?.room_id || '') === roomKey && String(item?.name || '') === name)
+  const nextQty = getRoomServiceQuantity(roomId, name) + Number(delta || 0)
+  if (nextQty <= 0) {
+    if (index >= 0) selected.splice(index, 1)
+    form.value.additional_services_selected = selected
+    return
+  }
+  if (index >= 0) {
+    selected[index].quantity = normalizeAddonQuantity(nextQty)
+  } else {
+    selected.push({ room_id: roomKey, name, quantity: normalizeAddonQuantity(nextQty) })
+  }
+  form.value.additional_services_selected = selected
+}
+
+const findRoomSubserviceItem = (roomId, serviceName, subName) => {
+  const item = findRoomServiceItem(roomId, serviceName)
+  const subs = Array.isArray(item?.subservices) ? item.subservices : []
+  return subs.find(sub => String(sub?.name || '') === String(subName || '')) || null
+}
+
+const isRoomSubserviceSelected = (roomId, serviceName, subName) => Boolean(findRoomSubserviceItem(roomId, serviceName, subName))
+
+const getRoomSubserviceQuantity = (roomId, serviceName, subName) => {
+  const item = findRoomSubserviceItem(roomId, serviceName, subName)
+  return item ? addonQuantityValue(item?.quantity) : 0
+}
+
+const changeRoomSubserviceQuantity = (roomId, serviceName, sub, delta) => {
+  const roomKey = String(roomId || '')
+  const name = String(serviceName || '').trim()
+  const subName = String(sub?.name || '').trim()
+  if (!roomKey || !name || !subName) return
+  const selected = cloneAdditionalServicesSelected()
+  let item = selected.find(entry => String(entry?.room_id || '') === roomKey && String(entry?.name || '') === name)
+  if (!item) {
+    item = { room_id: roomKey, name, quantity: 1, subservices: [] }
+    selected.push(item)
+  }
+  const subs = Array.isArray(item.subservices) ? [...item.subservices] : []
+  const subIndex = subs.findIndex(entry => String(entry?.name || '') === subName)
+  const nextQty = getRoomSubserviceQuantity(roomId, name, subName) + Number(delta || 0)
+  if (nextQty <= 0) {
+    if (subIndex >= 0) subs.splice(subIndex, 1)
+  } else if (subIndex >= 0) {
+    subs[subIndex].quantity = normalizeAddonQuantity(nextQty)
+  } else {
+    subs.push({ name: subName, quantity: normalizeAddonQuantity(nextQty) })
+  }
+  if (subs.length) {
+    item.subservices = subs
+  } else {
+    const itemIndex = selected.findIndex(entry => String(entry?.room_id || '') === roomKey && String(entry?.name || '') === name)
+    if (itemIndex >= 0) selected.splice(itemIndex, 1)
+  }
+  form.value.additional_services_selected = selected
 }
 
 const toggleSubservice = (serviceName, subName) => {
@@ -2644,6 +2942,7 @@ const openAddModal = () => {
     room: rooms.value[0]?.id || '',
     rooms_selected: rooms.value[0]?.id ? [String(rooms.value[0].id)] : [],
   }
+  discountEnabled.value = false
   resetQuickCustomerState()
   daysCount.value = 0
   calendarViewMonth.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -2658,6 +2957,7 @@ const editBooking = (booking) => {
   closeActions()
   isEditing.value = true
   form.value = mapBookingToForm(booking)
+  discountEnabled.value = canManageBookingDiscount.value && (Number(form.value.discount_amount || 0) > 0 || Boolean(String(form.value.discount_reason || '').trim()))
   selectedCustomer.value = booking?.customer && form.value.customer_kind !== 'organization'
     ? {
       id: booking.customer,
@@ -4130,6 +4430,217 @@ const printReservationJeton = async (booking) => {
   gap: 12px;
 }
 
+.addons-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.05rem;
+  border: 1px dashed rgba(148, 163, 184, 0.55);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.addons-empty-state strong {
+  color: #0f172a;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.addons-empty-state small {
+  color: #64748b;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.room-addons-section {
+  border-top: 1px solid var(--gray-200);
+}
+
+.room-service-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.room-service-group {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 18px;
+  padding: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.room-service-group-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.room-service-group-head strong {
+  color: var(--gray-900);
+  font-size: 0.93rem;
+  font-weight: 800;
+}
+
+.room-service-group-head small {
+  color: var(--gray-500);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.room-service-group-count {
+  color: var(--gray-600);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.room-service-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.room-service-card {
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 14px;
+  background: #fff;
+  min-width: 190px;
+  max-width: 203px;
+  flex: 1 1 210px;
+  padding: 10px 11px;
+  display: flex;
+
+  flex-direction: column;
+  gap: 8px;
+}
+
+.room-service-card.is-active {
+  border-color: rgba(34, 197, 94, 0.55);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+
+.room-service-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.room-service-card-top strong {
+  color: var(--gray-900);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.room-service-card-top span {
+  color: var(--gray-700);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.room-service-card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-service-card-bottom small {
+  color: var(--gray-500);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.room-service-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.room-service-step-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--gray-700);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.room-service-step-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.room-service-qty {
+  min-width: 24px;
+  text-align: center;
+  color: var(--gray-900);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.room-service-card-stack {
+  max-width: none;
+  flex: 1 1 100%;
+}
+
+.room-subservice-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.room-subservice-card {
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 12px;
+  padding: 9px 10px;
+  min-width: 170px;
+  max-width: 220px;
+  flex: 1 1 180px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.room-subservice-card.is-active {
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.room-subservice-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.room-subservice-top strong {
+  color: var(--gray-900);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.room-subservice-top span {
+  color: var(--gray-700);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.room-addons-empty {
+  border-style: dashed;
+}
+
 .addon-item {
   border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 22px;
@@ -4420,6 +4931,54 @@ html[data-admin-theme="dark"] .addon-toggle.is-active {
   border-color: rgba(34, 197, 94, 0.55);
   background: linear-gradient(180deg, rgba(20, 83, 45, 0.4) 0%, rgba(15, 23, 42, 0.92) 100%);
   box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+}
+
+html[data-admin-theme="dark"] .addons-empty-state {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: rgba(15, 23, 42, 0.78);
+}
+
+html[data-admin-theme="dark"] .room-service-group {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: rgba(15, 23, 42, 0.74);
+}
+
+html[data-admin-theme="dark"] .room-service-group-head strong,
+html[data-admin-theme="dark"] .room-service-card-top strong,
+html[data-admin-theme="dark"] .room-subservice-top strong,
+html[data-admin-theme="dark"] .room-service-qty {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .room-service-group-head small,
+html[data-admin-theme="dark"] .room-service-group-count,
+html[data-admin-theme="dark"] .room-service-card-bottom small {
+  color: #94a3b8;
+}
+
+html[data-admin-theme="dark"] .room-service-card,
+html[data-admin-theme="dark"] .room-subservice-card {
+  border-color: rgba(71, 85, 105, 0.85);
+  background: rgba(15, 23, 42, 0.9);
+}
+
+html[data-admin-theme="dark"] .room-service-card-top span,
+html[data-admin-theme="dark"] .room-subservice-top span {
+  color: #cbd5e1;
+}
+
+html[data-admin-theme="dark"] .room-service-step-btn {
+  border-color: rgba(71, 85, 105, 0.95);
+  background: rgba(30, 41, 59, 0.9);
+  color: #e2e8f0;
+}
+
+html[data-admin-theme="dark"] .addons-empty-state strong {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .addons-empty-state small {
+  color: #cbd5e1;
 }
 
 html[data-admin-theme="dark"] .toggle-switch {
@@ -4759,7 +5318,7 @@ html[data-admin-theme="dark"] .selected-period-value {
   align-items: center;
   gap: 4px;
   padding: 2px 7px;
-  background: #ecfdf5;
+  background: var(--success);
   color: #059669;
   border: 1px solid #a7f3d0;
   border-radius: 999px;
@@ -4838,8 +5397,8 @@ html[data-admin-theme="dark"] .selected-period-value {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid #e2e8f0;
+  background: var(--white);
+  border: 1px solid var(--gray-300);
   border-radius: 20px;
   padding: 1.25rem;
   margin-top: 0.75rem;
@@ -4878,7 +5437,7 @@ html[data-admin-theme="dark"] .selected-period-value {
 .pdp-title {
   font-size: 0.95rem;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--gray-800);
   margin: 0;
 }
 
@@ -4915,15 +5474,83 @@ html[data-admin-theme="dark"] .selected-period-value {
   border-radius: 999px;
 }
 
+.pdp-discount-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pdp-discount-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pdp-discount-toggle-track {
+  position: relative;
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  border: 1px solid #cbd5e1;
+  transition: background 0.18s ease, border-color 0.18s ease;
+  flex-shrink: 0;
+}
+
+.pdp-discount-toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
+  transition: transform 0.18s ease;
+}
+
+.pdp-discount-toggle.is-active .pdp-discount-toggle-track {
+  background: #10b981;
+  border-color: #10b981;
+}
+
+.pdp-discount-toggle.is-active .pdp-discount-toggle-knob {
+  transform: translateX(18px);
+}
+
+.pdp-discount-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pdp-discount-toggle-copy strong {
+  font-size: 0.8rem;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.pdp-discount-toggle-copy small {
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.25;
+}
+
 .pdp-body-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
   gap: 1.15rem;
 }
 
+.pdp-body-grid.is-discount-disabled {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .pdp-control-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--white);
+  border: 1px solid var(--gray-300);
   border-radius: 14px;
   padding: 1.1rem;
   display: flex;
@@ -4945,7 +5572,7 @@ html[data-admin-theme="dark"] .selected-period-value {
   gap: 6px;
   font-size: 0.82rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--gray-800);
 }
 
 .pdp-clear-btn {
@@ -5265,6 +5892,24 @@ html[data-admin-theme="dark"] .selected-period-value {
   background: #162033;
   border-color: #334155;
   color: #cbd5e1;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-discount-toggle-track {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-discount-toggle.is-active .pdp-discount-toggle-track {
+  background: #10b981;
+  border-color: #10b981;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-discount-toggle-copy strong {
+  color: #f8fafc;
+}
+
+:global(html[data-admin-theme="dark"]) .pdp-discount-toggle-copy small {
+  color: #94a3b8;
 }
 
 :global(html[data-admin-theme="dark"]) .pdp-discount-active-badge {

@@ -6,8 +6,8 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from .models import Booking, Hall, Payment
-from .views import _compute_booking_totals
+from .models import Booking, Hall, Payment, Room
+from .views import _compute_booking_totals, _compute_room_addons_total
 
 
 class PendingBookingAutomationTests(TestCase):
@@ -92,6 +92,46 @@ class BookingAddonsPricingTests(TestCase):
         self.assertEqual(str(discount), '0.00')
         self.assertEqual(normalized_selected[0]['name'], 'Sonorisation')
         self.assertEqual(normalized_selected[1]['name'], 'Décoration')
+
+    def test_compute_room_totals_with_services_merged_from_multiple_rooms(self):
+        room_a = Room.objects.create(
+            name='Chambre A',
+            room_number='101',
+            room_type='double',
+            status='available',
+            capacity=2,
+            price_per_night='50000.00',
+            additional_services=[
+                {'name': 'Petit-déjeuner', 'price': '10000.00', 'has_subservices': False, 'subservices': []},
+                {'name': 'Navette', 'price': '0.00', 'has_subservices': True, 'subservices': [
+                    {'name': 'Aéroport', 'price': '15000.00'},
+                ]},
+            ],
+        )
+        room_b = Room.objects.create(
+            name='Chambre B',
+            room_number='102',
+            room_type='double',
+            status='reserved',
+            capacity=2,
+            price_per_night='50000.00',
+            additional_services=[
+                {'name': 'Petit-déjeuner', 'price': '8000.00', 'has_subservices': False, 'subservices': []},
+                {'name': 'Navette', 'price': '0.00', 'has_subservices': True, 'subservices': [
+                    {'name': 'Aéroport', 'price': '12000.00'},
+                ]},
+            ],
+        )
+
+        selected = [
+            {'name': 'Petit-déjeuner', 'quantity': 2},
+            {'name': 'Navette', 'subservices': [{'name': 'Aéroport', 'quantity': 1}]},
+        ]
+
+        addons_total, normalized_selected = _compute_room_addons_total([room_a, room_b], selected)
+        self.assertEqual(str(addons_total), '51000.00')
+        self.assertEqual(normalized_selected[0]['name'], 'Petit-déjeuner')
+        self.assertEqual(normalized_selected[1]['name'], 'Navette')
 
 
 class BookingDiscountPricingTests(TestCase):

@@ -300,7 +300,7 @@ class BookingSerializer(serializers.ModelSerializer):
                 'checked_out_at': checked_out_at,
                 'guest_count': len(guests),
                 'guests': guests,
-                'can_check_in': bool(str(obj.status or '') == 'paid' and not checked_in_at),
+                'can_check_in': bool(str(obj.status or '') != 'cancelled' and not checked_in_at),
                 'can_check_out': bool(checked_in_at and not checked_out_at),
             })
         return items
@@ -378,12 +378,6 @@ class BookingSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({
                         'room_ids': f"Ces chambres ne sont pas disponibles pour cette période: {', '.join(str(room) for room in conflicts)}"
                     })
-            selected_services = data.get('additional_services_selected', getattr(instance, 'additional_services_selected', []))
-            if len(normalized_room_ids) != 1 and selected_services:
-                raise serializers.ValidationError({
-                    'additional_services_selected': 'Les services additionnels sont disponibles uniquement pour une réservation avec une seule chambre'
-                })
-
         if customer_kind == 'organization' and not organization_name:
             raise serializers.ValidationError({'organization_name': "Le nom de l'organisation est requis"})
 
@@ -516,7 +510,7 @@ class BookingSerializer(serializers.ModelSerializer):
         return len(self.get_stay_history(obj))
 
     def get_can_check_in(self, obj):
-        return bool(obj.booking_type == 'room' and obj.status == 'paid' and any(not stay.get('checked_in_at') for stay in obj.normalized_room_stays))
+        return bool(obj.booking_type == 'room' and obj.status != 'cancelled' and any(not stay.get('checked_in_at') for stay in obj.normalized_room_stays))
 
     def get_can_check_out(self, obj):
         return bool(obj.booking_type == 'room' and any(stay.get('checked_in_at') and not stay.get('checked_out_at') for stay in obj.normalized_room_stays))

@@ -104,11 +104,142 @@
         </div>
       </div>
 
-      <div class="accounting-summary card">
+      <div class="cashflow-overview card">
+        <div class="cashflow-overview-head">
+          <div>
+            <span class="summary-eyebrow">Flux</span>
+            <h2>Vue d'ensemble des entrees et sorties</h2>
+            <p>Choisissez une lecture journalière regroupée par date ou une lecture détaillée pièce par pièce.</p>
+          </div>
+          <div class="cashflow-mode-switch">
+            <button
+              type="button"
+              class="cashflow-mode-btn"
+              :class="{ active: cashflowOverviewMode === 'daily' }"
+              @click="cashflowOverviewMode = 'daily'"
+            >
+              Vue journaliere
+            </button>
+            <button
+              type="button"
+              class="cashflow-mode-btn"
+              :class="{ active: cashflowOverviewMode === 'detailed' }"
+              @click="cashflowOverviewMode = 'detailed'"
+            >
+              Vue detaillee
+            </button>
+          </div>
+        </div>
+
+        <div class="cashflow-overview-meta">
+          <span>{{ cashflowOverviewNotice }}</span>
+          <strong>{{ cashflowOverviewRangeLabel }}</strong>
+        </div>
+
+        <div class="cashflow-period-grid">
+          <div class="cashflow-summary-card success-tone">
+            <span class="cashflow-summary-label">Entrees de la periode</span>
+            <strong class="text-success">{{ formatMoney(periodOverview.recettes) }}</strong>
+            <small>{{ periodOverview.recetteCount }} mouvement(s)</small>
+          </div>
+          <div class="cashflow-summary-card danger-tone">
+            <span class="cashflow-summary-label">Sorties de la periode</span>
+            <strong class="text-danger">{{ formatMoney(periodOverview.depenses) }}</strong>
+            <small>{{ periodOverview.depenseCount }} mouvement(s)</small>
+          </div>
+          <div class="cashflow-summary-card info-tone">
+            <span class="cashflow-summary-label">Net de la periode</span>
+            <strong :class="periodOverview.net >= 0 ? 'text-success' : 'text-danger'">{{ formatMoney(periodOverview.net) }}</strong>
+            <small>{{ periodOverview.totalCount }} operation(s)</small>
+          </div>
+        </div>
+
+        <div v-if="cashflowOverviewMode === 'daily'" class="cashflow-daily-list">
+          <div class="ledger-head cashflow-table-head">
+            <div>
+              <h2 class="table-title">Flux journaliers regroupes</h2>
+              <p class="ledger-subtitle">Toutes les entrees et sorties sont fusionnées sur une seule ligne par jour.</p>
+            </div>
+          </div>
+
+          <div v-if="isMobile" class="admin-cards">
+            <div v-if="cashflowDailyRows.length === 0" class="empty-cell">Aucun mouvement pour cette plage de dates.</div>
+            <div v-else v-for="row in cashflowDailyRows" :key="row.date" class="admin-card ledger-card cashflow-daily-card">
+              <div class="admin-card-head">
+                <div>
+                  <div class="admin-card-title">{{ formatDisplayDate(row.date) }}</div>
+                  <div class="admin-card-subtitle">{{ row.totalCount }} mouvement(s)</div>
+                </div>
+                <span :class="['cashflow-net-pill', row.net >= 0 ? 'positive' : 'negative']">
+                  {{ row.net >= 0 ? '+' : '' }}{{ formatMoney(row.net) }}
+                </span>
+              </div>
+
+              <div class="admin-card-body">
+                <div class="admin-kv">
+                  <span class="k">Nombre d'entrees</span>
+                  <span class="v">{{ row.recetteCount }}</span>
+                </div>
+                <div class="admin-kv">
+                  <span class="k">Montant des entrees</span>
+                  <span class="v text-success">{{ formatMoney(row.recettes) }}</span>
+                </div>
+                <div class="admin-kv">
+                  <span class="k">Nombre de sorties</span>
+                  <span class="v">{{ row.depenseCount }}</span>
+                </div>
+                <div class="admin-kv">
+                  <span class="k">Montant des sorties</span>
+                  <span class="v text-danger">{{ formatMoney(row.depenses) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <table v-else class="admin-table accounting-table cashflow-daily-table">
+            <colgroup>
+              <col class="cashflow-col-date" />
+              <col class="cashflow-col-count" />
+              <col class="cashflow-col-amount" />
+              <col class="cashflow-col-count" />
+              <col class="cashflow-col-amount" />
+              <col class="cashflow-col-net" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Nb entrees</th>
+                <th>Montant entrees</th>
+                <th>Nb sorties</th>
+                <th>Montant sorties</th>
+                <th>Net journalier</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="cashflowDailyRows.length === 0">
+                <td colspan="6" class="empty-cell">Aucun mouvement pour cette plage de dates.</td>
+              </tr>
+              <tr v-for="row in cashflowDailyRows" :key="row.date">
+                <td>
+                  <div class="cell-main">{{ formatDisplayDate(row.date) }}</div>
+                  <div class="cell-sub">{{ row.totalCount }} mouvement(s)</div>
+                </td>
+                <td>{{ row.recetteCount }}</td>
+                <td class="amount-cell text-success">{{ formatMoney(row.recettes) }}</td>
+                <td>{{ row.depenseCount }}</td>
+                <td class="amount-cell text-danger">{{ formatMoney(row.depenses) }}</td>
+                <td class="amount-cell" :class="row.net >= 0 ? 'text-success' : 'text-danger'">{{ formatMoney(row.net) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div v-if="cashflowOverviewMode === 'detailed'" class="accounting-summary card">
         <div class="accounting-summary-main">
           <span class="summary-eyebrow">Journal</span>
-          <h2>Suivi comptable par piece justificative</h2>
-          <p>Chaque ecriture est ordonnee chronologiquement. Le numero de piece justificative suit l'ordre  des operations comptables valides.</p>
+          <h2>Vue detaillee par piece justificative</h2>
+          <p>Chaque ecriture est ordonnee chronologiquement. Le numero de piece justificative suit l'ordre des operations comptables valides.</p>
         </div>
         <div class="accounting-summary-chips">
           <div class="summary-chip">
@@ -126,10 +257,10 @@
         </div>
       </div>
 
-      <div class="table-container card">
+      <div v-if="cashflowOverviewMode === 'detailed'" class="table-container card">
         <div class="ledger-head">
           <div>
-            <h2 class="table-title">Grand livre comptable</h2>
+            <h2 class="table-title">Vue detaillee des pieces</h2>
             <p class="ledger-subtitle">Recettes issues des paiements encaisses, des entrees manuelles et des depenses validees.</p>
           </div>
           <AdminAppTablePagination
@@ -363,6 +494,7 @@ const customStart = ref('')
 const customEnd = ref('')
 const isMobile = ref(false)
 const filtersOpen = ref(false)
+const cashflowOverviewMode = ref('daily')
 
 const canExportExcel = computed(() => canExportAdminExcel(currentUser.value))
 const isLoading = computed(() => loadingPayments.value || loadingExpenses.value || loadingEntrees.value)
@@ -584,6 +716,73 @@ const filteredEntries = computed(() => {
       ...entry,
       voucherNumber: voucherMap.value.get(entry.entryKey) || 'PJ-0000',
     }))
+})
+
+const entriesInActiveRange = computed(() => {
+  return ledgerEntriesAsc.value.filter(entry => inRangeYmd(entry.date, rangeStartYmd.value, rangeEndYmd.value))
+})
+
+const periodOverview = computed(() => {
+  return entriesInActiveRange.value.reduce((summary, entry) => {
+    const recette = Number(entry.recette || 0)
+    const depense = Number(entry.depense || 0)
+    summary.recettes += recette
+    summary.depenses += depense
+    summary.net += recette - depense
+    if (recette > 0) summary.recetteCount += 1
+    if (depense > 0) summary.depenseCount += 1
+    summary.totalCount += 1
+    return summary
+  }, {
+    recettes: 0,
+    depenses: 0,
+    net: 0,
+    recetteCount: 0,
+    depenseCount: 0,
+    totalCount: 0,
+  })
+})
+
+const cashflowDailyRows = computed(() => {
+  const grouped = new Map()
+  for (const entry of entriesInActiveRange.value) {
+    const date = String(entry.date || '').slice(0, 10)
+    if (!date) continue
+    if (!grouped.has(date)) {
+      grouped.set(date, {
+        date,
+        recettes: 0,
+        depenses: 0,
+        net: 0,
+        recetteCount: 0,
+        depenseCount: 0,
+        totalCount: 0,
+      })
+    }
+    const row = grouped.get(date)
+    const recette = Number(entry.recette || 0)
+    const depense = Number(entry.depense || 0)
+    row.recettes += recette
+    row.depenses += depense
+    row.net += recette - depense
+    if (recette > 0) row.recetteCount += 1
+    if (depense > 0) row.depenseCount += 1
+    row.totalCount += 1
+  }
+  return Array.from(grouped.values()).sort((a, b) => b.date.localeCompare(a.date))
+})
+
+const cashflowOverviewRangeLabel = computed(() => {
+  if (!rangeStartYmd.value || !rangeEndYmd.value) return 'Toutes les dates'
+  if (rangeStartYmd.value === rangeEndYmd.value) return `Le ${rangeStartYmd.value}`
+  return `Du ${rangeStartYmd.value} au ${rangeEndYmd.value}`
+})
+
+const cashflowOverviewNotice = computed(() => {
+  if (cashflowOverviewMode.value === 'detailed') {
+    return 'Lecture détaillée de chaque pièce comptable validée dans la plage active.'
+  }
+  return 'Lecture jour par jour avec toutes les entrées et sorties regroupées sur une seule ligne.'
 })
 
 const balanceMap = computed(() => {
@@ -920,6 +1119,238 @@ onMounted(async () => {
   align-items: stretch;
 }
 
+.cashflow-overview {
+  display: grid;
+  gap: 16px;
+}
+
+.cashflow-overview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cashflow-overview-head h2 {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 1.3rem;
+}
+
+.cashflow-overview-head p {
+  margin: 0;
+  color: var(--gray-500);
+  line-height: 1.6;
+}
+
+.cashflow-mode-switch {
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--gray-200);
+  border-radius: 16px;
+  background: var(--gray-50);
+}
+
+.cashflow-mode-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--gray-600);
+  font-weight: 700;
+}
+
+.cashflow-mode-btn.active {
+  background: var(--white);
+  color: #2563eb;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.cashflow-overview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--gray-500);
+  font-size: 0.9rem;
+}
+
+.cashflow-overview-meta strong {
+  color: var(--gray-900);
+}
+
+.cashflow-period-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.cashflow-summary-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--gray-200);
+  border-radius: 18px;
+  background: var(--white);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.cashflow-summary-card small {
+  color: var(--gray-500);
+}
+
+.cashflow-summary-label {
+  color: gray;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.success-tone {
+  background: var(--white);
+  /* border-color: rgba(0, 138, 92, 0.22); */
+  border: 2px solid rgba(0, 138, 92, 0.22);
+}
+
+.danger-tone {
+  background: var(--white);
+  border-color: rgba(239, 68, 68, 0.18);
+  border: 2px solid rgba(239, 68, 68, 0.18);
+}
+
+.info-tone {
+ background: var(--white);
+  border-color: rgba(37, 99, 235, 0.18);
+  border: 2px solid rgba(37, 99, 235, 0.18);
+}
+
+.cashflow-daily-list {
+  display: grid;
+  gap: 14px;
+}
+
+.cashflow-table-head {
+  margin-bottom: 0;
+}
+
+.cashflow-daily-card {
+  border: 1px solid var(--gray-200);
+}
+
+.cashflow-daily-table th,
+.cashflow-daily-table td {
+  vertical-align: middle;
+}
+
+.cashflow-daily-table {
+  table-layout: fixed;
+}
+
+.cashflow-col-date {
+  width: 22%;
+}
+
+.cashflow-col-count {
+  width: 10%;
+}
+
+.cashflow-col-amount,
+.cashflow-col-net {
+  width: 19%;
+}
+
+.cashflow-daily-table thead th {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.cashflow-daily-table td {
+  padding-top: 20px;
+  padding-bottom: 20px;
+  text-align: left;
+}
+
+.cashflow-daily-table th:nth-child(2),
+.cashflow-daily-table th:nth-child(4),
+.cashflow-daily-table td:nth-child(2),
+.cashflow-daily-table td:nth-child(4) {
+  text-align: center;
+  font-weight: 700;
+}
+
+.cashflow-daily-table th:nth-child(3),
+.cashflow-daily-table th:nth-child(5),
+.cashflow-daily-table th:nth-child(6),
+.cashflow-daily-table td:nth-child(3),
+.cashflow-daily-table td:nth-child(5),
+.cashflow-daily-table td:nth-child(6) {
+  text-align: right;
+}
+
+.cashflow-day-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cashflow-day-head strong {
+  display: block;
+  color: var(--gray-900);
+}
+
+.cashflow-day-head small {
+  color: var(--gray-500);
+}
+
+.cashflow-net-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.cashflow-net-pill.positive {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.cashflow-net-pill.negative {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.cashflow-day-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cashflow-day-stat {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--gray-200);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.88);
+}
+
+.cashflow-day-stat span {
+  color: var(--gray-500);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .accounting-summary-main {
   padding: 4px 2px;
 }
@@ -1053,6 +1484,10 @@ onMounted(async () => {
 :global(html[data-admin-theme="dark"]) .filter-input-clean,
 :global(html[data-admin-theme="dark"]) .filters-toggle,
 :global(html[data-admin-theme="dark"]) .current-balance-chip,
+:global(html[data-admin-theme="dark"]) .cashflow-mode-switch,
+:global(html[data-admin-theme="dark"]) .cashflow-daily-card,
+:global(html[data-admin-theme="dark"]) .cashflow-summary-card,
+:global(html[data-admin-theme="dark"]) .cashflow-day-stat,
 :global(html[data-admin-theme="dark"]) .summary-chip,
 :global(html[data-admin-theme="dark"]) .ledger-card,
 :global(html[data-admin-theme="dark"]) .table-total-row td {
@@ -1063,6 +1498,12 @@ onMounted(async () => {
 :global(html[data-admin-theme="dark"]) .page-header p,
 :global(html[data-admin-theme="dark"]) .filter-range-note,
 :global(html[data-admin-theme="dark"]) .ledger-subtitle,
+:global(html[data-admin-theme="dark"]) .cashflow-overview-head p,
+:global(html[data-admin-theme="dark"]) .cashflow-overview-meta,
+:global(html[data-admin-theme="dark"]) .cashflow-summary-card small,
+:global(html[data-admin-theme="dark"]) .cashflow-summary-label,
+:global(html[data-admin-theme="dark"]) .cashflow-day-head small,
+:global(html[data-admin-theme="dark"]) .cashflow-day-stat span,
 :global(html[data-admin-theme="dark"]) .accounting-summary-main p,
 :global(html[data-admin-theme="dark"]) .current-balance-chip span,
 :global(html[data-admin-theme="dark"]) .summary-chip-label,
@@ -1073,6 +1514,9 @@ onMounted(async () => {
 }
 
 :global(html[data-admin-theme="dark"]) .page-header h1,
+:global(html[data-admin-theme="dark"]) .cashflow-overview-head h2,
+:global(html[data-admin-theme="dark"]) .cashflow-overview-meta strong,
+:global(html[data-admin-theme="dark"]) .cashflow-day-head strong,
 :global(html[data-admin-theme="dark"]) .accounting-summary-main h2,
 :global(html[data-admin-theme="dark"]) .current-balance-chip strong,
 :global(html[data-admin-theme="dark"]) .stat-info .value,
@@ -1082,9 +1526,47 @@ onMounted(async () => {
   color: #f8fafc;
 }
 
+:global(html[data-admin-theme="dark"]) .cashflow-mode-btn {
+  color: #cbd5e1;
+}
+
+:global(html[data-admin-theme="dark"]) .cashflow-mode-btn.active {
+  background: rgba(30, 41, 59, 0.95);
+  color: #93c5fd;
+  box-shadow: none;
+}
+
+:global(html[data-admin-theme="dark"]) .cashflow-summary-card.success-tone,
+:global(html[data-admin-theme="dark"]) .cashflow-summary-card.danger-tone,
+:global(html[data-admin-theme="dark"]) .cashflow-summary-card.info-tone {
+  background: rgba(15, 23, 42, 0.92) !important;
+  box-shadow: none;
+}
+
+:global(html[data-admin-theme="dark"]) .cashflow-summary-card.success-tone {
+  border-color: rgba(16, 185, 129, 0.28) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .cashflow-summary-card.danger-tone {
+  border-color: rgba(239, 68, 68, 0.24) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .cashflow-summary-card.info-tone {
+  border-color: rgba(59, 130, 246, 0.24) !important;
+}
+
+:global(html[data-admin-theme="dark"]) .cashflow-summary-card .cashflow-summary-label,
+:global(html[data-admin-theme="dark"]) .cashflow-summary-card small {
+  color: #cbd5e1 !important;
+}
+
 @media (max-width: 1200px) {
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cashflow-period-grid {
+    grid-template-columns: 1fr;
   }
 
   .accounting-summary {
@@ -1096,6 +1578,10 @@ onMounted(async () => {
   .filters-panel {
     grid-template-columns: 1fr 1fr;
   }
+
+  .cashflow-day-stats {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1103,5 +1589,14 @@ onMounted(async () => {
   .filters-panel {
     grid-template-columns: 1fr;
   }
+
+  .cashflow-mode-switch {
+    width: 100%;
+  }
+
+  .cashflow-mode-btn {
+    flex: 1 1 0;
+  }
+
 }
 </style>

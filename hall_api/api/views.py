@@ -508,6 +508,98 @@ def _compute_addons_total(item: Hall | Room, selected_services):
     return addons_total.quantize(Decimal('0.01')), normalized_selected
 
 
+def normalize_room_services(services):
+    return services if isinstance(services, list) else []
+
+
+def _compute_room_addons_total(rooms, selected_services):
+    rooms = [room for room in (rooms or []) if isinstance(room, Room)]
+    if len(rooms) <= 1:
+        return _compute_addons_total(rooms[0], selected_services) if rooms else (Decimal('0.00'), [])
+
+    selected_services = selected_services or []
+    if not isinstance(selected_services, list):
+        raise DjangoValidationError('Les services sélectionnés doivent être une liste')
+
+    room_map = {str(room.id): room for room in rooms if getattr(room, 'id', None) is not None}
+    services_map = {}
+    for room in rooms:
+        for service in normalize_room_services(getattr(room, 'additional_services', None)):
+            name = str(service.get('name') or '').strip()
+            if not name:
+                continue
+            existing = services_map.get(name)
+            if existing is None:
+                existing = {
+                    'name': name,
+                    'price': Decimal('0.00'),
+                    'has_subservices': bool(service.get('has_subservices')),
+                    'subservices': {},
+                }
+                services_map[name] = existing
+            existing['has_subservices'] = existing['has_subservices'] or bool(service.get('has_subservices'))
+            if existing['has_subservices']:
+                for subservice in service.get('subservices') or []:
+                    sub_name = str(subservice.get('name') or '').strip()
+                    if not sub_name:
+                        continue
+                    existing['subservices'][sub_name] = (
+                        existing['subservices'].get(sub_name, Decimal('0.00')) +
+                        Decimal(str(subservice.get('price') or '0.00'))
+                    )
+            else:
+                existing['price'] += Decimal(str(service.get('price') or '0.00'))
+
+    merged_services = []
+    for service in services_map.values():
+        if service['has_subservices']:
+            merged_services.append({
+                'name': service['name'],
+                'price': '0.00',
+                'has_subservices': True,
+                'subservices': [
+                    {'name': sub_name, 'price': str(price.quantize(Decimal('0.01')))}
+                    for sub_name, price in service['subservices'].items()
+                ],
+            })
+        else:
+            merged_services.append({
+                'name': service['name'],
+                'price': str(service['price'].quantize(Decimal('0.01'))),
+                'has_subservices': False,
+                'subservices': [],
+            })
+
+    room_scoped = [item for item in selected_services if str(item.get('room_id') or '').strip()]
+    shared = [item for item in selected_services if not str(item.get('room_id') or '').strip()]
+
+    addons_total = Decimal('0.00')
+    normalized_selected = []
+
+    for selected_item in room_scoped:
+        room_id = str(selected_item.get('room_id') or '').strip()
+        room = room_map.get(room_id)
+        if room is None:
+            raise DjangoValidationError("La chambre liée au service sélectionné est introuvable")
+        line_total, normalized_line = _compute_addons_total(room, [selected_item])
+        addons_total += line_total
+        normalized_selected.extend([
+            {
+                **entry,
+                'room_id': room_id,
+            }
+            for entry in normalized_line
+        ])
+
+    if shared:
+        merged_item = Room(additional_services=merged_services)
+        shared_total, shared_normalized = _compute_addons_total(merged_item, shared)
+        addons_total += shared_total
+        normalized_selected.extend(shared_normalized)
+
+    return addons_total.quantize(Decimal('0.01')), normalized_selected
+
+
 def _compute_booking_totals(item: Hall | Room, start_dt: date, end_dt: date, selected_services, *, booking_type=None, discount_amount=Decimal('0.00')):
     if end_dt < start_dt:
         raise DjangoValidationError('La date fin doit être après la date début')
@@ -1219,25 +1311,20 @@ class BookingViewSet(viewsets.ModelViewSet):
                 raise DjangoValidationError('La date fin doit être après la date début')
             days = (end_dt - start_dt).days + 1
             base_accomodation_ht = (Decimal(days) * sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)).quantize(Decimal('0.01'))
-            if len(selected_rooms) == 1:
-                _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount, applied_discount = _compute_booking_totals(
-                    selected_rooms[0], start_dt, end_dt, selected, booking_type=booking_type, discount_amount=discount_amount
-                )
-            else:
-                addons_total, normalized_selected = _compute_addons_total(selected_rooms[0], selected) if selected_rooms else (Decimal('0.00'), [])
-                _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
-                gross_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
-                gross_total = (gross_ht + tva_amount).quantize(Decimal('0.01'))
-                try:
-                    applied_discount = Decimal(str(discount_amount or '0.00')).quantize(Decimal('0.01'))
-                except Exception:
-                    applied_discount = Decimal('0.00')
-                if applied_discount < 0:
-                    applied_discount = Decimal('0.00')
-                if applied_discount > gross_total:
-                    applied_discount = gross_total
-                subtotal_ht = max(Decimal('0.00'), (gross_ht - applied_discount)).quantize(Decimal('0.01'))
-                total = max(Decimal('0.00'), (gross_total - applied_discount)).quantize(Decimal('0.01'))
+            addons_total, normalized_selected = _compute_room_addons_total(selected_rooms, selected)
+            _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
+            gross_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
+            gross_total = (gross_ht + tva_amount).quantize(Decimal('0.01'))
+            try:
+                applied_discount = Decimal(str(discount_amount or '0.00')).quantize(Decimal('0.01'))
+            except Exception:
+                applied_discount = Decimal('0.00')
+            if applied_discount < 0:
+                applied_discount = Decimal('0.00')
+            if applied_discount > gross_total:
+                applied_discount = gross_total
+            subtotal_ht = max(Decimal('0.00'), (gross_ht - applied_discount)).quantize(Decimal('0.01'))
+            total = max(Decimal('0.00'), (gross_total - applied_discount)).quantize(Decimal('0.01'))
         save_kwargs = {
             'created_by': self.request.user,
             'updated_by': self.request.user,
@@ -1309,25 +1396,20 @@ class BookingViewSet(viewsets.ModelViewSet):
                 raise DjangoValidationError('La date fin doit être après la date début')
             days = (end_dt - start_dt).days + 1
             base_accomodation_ht = (Decimal(days) * sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)).quantize(Decimal('0.01'))
-            if len(selected_rooms) == 1:
-                _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount, applied_discount = _compute_booking_totals(
-                    selected_rooms[0], start_dt, end_dt, selected, booking_type=booking_type, discount_amount=discount_amount
-                )
-            else:
-                addons_total, normalized_selected = _compute_addons_total(selected_rooms[0], selected) if selected_rooms else (Decimal('0.00'), [])
-                _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
-                gross_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
-                gross_total = (gross_ht + tva_amount).quantize(Decimal('0.01'))
-                try:
-                    applied_discount = Decimal(str(discount_amount or '0.00')).quantize(Decimal('0.01'))
-                except Exception:
-                    applied_discount = Decimal('0.00')
-                if applied_discount < 0:
-                    applied_discount = Decimal('0.00')
-                if applied_discount > gross_total:
-                    applied_discount = gross_total
-                subtotal_ht = max(Decimal('0.00'), (gross_ht - applied_discount)).quantize(Decimal('0.01'))
-                total = max(Decimal('0.00'), (gross_total - applied_discount)).quantize(Decimal('0.01'))
+            addons_total, normalized_selected = _compute_room_addons_total(selected_rooms, selected)
+            _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
+            gross_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
+            gross_total = (gross_ht + tva_amount).quantize(Decimal('0.01'))
+            try:
+                applied_discount = Decimal(str(discount_amount or '0.00')).quantize(Decimal('0.01'))
+            except Exception:
+                applied_discount = Decimal('0.00')
+            if applied_discount < 0:
+                applied_discount = Decimal('0.00')
+            if applied_discount > gross_total:
+                applied_discount = gross_total
+            subtotal_ht = max(Decimal('0.00'), (gross_ht - applied_discount)).quantize(Decimal('0.01'))
+            total = max(Decimal('0.00'), (gross_total - applied_discount)).quantize(Decimal('0.01'))
         save_kwargs = {
             'updated_by': _actor(self.request),
             'customer': resolved_customer,
@@ -1563,8 +1645,6 @@ class BookingViewSet(viewsets.ModelViewSet):
         booking = self.get_object()
         if booking.booking_type != 'room' or not _get_booking_rooms(booking):
             return Response({'detail': 'Action disponible uniquement pour une réservation de chambre'}, status=status.HTTP_400_BAD_REQUEST)
-        if booking.status != 'paid':
-            return Response({'detail': 'Seules les réservations payées peuvent être enregistrées au check-in'}, status=status.HTTP_400_BAD_REQUEST)
         if booking.status == 'cancelled':
             return Response({'detail': 'Impossible de gérer une réservation annulée'}, status=status.HTTP_400_BAD_REQUEST)
         room = self._resolve_booking_room(booking, request.data.get('room_id'))
@@ -1588,9 +1668,6 @@ class BookingViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Action disponible uniquement pour une réservation de chambre'}, status=status.HTTP_400_BAD_REQUEST)
         if booking.status == 'cancelled':
             return Response({'detail': 'Impossible de gérer une réservation annulée'}, status=status.HTTP_400_BAD_REQUEST)
-        remaining = (booking.total_price or Decimal('0.00')) - (booking.paid_amount or Decimal('0.00'))
-        if remaining > Decimal('0.00'):
-            return Response({'detail': 'Le séjour doit être soldé avant le check-out'}, status=status.HTTP_400_BAD_REQUEST)
         room = self._resolve_booking_room(booking, request.data.get('room_id'))
         if room is None:
             return Response({'room_id': 'Sélectionnez une chambre valide de cette réservation'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1611,8 +1688,8 @@ class BookingViewSet(viewsets.ModelViewSet):
         room = self._resolve_booking_room(booking, pending_rooms[0].get('room_id'))
         if room is None:
             return Response({'room_id': 'Sélectionnez une chambre valide de cette réservation'}, status=status.HTTP_400_BAD_REQUEST)
-        if booking.status != 'paid':
-            return Response({'detail': 'Seules les réservations payées peuvent être enregistrées au check-in'}, status=status.HTTP_400_BAD_REQUEST)
+        if booking.status == 'cancelled':
+            return Response({'detail': 'Impossible de gérer une réservation annulée'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             guests = self._validate_room_guests(room, request.data.get('guests'))
             _check_in_booking_room(booking, room, guests)
@@ -1631,9 +1708,6 @@ class BookingViewSet(viewsets.ModelViewSet):
         room = self._resolve_booking_room(booking, active_rooms[0].get('room_id'))
         if room is None:
             return Response({'room_id': 'Sélectionnez une chambre valide de cette réservation'}, status=status.HTTP_400_BAD_REQUEST)
-        remaining = (booking.total_price or Decimal('0.00')) - (booking.paid_amount or Decimal('0.00'))
-        if remaining > Decimal('0.00'):
-            return Response({'detail': 'Le séjour doit être soldé avant le check-out'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             _check_out_booking_room(booking, room)
         except DjangoValidationError as exc:

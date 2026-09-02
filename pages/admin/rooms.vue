@@ -213,7 +213,7 @@
             </div>
             <div class="desk-item-actions">
               <button v-if="Number(booking.remaining_amount || 0) > 0" class="btn btn-outline btn-sm" @click="openPaymentForBooking(booking)">Solder</button>
-              <button class="btn btn-primary btn-sm" :class="{ 'is-loading': isStayActionLoading(booking, 'check_out') }" :disabled="stayActionLoadingId || Number(booking.remaining_amount || 0) > 0 || !booking.can_check_out" @click="manageStay(booking, 'check_out')">Check-out</button>
+              <button class="btn btn-primary btn-sm" :class="{ 'is-loading': isStayActionLoading(booking, 'check_out') }" :disabled="stayActionLoadingId || !booking.can_check_out" @click="openStayModal(booking, 'check_out')">Check-out</button>
               <button class="btn btn-outline btn-sm" @click="openBookingDetails(booking)">Détails</button>
             </div>
           </div>
@@ -855,6 +855,16 @@
         </template>
 
         <template v-else>
+          <div v-if="Number(selectedRoomStay.remaining_amount || 0) > 0" class="stay-modal-warning">
+            <div class="smw-icon"><i class="fas fa-circle-info"></i></div>
+            <div class="smw-body">
+              <strong>Solde restant à payer</strong>
+              <p>Cette réservation conserve un reste de <strong>{{ formatMoney(selectedRoomStay.remaining_amount) }}</strong>. Le check-out peut être enregistré, mais le solde restera dû.</p>
+            </div>
+            <button v-if="Number(selectedRoomStay.remaining_amount || 0) > 0" type="button" class="btn btn-outline btn-sm smw-action" @click="() => { closeStayModal(); openPaymentForBooking(selectedRoomStay); }">
+              <i class="fas fa-coins"></i> Régler maintenant
+            </button>
+          </div>
           <div class="stay-modal-checkout">
             <h3>Confirmer le départ</h3>
             <p>Cette action clôture le séjour pour la chambre sélectionnée et la place en nettoyage.</p>
@@ -1131,12 +1141,12 @@ const roomStayEntries = computed(() => roomBookings.value.flatMap((booking) => {
     checked_out_at: stay.checked_out_at,
     guests: Array.isArray(stay.guests) ? stay.guests : [],
     guest_count: Number(stay.guest_count || 0),
-    can_check_in: Boolean(stay.can_check_in && ['paid','pending'].includes(String(booking.status || '')) && !booking.checked_in_at),
-    can_check_out: Boolean(stay.can_check_out),
+    can_check_in: Boolean(String(booking.status || '') !== 'cancelled' && !stay.checked_in_at),
+    can_check_out: Boolean(String(booking.status || '') !== 'cancelled' && stay.checked_in_at && !stay.checked_out_at),
   }))
 }))
 const pendingArrivalBookings = computed(() => roomStayEntries.value
-  .filter((roomStay) => ['paid','pending'].includes(String(roomStay.booking_status || '')) && !roomStay.checked_in_at)
+  .filter((roomStay) => String(roomStay.booking_status || '') !== 'cancelled' && !roomStay.checked_in_at)
   .slice()
   .sort((a, b) => new Date(a?.start_date || 0) - new Date(b?.start_date || 0)))
 const inHouseBookings = computed(() => roomStayEntries.value
@@ -3028,7 +3038,7 @@ const deleteRoom = async () => {
   padding: .9rem 1rem;
   border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
-  background: color-mix(in srgb, var(--warning-bg) 85%, var(--warning) 6%);
+  /* background: color-mix(in srgb, var(--warning-bg) 25%, var(--warning) 6%); */
   margin-bottom: 1rem;
 }
 .stay-modal-warning .smw-icon {
@@ -3082,7 +3092,7 @@ const deleteRoom = async () => {
 .stay-modal-head p,
 .stay-modal-checkout p {
   margin: 0.35rem 0 0;
-  color: #64748b;
+  color: var(--gray-800);
   line-height: 1.55;
 }
 
@@ -3117,15 +3127,17 @@ const deleteRoom = async () => {
   padding: 1rem;
   border-radius: 18px;
   border: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    background: var(--white);
 }
+
 
 .stay-modal-guest-line {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.9rem;
-  color: #475569;
+  color: var(--gray-800);
   flex-wrap: wrap;
+  font-weight: 800;
 }
 
 :global(html[data-admin-theme="dark"]) .stay-modal-summary,
