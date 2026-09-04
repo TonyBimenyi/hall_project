@@ -73,6 +73,8 @@ export const canAccessAdminRoute = (user, path) => {
     return (
       adminPath === '/admin/bookings' ||
       adminPath.startsWith('/admin/bookings/') ||
+      adminPath === '/admin/proformas' ||
+      adminPath.startsWith('/admin/proformas/') ||
       adminPath === '/admin/calendar' ||
       adminPath.startsWith('/admin/calendar/') ||
       adminPath === '/admin/payments' ||

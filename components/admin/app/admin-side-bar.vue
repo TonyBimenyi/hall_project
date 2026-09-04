@@ -149,6 +149,7 @@ export default {
         { title: 'Notifications', url: '/admin/notifications', icon: 'fa-solid fa-bell' },
         { title: 'Salles', url: '/admin/halls', icon: 'fa-solid fa-building' },
         { title: 'Chambres', url: '/admin/rooms', icon: 'fa-solid fa-door-closed' },
+        { title: 'Proformas', url: '/admin/proformas', icon: 'fa-solid fa-file-invoice' },
         { title: 'Réservations', url: '/admin/bookings', icon: 'fa-solid fa-calendar-days' },
         { title: 'Paiements', url: '/admin/payments', icon: 'fa-solid fa-credit-card' },
         { title: 'TCSTH', url: '/admin/tva', icon: 'fa-solid fa-file-invoice-dollar' },

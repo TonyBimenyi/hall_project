@@ -966,6 +966,7 @@ export const useAdminExportDocuments = () => {
     buildExportFileName,
     buildExportTimestamp,
     getPrintedByLabel,
+    escapeHtml,
     getSanitizedExportHtml,
     buildPdfDocumentHtml,
     downloadHtmlAsXls,

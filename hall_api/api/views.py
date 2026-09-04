@@ -1,9 +1,9 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
-from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Notification, MagicLoginToken, AccountSecurityProfile, Room, Customer
+from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Notification, MagicLoginToken, AccountSecurityProfile, Room, Customer, Proforma
 from .serializers import (
     HallSerializer, BookingSerializer, PersonnelSerializer,
-    MaterialSerializer, ExpenseSerializer, EntreeSerializer, PaymentSerializer, NotificationSerializer, RoomSerializer, CustomerSerializer
+    MaterialSerializer, ExpenseSerializer, EntreeSerializer, PaymentSerializer, NotificationSerializer, RoomSerializer, CustomerSerializer, ProformaSerializer
 )
 
 from rest_framework.views import APIView
@@ -2106,3 +2106,214 @@ class PaymentViewSet(viewsets.ModelViewSet):
         self._recalc_booking_paid(booking)
         _sync_overdue_notifications()
         return response
+
+
+class ProformaViewSet(viewsets.ModelViewSet):
+    queryset = Proforma.objects.all()
+    serializer_class = ProformaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return Proforma.objects.all().order_by('-id')
+        return Proforma.objects.filter(created_by=user).order_by('-id')
+
+    def _calc_totals(self, validated_data, instance=None):
+        discount_amount = validated_data.get('discount_amount', getattr(instance, 'discount_amount', Decimal('0.00')))
+        discount_reason = validated_data.get('discount_reason', getattr(instance, 'discount_reason', ''))
+        booking_type = validated_data.get('booking_type', getattr(instance, 'booking_type', 'hall'))
+        hall = validated_data.get('hall', getattr(instance, 'hall', None))
+        room = validated_data.get('room', getattr(instance, 'room', None))
+        room_ids = validated_data.get('room_ids', getattr(instance, 'room_ids', []))
+        start_dt = validated_data.get('start_date', getattr(instance, 'start_date', None))
+        end_dt = validated_data.get('end_date', getattr(instance, 'end_date', None))
+        selected = validated_data.get('additional_services_selected', getattr(instance, 'additional_services_selected', [])) or []
+
+        if booking_type == 'hall':
+            _, addons_total, total, normalized_selected, subtotal_ht, tva_rate, tva_amount, applied_discount = _compute_booking_totals(
+                hall, start_dt, end_dt, selected, booking_type=booking_type, discount_amount=discount_amount
+            )
+        else:
+            selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
+            if end_dt and start_dt and end_dt < start_dt:
+                raise DjangoValidationError('La date fin doit être après la date début')
+            days = ((end_dt - start_dt).days + 1) if (end_dt and start_dt) else 1
+            base_accomodation_ht = (Decimal(days) * sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)).quantize(Decimal('0.01'))
+            addons_total, normalized_selected = _compute_room_addons_total(selected_rooms, selected)
+            _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
+            gross_ht = (base_accomodation_ht + addons_total).quantize(Decimal('0.01'))
+            gross_total = (gross_ht + tva_amount).quantize(Decimal('0.01'))
+            try:
+                applied_discount = Decimal(str(discount_amount or '0.00')).quantize(Decimal('0.01'))
+            except Exception:
+                applied_discount = Decimal('0.00')
+            if applied_discount < 0:
+                applied_discount = Decimal('0.00')
+            if applied_discount > gross_total:
+                applied_discount = gross_total
+            subtotal_ht = max(Decimal('0.00'), (gross_ht - applied_discount)).quantize(Decimal('0.01'))
+            total = max(Decimal('0.00'), (gross_total - applied_discount)).quantize(Decimal('0.01'))
+
+        return {
+            'total_price': total,
+            'discount_amount': applied_discount,
+            'discount_reason': str(discount_reason or '').strip(),
+            'addons_total': addons_total,
+            'subtotal_ht': subtotal_ht,
+            'tva_rate': tva_rate,
+            'tva_amount': tva_amount,
+            'additional_services_selected': normalized_selected,
+            'room_ids': room_ids if booking_type == 'room' else [],
+        }
+
+    def perform_create(self, serializer):
+        customer_kind = serializer.validated_data.get('customer_kind', 'individual')
+        customer = serializer.validated_data.get('customer') if customer_kind != 'organization' else None
+        customer_name = serializer.validated_data.get('customer_name', '')
+        customer_phone = serializer.validated_data.get('customer_phone', '')
+        customer_email = serializer.validated_data.get('customer_email', '')
+        guest_id_type = serializer.validated_data.get('guest_id_type', '')
+        guest_id_number = serializer.validated_data.get('guest_id_number', '')
+        resolved_customer = None
+        if customer_kind != 'organization':
+            resolved_customer = _upsert_customer_from_snapshot(
+                customer=customer,
+                full_name=customer_name,
+                phone=customer_phone,
+                email=customer_email,
+                identity_type=guest_id_type,
+                identity_number=guest_id_number,
+                actor=_actor(self.request),
+            )
+        totals = self._calc_totals(serializer.validated_data)
+        save_kwargs = {
+            'created_by': self.request.user,
+            'updated_by': self.request.user,
+            'customer': resolved_customer,
+            **totals,
+        }
+        if serializer.validated_data.get('booking_type') == 'hall':
+            save_kwargs.update({'room': None, 'guest_full_name': '', 'guest_id_type': '', 'guest_id_number': ''})
+        else:
+            save_kwargs['hall'] = None
+        serializer.save(**save_kwargs)
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        customer_kind = serializer.validated_data.get('customer_kind', getattr(instance, 'customer_kind', 'individual'))
+        customer = serializer.validated_data.get('customer', getattr(instance, 'customer', None)) if customer_kind != 'organization' else None
+        customer_name = serializer.validated_data.get('customer_name', getattr(instance, 'customer_name', ''))
+        customer_phone = serializer.validated_data.get('customer_phone', getattr(instance, 'customer_phone', ''))
+        customer_email = serializer.validated_data.get('customer_email', getattr(instance, 'customer_email', ''))
+        guest_id_type = serializer.validated_data.get('guest_id_type', getattr(instance, 'guest_id_type', ''))
+        guest_id_number = serializer.validated_data.get('guest_id_number', getattr(instance, 'guest_id_number', ''))
+        resolved_customer = None
+        if customer_kind != 'organization':
+            resolved_customer = _upsert_customer_from_snapshot(
+                customer=customer,
+                full_name=customer_name,
+                phone=customer_phone,
+                email=customer_email,
+                identity_type=guest_id_type,
+                identity_number=guest_id_number,
+                actor=_actor(self.request),
+            )
+        totals = self._calc_totals(serializer.validated_data, instance=instance)
+        save_kwargs = {
+            'updated_by': _actor(self.request),
+            'customer': resolved_customer,
+            **totals,
+        }
+        booking_type = serializer.validated_data.get('booking_type', getattr(instance, 'booking_type', 'hall'))
+        if booking_type == 'hall':
+            save_kwargs.update({'room': None, 'guest_full_name': '', 'guest_id_type': '', 'guest_id_number': ''})
+        else:
+            save_kwargs['hall'] = None
+        serializer.save(**save_kwargs)
+
+    @action(detail=True, methods=['post'], url_path='convert')
+    def convert(self, request, pk=None):
+        proforma = self.get_object()
+        if proforma.converted_booking:
+            return Response({
+                'detail': 'Cette proforma a déjà été convertie en réservation.',
+                'booking': BookingSerializer(proforma.converted_booking).data,
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check availability
+        if proforma.booking_type == 'room':
+            room_ids = proforma.selected_room_ids
+            if not room_ids:
+                return Response({'detail': 'Aucune chambre spécifiée dans cette proforma.'}, status=status.HTTP_400_BAD_REQUEST)
+            overlapping = (
+                Booking.objects
+                .filter(booking_type='room', status__in=['pending', 'confirmed', 'paid'], start_date__lte=proforma.end_date, end_date__gte=proforma.start_date)
+            )
+            busy_ids = set()
+            for b in overlapping:
+                for rid in b.selected_room_ids:
+                    busy_ids.add(int(rid))
+            conflicts = [rid for rid in room_ids if rid in busy_ids]
+            if conflicts:
+                conflicting_rooms = Room.objects.filter(id__in=conflicts)
+                conflict_names = ', '.join(str(r) for r in conflicting_rooms)
+                return Response({'detail': f'Chambres non disponibles pour ces dates: {conflict_names}'}, status=status.HTTP_400_BAD_REQUEST)
+        elif proforma.booking_type == 'hall' and proforma.hall:
+            overlapping = Booking.objects.filter(
+                booking_type='hall',
+                hall=proforma.hall,
+                status__in=['pending', 'confirmed', 'paid'],
+                start_date__lte=proforma.end_date,
+                end_date__gte=proforma.start_date,
+            ).exists()
+            if overlapping:
+                return Response({'detail': f'La salle {proforma.hall.name} est déjà réservée pour cette période.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create Booking
+        booking = Booking(
+            booking_type=proforma.booking_type,
+            customer_kind=proforma.customer_kind,
+            customer=proforma.customer,
+            hall=proforma.hall,
+            room=proforma.room,
+            room_ids=proforma.room_ids,
+            organization_name=proforma.organization_name,
+            organization_contact_name=proforma.organization_contact_name,
+            customer_name=proforma.customer_name,
+            customer_email=proforma.customer_email,
+            customer_phone=proforma.customer_phone,
+            guest_full_name=proforma.guest_full_name,
+            guest_id_type=proforma.guest_id_type,
+            guest_id_number=proforma.guest_id_number,
+            event_type=proforma.event_type,
+            start_date=proforma.start_date,
+            end_date=proforma.end_date,
+            total_price=proforma.total_price,
+            discount_amount=proforma.discount_amount,
+            discount_reason=proforma.discount_reason,
+            addons_total=proforma.addons_total,
+            subtotal_ht=proforma.subtotal_ht,
+            tva_rate=proforma.tva_rate,
+            tva_amount=proforma.tva_amount,
+            additional_services_selected=proforma.additional_services_selected,
+            status='pending',
+            created_by=request.user,
+            updated_by=request.user,
+        )
+        booking.save()
+
+        # Update proforma
+        proforma.status = 'converted'
+        proforma.converted_booking = booking
+        proforma.updated_by = request.user
+        proforma.save(update_fields=['status', 'converted_booking', 'updated_by', 'updated_at'])
+
+        if booking.booking_type == 'room':
+            _sync_room_status_for_booking(booking, 'none')
+
+        return Response({
+            'detail': 'Proforma convertie avec succès en réservation.',
+            'booking': BookingSerializer(booking).data,
+            'proforma': ProformaSerializer(proforma).data,
+        }, status=status.HTTP_201_CREATED)

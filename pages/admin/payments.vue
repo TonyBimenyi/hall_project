@@ -291,7 +291,7 @@
                     <i class="fas fa-eye"></i> Voir
                   </button>
                   <button class="actions-item" @click="printPaymentInvoice(payment)">
-                    <i class="fas fa-file-arrow-down"></i> Télécharger la facture
+                    <i class="fas fa-receipt"></i> Télécharger le reçu
                   </button>
                   <button v-if="canManagePaymentRecords" class="actions-item danger" @click="confirmDelete(payment)">
                     <i class="fas fa-trash-alt"></i> Supprimer
@@ -376,7 +376,7 @@
                       <i class="fas fa-eye"></i> Voir
                     </button>
                     <button class="actions-item" @click="printPaymentInvoice(payment)">
-                      <i class="fas fa-file-arrow-down"></i> Télécharger la facture
+                      <i class="fas fa-receipt"></i> Télécharger le reçu
                     </button>
                     <button v-if="canManagePaymentRecords" class="actions-item danger" @click="confirmDelete(payment)">
                       <i class="fas fa-trash-alt"></i> Supprimer
@@ -511,7 +511,7 @@
         </div>
       </div>
       <template #footer>
-        <button class="btn btn-outline" @click="printPaymentInvoice(selectedPayment)">Télécharger la facture</button>
+        <button class="btn btn-outline" @click="printPaymentInvoice(selectedPayment)">Télécharger le reçu</button>
         <button class="btn btn-primary" @click="showViewModal = false">Fermer</button>
       </template>
     </AdminAppModal>
@@ -784,10 +784,10 @@ const buildInvoicePdfHtml = (payment) => {
   ]
 
   return buildPdfDocumentHtml({
-    title: 'Facture de paiement',
-    documentTitle: `Facture ${paymentCode}`,
-    subtitle: 'Facture generee automatiquement apres enregistrement du paiement.',
-    typeLabel: 'Facture PDF',
+    title: 'Reçu de paiement',
+    documentTitle: `Reçu ${paymentCode}`,
+    subtitle: 'Reçu officiel attestant le règlement du montant ci-dessous.',
+    typeLabel: 'Reçu de paiement',
     tableTitle: 'Détails du paiement',
     tableTitles: ['Détails du paiement'],
     periodLabel,
@@ -822,10 +822,10 @@ const openPaymentInvoicePrintPreview = (payment) => {
   const html = buildInvoicePdfHtml(payment)
   const ok = openPrintPreviewHtml({
     html,
-    title: `Facture ${getPaymentDisplayId(payment)}`,
+    title: `Reçu ${getPaymentDisplayId(payment)}`,
   })
   if (!ok) {
-    notify('Impossible d’ouvrir l’aperçu d’impression de la facture', 'warning')
+    notify('Impossible d’ouvrir l’aperçu d’impression du reçu', 'warning')
   }
 }
 
@@ -835,10 +835,10 @@ const printPaymentInvoice = async (payment) => {
   const html = buildInvoicePdfHtml(payment)
   const ok = await downloadPdfHtml({
     html,
-    fileName: buildPaymentPdfFileName('facture-paiement', getPaymentDisplayId(payment)),
+    fileName: buildPaymentPdfFileName('recu-paiement', getPaymentDisplayId(payment)),
   })
   if (!ok) {
-    notify('Impossible de télécharger la facture PDF', 'warning')
+    notify('Impossible de télécharger le reçu PDF', 'warning')
   }
 }
 

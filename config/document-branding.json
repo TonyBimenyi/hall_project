@@ -13,8 +13,9 @@
     "labertha-villa.com"
   ],
   "documents": {
-    "invoiceTitle": "Recu de paiement",
-    "bookingTitle": "Jeton officiel de reservation",
+    "proformaTitle": "Facture Proforma",
+    "bookingTitle": "Facture de réservation",
+    "invoiceTitle": "Reçu de paiement",
     "reportsTitle": "Rapport et statistiques"
   }
 }

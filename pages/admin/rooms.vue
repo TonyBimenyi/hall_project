@@ -1583,10 +1583,10 @@ const buildDeskPaymentPrintHtml = (payment) => {
   ]
 
   return buildPdfDocumentHtml({
-    title: 'Facture de paiement',
-    documentTitle: `Facture ${paymentCode}`,
-    subtitle: 'Facture generee automatiquement apres enregistrement du paiement.',
-    typeLabel: 'Facture à imprimer',
+    title: 'Reçu de paiement',
+    documentTitle: `Reçu ${paymentCode}`,
+    subtitle: 'Reçu officiel de paiement généré après encaissement.',
+    typeLabel: 'Reçu de paiement',
     tableTitle: 'Détails du paiement',
     tableTitles: ['Détails du paiement'],
     periodLabel,
@@ -1644,10 +1644,10 @@ const printDeskPaymentInvoice = (payment) => {
   const html = buildDeskPaymentPrintHtml(payment)
   const ok = openPrintPreviewHtml({
     html,
-    title: `Facture ${getDeskPaymentDisplayId(payment)}`,
+    title: `Reçu ${getDeskPaymentDisplayId(payment)}`,
   })
   if (!ok) {
-    notify('Impossible d’ouvrir l’aperçu d’impression de la facture', 'warning')
+    notify('Impossible d’ouvrir l’aperçu d’impression du reçu', 'warning')
   }
 }
 

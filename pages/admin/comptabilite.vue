@@ -160,11 +160,21 @@
               <h2 class="table-title">Flux journaliers regroupes</h2>
               <p class="ledger-subtitle">Toutes les entrees et sorties sont fusionnées sur une seule ligne par jour.</p>
             </div>
+            <AdminAppTablePagination
+              :start="cashflowStartIndex"
+              :end="cashflowEndIndex"
+              :total="cashflowTotalItems"
+              :can-prev="cashflowCanPrev"
+              :can-next="cashflowCanNext"
+              :disabled="isLoading"
+              @prev="cashflowPrevPage"
+              @next="cashflowNextPage"
+            />
           </div>
 
           <div v-if="isMobile" class="admin-cards">
-            <div v-if="cashflowDailyRows.length === 0" class="empty-cell">Aucun mouvement pour cette plage de dates.</div>
-            <div v-else v-for="row in cashflowDailyRows" :key="row.date" class="admin-card ledger-card cashflow-daily-card">
+            <div v-if="paginatedCashflowDailyRows.length === 0" class="empty-cell">Aucun mouvement pour cette plage de dates.</div>
+            <div v-else v-for="row in paginatedCashflowDailyRows" :key="row.date" class="admin-card ledger-card cashflow-daily-card">
               <div class="admin-card-head">
                 <div>
                   <div class="admin-card-title">{{ formatDisplayDate(row.date) }}</div>
@@ -216,10 +226,10 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-if="cashflowDailyRows.length === 0">
+              <tr v-if="paginatedCashflowDailyRows.length === 0">
                 <td colspan="6" class="empty-cell">Aucun mouvement pour cette plage de dates.</td>
               </tr>
-              <tr v-for="row in cashflowDailyRows" :key="row.date">
+              <tr v-for="row in paginatedCashflowDailyRows" :key="row.date">
                 <td>
                   <div class="cell-main">{{ formatDisplayDate(row.date) }}</div>
                   <div class="cell-sub">{{ row.totalCount }} mouvement(s)</div>
@@ -771,6 +781,17 @@ const cashflowDailyRows = computed(() => {
   }
   return Array.from(grouped.values()).sort((a, b) => b.date.localeCompare(a.date))
 })
+
+const {
+  paginatedItems: paginatedCashflowDailyRows,
+  totalItems: cashflowTotalItems,
+  startIndex: cashflowStartIndex,
+  endIndex: cashflowEndIndex,
+  canPrev: cashflowCanPrev,
+  canNext: cashflowCanNext,
+  prevPage: cashflowPrevPage,
+  nextPage: cashflowNextPage,
+} = usePagination(cashflowDailyRows, 30)
 
 const cashflowOverviewRangeLabel = computed(() => {
   if (!rangeStartYmd.value || !rangeEndYmd.value) return 'Toutes les dates'

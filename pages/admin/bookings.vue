@@ -20,6 +20,10 @@
           <i class="fas fa-calendar-alt"></i>
           <span class="btn-label">Calendrier global</span>
         </NuxtLink>
+        <NuxtLink to="/admin/proformas" class="btn btn-secondary btn-sm admin-head-btn">
+          <i class="fas fa-file-invoice"></i>
+          <span class="btn-label">Factures proforma</span>
+        </NuxtLink>
         <button class="btn btn-primary btn-sm admin-head-btn" @click="openAddModal">
           <i class="fas fa-plus"></i>
           <span class="btn-label">Nouvelle réservation</span>
@@ -153,11 +157,10 @@
                     <i class="fas fa-coins"></i> Payer
                   </NuxtLink>
                   <button
-                    v-if="booking.status === 'pending'"
                     class="actions-item"
-                    @click="printBookingJeton(booking)"
+                    @click="printBookingFacture(booking)"
                   >
-                    <i class="fas fa-file-arrow-down"></i> Télécharger le jeton
+                    <i class="fas fa-file-invoice"></i> Télécharger la facture
                   </button>
                   <button
                     v-if="booking.status === 'pending'"
@@ -298,8 +301,8 @@
                     <NuxtLink v-if="booking.status !== 'paid'" class="actions-item" :to="`/admin/payments?booking=${booking.id}`" @click="closeActions">
                       <i class="fas fa-coins"></i> Payer
                     </NuxtLink>
-                    <button v-if="booking.status === 'pending'" class="actions-item" @click="printBookingJeton(booking)">
-                      <i class="fas fa-file-arrow-down"></i> Télécharger le jeton
+                    <button class="actions-item" @click="printBookingFacture(booking)">
+                      <i class="fas fa-file-invoice"></i> Télécharger la facture
                     </button>
                     <button v-if="booking.status === 'pending'" class="actions-item" :class="{ 'is-loading': actionBookingId === booking.id && actionType === 'approve' }" :disabled="actionBookingId === booking.id" @click="approve(booking)">
                       <i class="fas fa-check-circle"></i> Approuver
@@ -555,7 +558,7 @@
                 </label>
               </div>
               <small class="form-hint" v-if="!selectedRoomIds.length">Choisissez au moins une chambre.</small>
-              <small class="form-hint" v-else-if="selectedRoomIds.length > 1">Toutes les chambres sélectionnées resteront dans une seule réservation, avec un seul jeton et une seule facture.</small>
+              <small class="form-hint" v-else-if="selectedRoomIds.length > 1">Toutes les chambres sélectionnées resteront dans une seule réservation, avec une seule facture.</small>
             </div>
             <div v-if="form.booking_type === 'room' && selectedRooms.length" class="form-group full room-booking-note">
               <div class="room-booking-note-head">
@@ -616,53 +619,13 @@
 
           <div class="form-grid booking-form-grid">
             <div class="form-group full">
-              <div class="calendar-top">
-                <strong>{{ calendarMonthLabel }}</strong>
-                <div class="calendar-nav">
-                  <button class="icon-btn" type="button" @click="prevCalendarMonth">
-                    <i class="fas fa-chevron-left"></i>
-                  </button>
-                  <button class="icon-btn" type="button" @click="nextCalendarMonth">
-                    <i class="fas fa-chevron-right"></i>
-                  </button>
-                  <button class="btn btn-outline btn-sm" type="button" @click="clearCalendarDates">
-                    Effacer
-                  </button>
-                </div>
-              </div>
-              <div class="weekday-row">
-                <span v-for="d in calendarWeekdays" :key="d">{{ d }}</span>
-              </div>
-              <div class="calendar-grid-admin">
-                <button
-                  v-for="cell in adminCalendarCells"
-                  :key="cell.key"
-                  class="day-cell"
-                  :class="{
-                    muted: !cell.currentMonth,
-                    disabled: cell.isPast || (!isEditing && cell.isBooked),
-                    start: isSameCalendarDate(cell.date, calendarRangeStart),
-                    end: isSameCalendarDate(cell.date, calendarRangeEnd),
-                    inrange: isCalendarInRange(cell.date, calendarRangeStart, calendarRangeEnd),
-                    booked: cell.isBooked
-                  }"
-                  :disabled="cell.isPast || (!isEditing && cell.isBooked)"
-                  type="button"
-                  @click="onAdminCalendarDayClick(cell.date)"
-                >
-                  {{ cell.date.getDate() }}
-                </button>
-              </div>
-              <div class="calendar-legend">
-                <span><i class="dot booked"></i> Réservé</span>
-                <span><i class="dot selected"></i> Début/Fin</span>
-                <span><i class="dot range"></i> Période</span>
-              </div>
-              <div class="selected-period-card">
-                <div class="selected-period-label">Période sélectionnée</div>
-                <div class="selected-period-value">{{ selectedPeriodLabel }}</div>
-                <div class="selected-period-hint">{{ selectedPeriodHint }}</div>
-              </div>
+              <AdminDateRangeSelector
+                v-model:startDate="form.start_date"
+                v-model:endDate="form.end_date"
+                :booked-dates="calendarRanges"
+                :booking-type="form.booking_type"
+                :is-editing="isEditing"
+              />
             </div>
 
             <div v-if="showRoomAddonsSection" class="form-group full addons-section room-addons-section">
@@ -1241,6 +1204,7 @@ import { useDateFormat } from '~/composables/useDateFormat'
 import { useTableSort } from '~/composables/useTableSort'
 import { useDocumentBranding } from '~/composables/useDocumentBranding'
 import { useAdminExportDocuments } from '~/composables/useAdminExportDocuments'
+import AdminDateRangeSelector from '~/components/admin/AdminDateRangeSelector.vue'
 import { canDeleteBookings as canDeleteBookingsByRole, canExportAdminExcel, getRoleKey, getStoredUser } from '~/composables/useRoleAccess'
 
 definePageMeta({ layout: 'admin' })
@@ -1398,109 +1362,17 @@ const customerSearch = ref('')
 const customerResultsOpen = ref(false)
 const selectedCustomer = ref(null)
 const showQuickCustomerForm = ref(false)
+const skipCustomerSearch = ref(false)
 let customerSearchTimer = null
-
-const calendarRanges = ref([])
-const calendarViewMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
-const calendarRangeStart = ref(null)
-const calendarRangeEnd = ref(null)
-const calendarWeekdays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
-
-const formatCalendarYMD = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-const isSameCalendarDate = (a, b) => !!(a && b && formatCalendarYMD(a) === formatCalendarYMD(b))
-const isCalendarInRange = (d, s, e) => !!(s && e && d > s && d < e)
-
-const calendarMonthLabel = computed(() => calendarViewMonth.value.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }))
-const bookedSet = computed(() => {
-  const set = new Set()
-  for (const r of calendarRanges.value) {
-    const start = new Date(r.start_date)
-    const end = new Date(r.end_date)
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      set.add(formatCalendarYMD(new Date(d)))
-    }
-  }
-  return set
-})
-
-const adminCalendarCells = computed(() => {
-  const first = new Date(calendarViewMonth.value.getFullYear(), calendarViewMonth.value.getMonth(), 1)
-  const firstWeekday = (first.getDay() + 6) % 7
-  const start = new Date(first)
-  start.setDate(first.getDate() - firstWeekday)
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(start)
-    d.setDate(start.getDate() + i)
-    const ymd = formatCalendarYMD(d)
-    return {
-      key: `${ymd}-${i}`,
-      date: d,
-      currentMonth: d.getMonth() === calendarViewMonth.value.getMonth(),
-      isPast: d < today,
-      isBooked: bookedSet.value.has(ymd),
-    }
-  })
-})
-
-const prevCalendarMonth = () => {
-  calendarViewMonth.value = new Date(calendarViewMonth.value.getFullYear(), calendarViewMonth.value.getMonth() - 1, 1)
-}
-
-const nextCalendarMonth = () => {
-  calendarViewMonth.value = new Date(calendarViewMonth.value.getFullYear(), calendarViewMonth.value.getMonth() + 1, 1)
-}
+let customerRequestId = 0
 
 const clearCalendarDates = () => {
-  calendarRangeStart.value = null
-  calendarRangeEnd.value = null
   form.value.start_date = ''
   form.value.end_date = ''
-  daysCount.value = 0
   calculatePrice()
 }
 
-const hasCalendarConflict = (start, end) => {
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    if (bookedSet.value.has(formatCalendarYMD(new Date(d)))) return true
-  }
-  return false
-}
-
-const syncFormDatesFromCalendarRange = () => {
-  if (!calendarRangeStart.value) return
-  const end = calendarRangeEnd.value || calendarRangeStart.value
-  form.value.start_date = formatCalendarYMD(calendarRangeStart.value)
-  form.value.end_date = formatCalendarYMD(end)
-  calculatePrice()
-}
-
-const onAdminCalendarDayClick = (date) => {
-  if (!calendarRangeStart.value || calendarRangeEnd.value) {
-    calendarRangeStart.value = date
-    calendarRangeEnd.value = null
-    syncFormDatesFromCalendarRange()
-    return
-  }
-
-  if (date < calendarRangeStart.value) {
-    calendarRangeStart.value = date
-    calendarRangeEnd.value = null
-    syncFormDatesFromCalendarRange()
-    return
-  }
-
-  if (!isEditing.value && hasCalendarConflict(calendarRangeStart.value, date)) {
-    notify('Certaines dates sont déjà réservées pour cette salle.', 'warning')
-    return
-  }
-
-  calendarRangeEnd.value = date
-  syncFormDatesFromCalendarRange()
-}
+const calendarRanges = ref([])
 
 const fetchCalendarRanges = async () => {
   if ((form.value.booking_type === 'hall' && !form.value.hall) || (form.value.booking_type === 'room' && !selectedRoomIds.value.length)) {
@@ -1617,6 +1489,11 @@ const createEmptyQuickCustomerForm = () => ({
 const form = ref(createEmptyBookingForm())
 const quickCustomerForm = ref(createEmptyQuickCustomerForm())
 const discountEnabled = ref(false)
+
+watch(() => [form.value.start_date, form.value.end_date], () => {
+  calculatePrice()
+})
+
 const showDiscountEditor = computed(() => canManageBookingDiscount.value && discountEnabled.value)
 const isOtherEventType = computed(() => form.value.event_type === 'Autres')
 const totalPriceInput = moneyInputModel(form, 'total_price')
@@ -1686,16 +1563,18 @@ const fetchRooms = async () => {
 }
 
 const fetchCustomers = async (searchTerm = '') => {
+  const requestId = ++customerRequestId
   loadingCustomers.value = true
   try {
     const params = { limit: searchTerm ? 8 : 6 }
     if (searchTerm) params.search = searchTerm
     const response = await api.get('customers/', { params })
-    customers.value = Array.isArray(response.data) ? response.data : []
+    if (requestId !== customerRequestId) return
+    customers.value = Array.isArray(response.data) ? response.data : (response.data?.results || [])
   } catch {
-    customers.value = []
+    if (requestId === customerRequestId) customers.value = []
   } finally {
-    loadingCustomers.value = false
+    if (requestId === customerRequestId) loadingCustomers.value = false
   }
 }
 
@@ -1730,6 +1609,10 @@ watch(() => `${route.query.view || ''}:${route.query.focus || ''}:${bookings.val
 
 watch(customerSearch, (value) => {
   if (!showFormModal.value) return
+  if (skipCustomerSearch.value) {
+    skipCustomerSearch.value = false
+    return
+  }
   customerResultsOpen.value = true
   if (customerSearchTimer) {
     clearTimeout(customerSearchTimer)
@@ -2546,6 +2429,7 @@ const selectCustomer = (customer) => {
     form.value.guest_id_type = String(customer.identity_type || form.value.guest_id_type || 'passport').trim()
     form.value.guest_id_number = String(customer.identity_number || '').trim()
   }
+  skipCustomerSearch.value = true
   customerSearch.value = customer.full_name || `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || customer.phone || ''
   customerResultsOpen.value = false
   showQuickCustomerForm.value = false
@@ -2769,7 +2653,7 @@ const saveBooking = async () => {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Préparation du jeton</title>
+  <title>Préparation de la facture</title>
   <style>
     body {
       margin: 0;
@@ -2804,7 +2688,7 @@ const saveBooking = async () => {
 </head>
 <body>
   <div class="preview-loading">
-    <strong>Préparation du jeton...</strong>
+    <strong>Préparation de la facture...</strong>
     <span>La fenêtre d’aperçu reste ouverte pendant l’enregistrement de la réservation.</span>
   </div>
 </body>
@@ -2842,7 +2726,7 @@ const saveBooking = async () => {
         notify('Nouvelle réservation créée', 'success')
       }
       if (createdBooking) {
-        openReservationJetonPrintPreview(createdBooking, Boolean(response.data?.email_sent), previewWindow)
+        openReservationFacturePrintPreview(createdBooking, Boolean(response.data?.email_sent), previewWindow)
       } else if (previewWindow && !previewWindow.closed) {
         previewWindow.close()
       }
@@ -2945,9 +2829,6 @@ const openAddModal = () => {
   discountEnabled.value = false
   resetQuickCustomerState()
   daysCount.value = 0
-  calendarViewMonth.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-  calendarRangeStart.value = null
-  calendarRangeEnd.value = null
   fetchCustomers()
   fetchCalendarRanges()
   showFormModal.value = true
@@ -2973,27 +2854,6 @@ const editBooking = (booking) => {
   customerSearch.value = selectedCustomer.value?.full_name || ''
   customerResultsOpen.value = false
   showQuickCustomerForm.value = false
-  if (form.value.start_date) {
-    const d = new Date(form.value.start_date)
-    if (!Number.isNaN(d.getTime())) {
-      d.setHours(0, 0, 0, 0)
-      calendarViewMonth.value = new Date(d.getFullYear(), d.getMonth(), 1)
-      calendarRangeStart.value = d
-    }
-  } else {
-    calendarRangeStart.value = null
-  }
-  if (form.value.end_date) {
-    const d2 = new Date(form.value.end_date)
-    if (!Number.isNaN(d2.getTime())) {
-      d2.setHours(0, 0, 0, 0)
-      calendarRangeEnd.value = d2
-    } else {
-      calendarRangeEnd.value = null
-    }
-  } else {
-    calendarRangeEnd.value = null
-  }
   fetchCalendarRanges()
   calculatePrice()
   showFormModal.value = true
@@ -3013,6 +2873,11 @@ const confirmDelete = (booking) => {
   }
   selectedBooking.value = booking
   showDeleteModal.value = true
+}
+
+const printBookingFacture = async (booking) => {
+  closeActions()
+  await printReservationFacture(booking)
 }
 
 const printBookingJeton = async (booking) => {
@@ -3118,7 +2983,7 @@ const buildBookingPayload = () => {
   }
 }
 
-const buildPdfFileName = (prefix, identifier) => {
+const buildPdfFileName = (prefix, identifier = '') => {
   const normalizedIdentifier = String(identifier || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -3129,6 +2994,196 @@ const buildPdfFileName = (prefix, identifier) => {
   return normalizedIdentifier
     ? `${prefix}-${normalizedIdentifier}.pdf`
     : buildExportFileName(prefix, 'pdf')
+}
+
+const buildReservationFacturePdfHtml = (booking, emailSent = null) => {
+  const displayId = getBookingDisplayId(booking)
+  const reservationNumber = booking?.id || '-'
+  const bookedItemLabel = booking?.booking_type === 'room'
+    ? ((Number(booking?.room_count || 0) > 1) ? 'Chambres' : 'Chambre')
+    : 'Salle'
+  const bookedItemName = booking?.booking_type === 'room' ? (booking?.room_display || '') : (booking?.hall_name || '')
+  const emailValue = booking?.customer_email || 'Non renseigné'
+  const emailSentLabel = typeof emailSent === 'boolean' ? (emailSent ? 'Oui' : 'Non') : '-'
+  const periodLabel = formatDateRange(booking?.start_date, booking?.end_date)
+  const clientRows = [
+    ['Client', booking?.customer_name || '-'],
+    ...(booking?.customer_kind === 'organization'
+      ? [
+        ['Organisation', booking?.organization_name || booking?.customer_name || '-'],
+        ['Contact', booking?.organization_contact_name || booking?.guest_full_name || '-'],
+      ]
+      : []),
+    ['Email client', emailValue],
+  ]
+  const discountVal = Number(booking?.discount_amount || 0)
+  const totalVal = Number(booking?.total_price || 0)
+  const grossVal = totalVal + discountVal
+  const reservationRows = [
+    [bookedItemLabel, bookedItemName || '-'],
+    ['Evénement', booking?.event_type || '-'],
+    ['Période', periodLabel || '-'],
+    ['Montant total', formatMoney(totalVal)],
+    ['Statut', getStatusTranslation(booking?.status)],
+  ]
+  const followUpRows = [
+    ['Code de réservation', displayId],
+    ['Numéro de réservation', reservationNumber],
+  ]
+
+  if (typeof emailSent === 'boolean') {
+    followUpRows.push(['Email envoyé', emailSentLabel])
+  }
+
+  if (booking?.booking_type === 'room') {
+    followUpRows.push(['Client hébergé', booking?.guest_full_name || booking?.customer_name || '-'])
+    if (booking?.customer_kind !== 'organization') {
+      followUpRows.push(['Pièce', guestIdSummary(booking)])
+    }
+  }
+
+  return buildPdfDocumentHtml({
+    title: 'Facture de réservation',
+    documentTitle: `Facture ${displayId}`,
+    subtitle: 'Facture officielle de réservation émise par LaBertha Villa. A conserver pour le suivi du séjour ou de l événement.',
+    typeLabel: 'Facture de réservation',
+    headerVariant: 'ticket',
+    headerEyebrow: 'FACTURE DE RÉSERVATION',
+    headerReference: displayId,
+    tableTitle: 'Détails de la réservation',
+    tableTitles: ['Résumé de la réservation', 'Client et contact', 'Prestations et montants', 'Suivi du dossier'],
+    periodLabel,
+    contentHtml: `
+      <div class="section-card">
+        <div class="section-header"><h2>Résumé de la réservation</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Information</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Code de réservation</td>
+              <td>${escapeHtml(displayId)}</td>
+            </tr>
+            <tr>
+              <td>Numéro de réservation</td>
+              <td>${escapeHtml(reservationNumber)}</td>
+            </tr>
+            <tr>
+              <td>Client</td>
+              <td>${escapeHtml(booking?.customer_name || '-')}</td>
+            </tr>
+            <tr>
+              <td>${escapeHtml(bookedItemLabel)}</td>
+              <td>${escapeHtml(bookedItemName || '-')}</td>
+            </tr>
+            <tr>
+              <td>Période</td>
+              <td>${escapeHtml(periodLabel || '-')}</td>
+            </tr>
+            <tr>
+              <td>Montant total</td>
+              <td><strong>${escapeHtml(formatMoney(booking?.total_price))}</strong></td>
+            </tr>
+            <tr>
+              <td>Statut</td>
+              <td>${escapeHtml(getStatusTranslation(booking?.status))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><h2>Client et contact</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Information</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${clientRows.map(([label, value]) => `
+              <tr>
+                <td>${escapeHtml(label)}</td>
+                <td>${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><h2>Prestations et montants</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Information</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${reservationRows.map(([label, value]) => `
+              <tr>
+                <td>${escapeHtml(label)}</td>
+                <td>${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><h2>Suivi du dossier</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Information</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${followUpRows.map(([label, value]) => `
+              <tr>
+                <td>${escapeHtml(label)}</td>
+                <td>${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><h2>Note</h2></div>
+        <p>Merci pour votre confiance. Cette facture atteste la prise en compte de votre réservation auprès de LaBertha Villa. Un reçu officiel vous sera remis à chaque encaissement de paiement.</p>
+      </div>
+    `,
+  })
+}
+
+const openReservationFacturePrintPreview = (booking, emailSent = null, previewWindow = null) => {
+  if (!process.client || !booking) return
+  const html = buildReservationFacturePdfHtml(booking, emailSent)
+  const ok = openPrintPreviewHtml({
+    html,
+    title: `Facture ${getBookingDisplayId(booking)}`,
+    autoPrint: false,
+    printWindow: previewWindow,
+  })
+  if (!ok) {
+    notify('Impossible d’ouvrir l’aperçu d’impression de la facture', 'warning')
+  }
+}
+
+const printReservationFacture = async (booking) => {
+  if (!process.client || !booking) return
+  const html = buildReservationFacturePdfHtml(booking)
+  const ok = await downloadPdfHtml({
+    html,
+    fileName: buildPdfFileName('facture-reservation', getBookingDisplayId(booking)),
+  })
+  if (!ok) {
+    notify('Impossible de télécharger la facture PDF', 'warning')
+  }
 }
 
 const buildReservationJetonPdfHtml = (booking, emailSent = null) => {
@@ -5069,6 +5124,42 @@ html[data-admin-theme="dark"] .booking-form-chip {
   border-color: rgba(51, 65, 85, 0.95);
   background: rgba(15, 23, 42, 0.72);
   color: #e2e8f0;
+}
+
+html[data-admin-theme="dark"] .booking-form-section .form-label,
+html[data-admin-theme="dark"] .booking-form-section .addon-toggle-copy strong,
+html[data-admin-theme="dark"] .booking-form-section .addon-price,
+html[data-admin-theme="dark"] .booking-form-section .addons-head strong,
+html[data-admin-theme="dark"] .booking-form-section .room-service-card strong {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .booking-form-section .form-input,
+html[data-admin-theme="dark"] .booking-form-section .form-select,
+html[data-admin-theme="dark"] .booking-form-section .form-textarea {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .booking-form-section .form-input::placeholder,
+html[data-admin-theme="dark"] .booking-form-section .form-textarea::placeholder {
+  color: #94a3b8;
+}
+
+html[data-admin-theme="dark"] .addon-item,
+html[data-admin-theme="dark"] .addon-sub-block,
+html[data-admin-theme="dark"] .room-service-card,
+html[data-admin-theme="dark"] .room-subservice-card {
+  border-color: #334155;
+  background: rgba(15, 23, 42, 0.76);
+}
+
+html[data-admin-theme="dark"] .addon-toggle-copy small,
+html[data-admin-theme="dark"] .addon-unit,
+html[data-admin-theme="dark"] .muted-line,
+html[data-admin-theme="dark"] .room-service-card small {
+  color: #cbd5e1;
 }
 
 html[data-admin-theme="dark"] .booking-form-chip.accent {

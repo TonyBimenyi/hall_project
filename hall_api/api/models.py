@@ -507,3 +507,119 @@ class MagicLoginToken(models.Model):
 
     def __str__(self):
         return f"MagicLoginToken(user_id={self.user_id}, expires_at={self.expires_at}, used={bool(self.used_at)})"
+
+
+class Proforma(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'En attente'),
+        ('converted', 'Converti'),
+        ('cancelled', 'Annulé'),
+    ]
+    CUSTOMER_KIND_CHOICES = [
+        ('individual', 'Particulier'),
+        ('organization', 'Organisation'),
+    ]
+    BOOKING_TYPE_CHOICES = [
+        ('hall', 'Salle'),
+        ('room', 'Chambre'),
+    ]
+    code = models.CharField(max_length=20, unique=True, editable=False, blank=True)
+    booking_type = models.CharField(max_length=20, choices=BOOKING_TYPE_CHOICES, default='hall')
+    customer_kind = models.CharField(max_length=20, choices=CUSTOMER_KIND_CHOICES, default='individual')
+    customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='proformas')
+    hall = models.ForeignKey(Hall, on_delete=models.CASCADE, null=True, blank=True)
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, null=True, blank=True)
+    room_ids = models.JSONField(default=list, blank=True)
+    organization_name = models.CharField(max_length=150, blank=True, default='')
+    organization_contact_name = models.CharField(max_length=120, blank=True, default='')
+    customer_name = models.CharField(max_length=100)
+    customer_email = models.EmailField(blank=True, default='')
+    customer_phone = models.CharField(max_length=30, blank=True, default='')
+    guest_full_name = models.CharField(max_length=120, blank=True, default='')
+    guest_id_type = models.CharField(max_length=30, blank=True, default='')
+    guest_id_number = models.CharField(max_length=60, blank=True, default='')
+    event_type = models.CharField(max_length=100)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    total_price = models.DecimalField(max_digits=12, decimal_places=2)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    discount_reason = models.CharField(max_length=255, blank=True, default='')
+    addons_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    subtotal_ht = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    tva_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('10.00'))
+    tva_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    additional_services_selected = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    converted_booking = models.ForeignKey(Booking, null=True, blank=True, on_delete=models.SET_NULL, related_name='proforma_source')
+    valid_until = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_proformas')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_proformas')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = _next_monthly_code(Proforma, 'PRF', self.created_at)
+        if self.booking_type != 'room':
+            self.room = None
+            self.room_ids = []
+        else:
+            normalized = []
+            raw_ids = self.room_ids if isinstance(self.room_ids, list) else []
+            for value in raw_ids:
+                try:
+                    room_id = int(value)
+                except (TypeError, ValueError):
+                    continue
+                if room_id not in normalized:
+                    normalized.append(room_id)
+            if self.room_id and self.room_id not in normalized:
+                normalized.insert(0, self.room_id)
+            self.room_ids = normalized
+            if normalized and not self.room_id:
+                self.room_id = normalized[0]
+        super().save(*args, **kwargs)
+
+    @property
+    def selected_room_ids(self):
+        ids = []
+        raw_ids = self.room_ids if isinstance(self.room_ids, list) else []
+        for value in raw_ids:
+            try:
+                room_id = int(value)
+            except (TypeError, ValueError):
+                continue
+            if room_id not in ids:
+                ids.append(room_id)
+        if self.room_id and self.room_id not in ids:
+            ids.insert(0, self.room_id)
+        return ids
+
+    @property
+    def selected_rooms(self):
+        room_ids = self.selected_room_ids
+        if not room_ids:
+            return []
+        room_map = {room.id: room for room in Room.objects.filter(id__in=room_ids)}
+        return [room_map[room_id] for room_id in room_ids if room_id in room_map]
+
+    @property
+    def room_display_summary(self):
+        if self.booking_type != 'room':
+            return ''
+        labels = [str(room) for room in self.selected_rooms]
+        if not labels and self.room:
+            labels = [str(self.room)]
+        return ', '.join(labels)
+
+    @property
+    def booked_item_name(self):
+        if self.booking_type == 'hall' and self.hall:
+            return self.hall.name
+        elif self.booking_type == 'room':
+            return self.room_display_summary or (str(self.room) if self.room else '')
+        return 'Non spécifié'
+
+    def __str__(self):
+        return f"Proforma {self.code} - {self.customer_name}"

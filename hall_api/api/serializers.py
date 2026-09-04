@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from decimal import Decimal, InvalidOperation
 from django.db.models import Q
-from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Room, Notification, Customer
+from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Room, Notification, Customer, Proforma
 
 def _user_label(user):
     if not user:
@@ -755,3 +755,134 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = '__all__'
+
+
+class ProformaSerializer(serializers.ModelSerializer):
+    customer_full_name = serializers.ReadOnlyField(source='customer.full_name')
+    customer_profile_phone = serializers.ReadOnlyField(source='customer.phone')
+    customer_profile_email = serializers.ReadOnlyField(source='customer.email')
+    customer_profile_identity_type = serializers.ReadOnlyField(source='customer.identity_type')
+    customer_profile_identity_number = serializers.ReadOnlyField(source='customer.identity_number')
+    hall_name = serializers.ReadOnlyField(source='hall.name')
+    room_display = serializers.SerializerMethodField()
+    room_count = serializers.SerializerMethodField()
+    gross_total = serializers.SerializerMethodField()
+    created_by = serializers.ReadOnlyField(source='created_by_id')
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+    converted_booking_code = serializers.ReadOnlyField(source='converted_booking.code')
+
+    class Meta:
+        model = Proforma
+        fields = '__all__'
+
+    def get_room_display(self, obj):
+        if obj.booking_type == 'room':
+            return obj.room_display_summary or (str(obj.room) if obj.room else None)
+        return None
+
+    def get_room_count(self, obj):
+        if obj.booking_type != 'room':
+            return 0
+        return len(obj.selected_room_ids)
+
+    def get_gross_total(self, obj):
+        total = obj.total_price or Decimal('0.00')
+        discount = obj.discount_amount or Decimal('0.00')
+        return total + discount
+
+    def get_created_by_name(self, obj):
+        return _user_label(getattr(obj, 'created_by', None))
+
+    def get_updated_by_name(self, obj):
+        return _user_label(getattr(obj, 'updated_by', None))
+
+    def validate(self, data):
+        instance = getattr(self, 'instance', None)
+        booking_type = data.get('booking_type', getattr(instance, 'booking_type', 'hall'))
+        customer_kind = str(data.get('customer_kind', getattr(instance, 'customer_kind', 'individual')) or 'individual').strip() or 'individual'
+        hall = data.get('hall', getattr(instance, 'hall', None))
+        room = data.get('room', getattr(instance, 'room', None))
+        raw_room_ids = data.get('room_ids', getattr(instance, 'room_ids', []))
+        organization_name = str(data.get('organization_name', getattr(instance, 'organization_name', '')) or '').strip()
+
+        normalized_room_ids = []
+        if booking_type == 'room':
+            source_ids = raw_room_ids if isinstance(raw_room_ids, list) else []
+            for value in source_ids:
+                try:
+                    room_id = int(value)
+                except (TypeError, ValueError):
+                    continue
+                if room_id not in normalized_room_ids:
+                    normalized_room_ids.append(room_id)
+            if getattr(room, 'id', None) and room.id not in normalized_room_ids:
+                normalized_room_ids.insert(0, room.id)
+            if not normalized_room_ids and getattr(room, 'id', None):
+                normalized_room_ids = [room.id]
+        data['room_ids'] = normalized_room_ids
+
+        if booking_type == 'hall' and not hall:
+            raise serializers.ValidationError({'hall': 'Ce champ est obligatoire pour un devis/proforma de salle'})
+        if booking_type == 'room' and not normalized_room_ids:
+            raise serializers.ValidationError({'room_ids': 'Choisissez au moins une chambre'})
+        if booking_type == 'room':
+            rooms = list(Room.objects.filter(id__in=normalized_room_ids))
+            rooms_map = {item.id: item for item in rooms}
+            missing_ids = [room_id for room_id in normalized_room_ids if room_id not in rooms_map]
+            if missing_ids:
+                raise serializers.ValidationError({'room_ids': 'Une ou plusieurs chambres sélectionnées sont introuvables'})
+            ordered_rooms = [rooms_map[room_id] for room_id in normalized_room_ids]
+            data['room'] = ordered_rooms[0]
+
+        if customer_kind == 'organization' and not organization_name:
+            raise serializers.ValidationError({'organization_name': "Le nom de l'organisation est requis"})
+
+        return data
+
+    def validate_additional_services_selected(self, value):
+        if value in (None, ''):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Les services sélectionnés doivent être une liste')
+
+        def _normalize_quantity(raw_value, *, label):
+            if raw_value in (None, ''):
+                return 1
+            try:
+                quantity = int(raw_value)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(f"Quantité invalide pour '{label}'")
+            if quantity < 1:
+                raise serializers.ValidationError(f"La quantité doit être supérieure ou égale à 1 pour '{label}'")
+            return quantity
+
+        normalized = []
+        for item in value:
+            if not isinstance(item, dict):
+                raise serializers.ValidationError('Format de service sélectionné invalide')
+            name = str(item.get('name') or '').strip()
+            if not name:
+                raise serializers.ValidationError("Chaque service sélectionné doit avoir un nom")
+            quantity = _normalize_quantity(item.get('quantity', 1), label=name)
+
+            subservices = item.get('subservices') or []
+            if subservices and not isinstance(subservices, list):
+                raise serializers.ValidationError(f"Sous-services invalides pour '{name}'")
+
+            normalized_subservices = []
+            for sub in subservices:
+                if not isinstance(sub, dict):
+                    raise serializers.ValidationError(f"Sous-service invalide pour '{name}'")
+                sub_name = str(sub.get('name') or '').strip()
+                if not sub_name:
+                    raise serializers.ValidationError(f"Chaque sous-service de '{name}' doit avoir un nom")
+                sub_quantity = _normalize_quantity(sub.get('quantity', 1), label=sub_name)
+                normalized_subservices.append({'name': sub_name, 'quantity': sub_quantity})
+
+            payload = {'name': name, 'quantity': quantity}
+            if normalized_subservices:
+                payload['subservices'] = normalized_subservices
+            normalized.append(payload)
+
+        return normalized
