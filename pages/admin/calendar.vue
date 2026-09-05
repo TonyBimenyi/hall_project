@@ -74,14 +74,14 @@
     </div>
 
     <!-- View Modal -->
-    <AdminAppModal v-model="showViewModal" title="Détails de la réservation" width="560px">
+    <AdminAppModal v-model="showViewModal" title="Détails de la réservation" width="640px">
       <div v-if="selectedEvent" class="entity-view-modal">
         <div class="entity-view-hero">
-          <div class="entity-view-avatar">{{ nameInitials(selectedEvent.customer_name) || 'RE' }}</div>
+          <div class="entity-view-avatar">{{ String(selectedEvent.customer_name || 'RE').trim().slice(0, 2).toUpperCase() }}</div>
           <div class="entity-view-main">
             <div class="entity-view-code">{{ selectedEvent.code || 'Reservation' }}</div>
             <h3>{{ selectedEvent.customer_name }}</h3>
-            <p>{{ selectedEvent.hall_name }} • {{ selectedEvent.event_type }}</p>
+            <p>{{ selectedEvent.booking_type === 'hall' ? selectedEvent.hall_name : selectedEvent.room_display }} • {{ selectedEvent.event_type }}</p>
           </div>
           <div class="entity-view-badges">
             <span :class="['badge', getBadgeClass(selectedEvent.status)]">{{ translateStatus(selectedEvent.status) }}</span>
@@ -93,20 +93,57 @@
           <section class="entity-view-card">
             <div class="entity-view-card-title">Réservation</div>
             <div class="entity-view-list">
-              <div class="entity-view-item"><span class="entity-view-label">Salle</span><span class="entity-view-value">{{ selectedEvent.hall_name }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Email</span><span class="entity-view-value">{{ selectedEvent.customer_email || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Téléphone</span><span class="entity-view-value">{{ selectedEvent.customer_phone || '-' }}</span></div>
+              <div v-if="selectedEvent.customer_kind === 'organization'" class="entity-view-item"><span class="entity-view-label">Organisation</span><span class="entity-view-value">{{ selectedEvent.organization_name || selectedEvent.customer_name || '-' }}</span></div>
+              <div v-if="selectedEvent.customer_kind === 'organization'" class="entity-view-item"><span class="entity-view-label">Contact</span><span class="entity-view-value">{{ selectedEvent.organization_contact_name || selectedEvent.guest_full_name || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">{{ selectedEvent.booking_type === 'hall' ? 'Salle' : 'Chambre' }}</span><span class="entity-view-value">{{ selectedEvent.booking_type === 'hall' ? selectedEvent.hall_name : selectedEvent.room_display || 'N/A' }}</span></div>
+              <div v-if="selectedEvent.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Statut chambre</span><span class="entity-view-value">{{ roomStatusLabel(selectedEvent.room_status) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Événement</span><span class="entity-view-value">{{ selectedEvent.event_type }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Période</span><span class="entity-view-value">{{ formatDateRange(selectedEvent.start_date, selectedEvent.end_date) }}</span></div>
+              <div v-if="selectedEvent.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Sous-total HT</span><span class="entity-view-value">{{ formatMoney(selectedEvent.subtotal_ht) }}</span></div>
+              <div v-if="selectedEvent.booking_type === 'room' && Number(selectedEvent.tva_amount || 0) > 0" class="entity-view-item"><span class="entity-view-label">TCSTH (sur hébergement)</span><span class="entity-view-value" style="color:#92400e;font-weight:700;">{{ formatMoney(selectedEvent.tva_amount) }}</span></div>
+              <div v-if="Number(selectedEvent.discount_amount || 0) > 0" class="entity-view-item"><span class="entity-view-label">Total brut</span><span class="entity-view-value">{{ formatMoney(Number(selectedEvent.total_price || 0) + Number(selectedEvent.discount_amount || 0)) }}</span></div>
+              <div v-if="Number(selectedEvent.discount_amount || 0) > 0" class="entity-view-item"><span class="entity-view-label">Remise accordée</span><span class="entity-view-value discount-text-highlight">-{{ formatMoney(selectedEvent.discount_amount) }}<span v-if="selectedEvent.discount_reason" class="discount-sub-reason">({{ selectedEvent.discount_reason }})</span></span></div>
+              <div class="entity-view-item"><span class="entity-view-label">{{ selectedEvent.booking_type === 'room' ? 'Montant total TTC' : 'Montant total' }}</span><span class="entity-view-value">{{ formatMoney(selectedEvent.total_price) }}</span></div>
+              <div v-if="Number(selectedEvent.addons_total || 0) > 0" class="entity-view-item"><span class="entity-view-label">Services additionnels (inclus TTC)</span><span class="entity-view-value">{{ formatMoney(selectedEvent.addons_total) }}</span></div>
             </div>
           </section>
 
           <section class="entity-view-card">
-            <div class="entity-view-card-title">Résumé</div>
+            <div class="entity-view-card-title">Suivi administratif</div>
             <div class="entity-view-list">
-              <div class="entity-view-item"><span class="entity-view-label">Client</span><span class="entity-view-value">{{ selectedEvent.customer_name }}</span></div>
-              <div v-if="Number(selectedEvent.discount_amount || 0) > 0" class="entity-view-item"><span class="entity-view-label">Total brut</span><span class="entity-view-value">{{ formatMoney(Number(selectedEvent.total_price || 0) + Number(selectedEvent.discount_amount || 0)) }}</span></div>
-              <div v-if="Number(selectedEvent.discount_amount || 0) > 0" class="entity-view-item"><span class="entity-view-label">Remise</span><span class="entity-view-value" style="color: #059669; font-weight: 700;">-{{ formatMoney(selectedEvent.discount_amount) }}</span></div>
-              <div class="entity-view-item"><span class="entity-view-label">Montant</span><span class="entity-view-value">{{ formatMoney(selectedEvent.total_price) }}</span></div>
               <div class="entity-view-item"><span class="entity-view-label">Statut</span><span class="entity-view-value">{{ translateStatus(selectedEvent.status) }}</span></div>
+              <div v-if="selectedEvent.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Client hébergé</span><span class="entity-view-value">{{ selectedEvent.guest_full_name || selectedEvent.customer_name }}</span></div>
+              <div v-if="selectedEvent.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-in</span><span class="entity-view-value">{{ selectedEvent.checked_in_at ? formatDateTime(selectedEvent.checked_in_at) : 'Non effectué' }}</span></div>
+              <div v-if="selectedEvent.booking_type === 'room'" class="entity-view-item"><span class="entity-view-label">Check-out</span><span class="entity-view-value">{{ selectedEvent.checked_out_at ? formatDateTime(selectedEvent.checked_out_at) : 'Non effectué' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Créé le</span><span class="entity-view-value">{{ formatDisplayDate(selectedEvent.created_at) }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Créé par</span><span class="entity-view-value">{{ selectedEvent.created_by_name || '-' }}</span></div>
+              <div class="entity-view-item"><span class="entity-view-label">Dernière action</span><span class="entity-view-value">{{ selectedEvent.updated_by_name || selectedEvent.created_by_name || '-' }}</span></div>
+            </div>
+          </section>
+
+          <section v-if="selectedEvent.booking_type === 'room'" class="entity-view-card entity-view-card-full">
+            <div class="entity-view-card-title">Historique de séjour</div>
+            <div v-if="!selectedEvent.stay_history?.length" class="entity-view-empty">Aucun séjour précédent trouvé</div>
+            <div v-else class="stay-history-list">
+              <div v-for="stay in selectedEvent.stay_history" :key="`calendar-stay-${stay.id}`" class="stay-history-item">
+                <strong>{{ stay.room_display || '-' }}</strong>
+                <span>{{ stay.start_date }} → {{ stay.end_date }}</span>
+                <span>{{ translateStatus(stay.status) }}</span>
+                <span>Check-in: {{ stay.checked_in_at ? formatDateTime(stay.checked_in_at) : 'Non effectué' }}</span>
+                <span>Check-out: {{ stay.checked_out_at ? formatDateTime(stay.checked_out_at) : 'Non effectué' }}</span>
+              </div>
+            </div>
+          </section>
+
+          <section v-if="selectedEvent.additional_services_selected?.length" class="entity-view-card entity-view-card-full">
+            <div class="entity-view-card-title">Détails services</div>
+            <div class="services-preview">
+              <div v-for="(svc, idx) in selectedEvent.additional_services_selected" :key="`${svc.name}-${idx}`" class="service-preview-item">
+                <div class="service-preview-title"><strong>{{ svc.name }}</strong><span v-if="!svc.subservices?.length">x{{ addonQuantityValue(svc.quantity) }}</span></div>
+                <div v-if="svc.subservices?.length" class="service-preview-subs"><div v-for="(sub, sidx) in svc.subservices" :key="`${svc.name}-${sidx}`" class="service-preview-sub"><span>{{ sub.name }}</span><span>x{{ addonQuantityValue(sub.quantity) }}</span></div></div>
+              </div>
             </div>
           </section>
         </div>
@@ -196,7 +233,7 @@ const fetchEvents = async () => {
   loadingEvents.value = true
   try {
     const response = await api.get('bookings/')
-    events.value = response.data
+    events.value = Array.isArray(response.data) ? response.data : (response.data?.results || [])
   } catch (error) {
     console.error('Error fetching events:', error)
   } finally {
@@ -305,6 +342,30 @@ const nameInitials = (name) => {
     if (w[1]) pick.push(w[1])
   }
   return pick.filter(Boolean).map(c => String(c).toUpperCase()).join('.')
+}
+
+const formatDisplayDate = (value) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('fr-FR')
+}
+
+const formatDateTime = (value) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('fr-FR')
+}
+
+const roomStatusLabel = (status) => ({
+  available: 'Disponible',
+  reserved: 'Réservée',
+  occupied: 'Occupée',
+  maintenance: 'Maintenance',
+}[String(status || '').toLowerCase()] || status || 'Non défini')
+
+const addonQuantityValue = (value) => {
+  const quantity = Number.parseInt(String(value ?? ''), 10)
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1
 }
 
 const viewEvent = (event) => {
@@ -524,12 +585,20 @@ const getBadgeClass = (status) => {
 .entity-view-main p { margin: 0; color: rgba(255,255,255,.78); font-size: .92rem; }
 .entity-view-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .entity-view-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.entity-view-card-full { grid-column: 1 / -1; }
 .entity-view-card { border: 1px solid var(--gray-200); border-radius: 18px; background: var(--white); padding: 16px; }
 .entity-view-card-title { margin-bottom: 14px; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--gray-500); }
 .entity-view-list { display: grid; gap: 10px; }
 .entity-view-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--gray-50); border: 1px solid var(--gray-200); }
 .entity-view-label { color: var(--gray-500); font-size: .82rem; font-weight: 700; }
 .entity-view-value { color: var(--gray-900); font-size: .9rem; font-weight: 700; text-align: right; word-break: break-word; }
+.entity-view-empty { padding: 14px; border: 1px dashed var(--gray-300); border-radius: 14px; color: var(--gray-500); text-align: center; }
+.stay-history-list, .services-preview { display: grid; gap: 8px; }
+.stay-history-item, .service-preview-item { display: grid; gap: 6px; padding: 11px 12px; border: 1px solid var(--gray-200); border-radius: 14px; background: var(--gray-50); color: var(--gray-600); font-size: .82rem; }
+.stay-history-item strong, .service-preview-title strong { color: var(--gray-900); }
+.service-preview-title, .service-preview-sub { display: flex; justify-content: space-between; gap: 12px; }
+.service-preview-title span, .service-preview-sub span:last-child { font-weight: 800; color: var(--gray-600); }
+.service-preview-subs { display: grid; gap: 5px; padding-left: 12px; border-left: 2px solid var(--gray-300); }
 .day-events-modal { display: grid; gap: 16px; }
 .day-events-head h3 { margin: 0 0 4px; font-size: 1.1rem; font-weight: 800; color: var(--gray-900); }
 .day-events-head p { margin: 0; color: var(--gray-500); font-size: .92rem; }
@@ -625,6 +694,27 @@ const getBadgeClass = (status) => {
 :global(html[data-admin-theme="dark"]) .calendar-nav {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(30, 41, 59, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .entity-view-card,
+:global(html[data-admin-theme="dark"]) .entity-view-item,
+:global(html[data-admin-theme="dark"]) .stay-history-item,
+:global(html[data-admin-theme="dark"]) .service-preview-item {
+  background: rgba(15, 23, 42, 0.78);
+  border-color: rgba(51, 65, 85, 0.95);
+}
+
+:global(html[data-admin-theme="dark"]) .entity-view-value,
+:global(html[data-admin-theme="dark"]) .stay-history-item strong,
+:global(html[data-admin-theme="dark"]) .service-preview-title strong {
+  color: #f8fafc;
+}
+
+:global(html[data-admin-theme="dark"]) .entity-view-label,
+:global(html[data-admin-theme="dark"]) .entity-view-empty,
+:global(html[data-admin-theme="dark"]) .stay-history-item,
+:global(html[data-admin-theme="dark"]) .service-preview-item {
+  color: #cbd5e1;
 }
 
 :global(html[data-admin-theme="dark"]) .calendar-grid {

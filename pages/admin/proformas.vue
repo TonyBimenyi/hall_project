@@ -2366,7 +2366,7 @@ onBeforeUnmount(() => {
   padding: 1rem;
   border-radius: 20px;
   border: 1px solid rgba(148, 163, 184, 0.28);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  /* background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); */
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   cursor: pointer;
@@ -2542,12 +2542,12 @@ onBeforeUnmount(() => {
 .addon-subs { display: grid; gap: 6px; padding-left: 12px; border-left: 2px solid #dbeafe; }
 .addon-sub-row { padding: 8px 0; }
 
-.pricing-discount-panel { display: flex; flex-direction: column; gap: 16px; padding: 18px; border: 1px solid #dbeafe; border-radius: 18px; background: #fff; box-shadow: 0 8px 24px rgba(15, 23, 42, .05); }
+.pricing-discount-panel { display: flex; flex-direction: column; gap: 16px; padding: 18px; border: 1px solid #dbeafe; border-radius: 18px; box-shadow: 0 8px 24px rgba(15, 23, 42, .05); }
 .pdp-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
 .pdp-header-left { display: flex; align-items: center; gap: 12px; }
 .pdp-icon-box { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: #059669; background: #ecfdf5; }
 .pdp-title { margin: 0; color: #0f172a; font-size: .95rem; font-weight: 800; }
-.pdp-subtitle { margin: 3px 0 0; color: #64748b; font-size: .78rem; }
+.pdp-subtitle { margin: 3px 0 0; font-size: .78rem; }
 .pdp-discount-toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
 .pdp-discount-toggle input { position: absolute; opacity: 0; pointer-events: none; }
 .pdp-discount-toggle-track { position: relative; width: 46px; height: 28px; border-radius: 999px; background: #cbd5e1; flex: 0 0 auto; }
@@ -2556,11 +2556,11 @@ onBeforeUnmount(() => {
 .pdp-discount-toggle.is-active .pdp-discount-toggle-knob { transform: translateX(18px); }
 .pdp-discount-toggle-copy { display: grid; gap: 2px; }
 .pdp-discount-toggle-copy strong { color: #0f172a; font-size: .8rem; }
-.pdp-discount-toggle-copy small { color: #64748b; font-size: .72rem; }
+.pdp-discount-toggle-copy small { font-size: .72rem; }
 .pdp-body-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 16px; }
 .pdp-control-card { display: grid; gap: 12px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 14px; }
 .pdp-field-header { display: flex; justify-content: space-between; align-items: center; }
-.pdp-label { display: inline-flex; align-items: center; gap: 6px; color: #334155; font-size: .82rem; font-weight: 700; }
+.pdp-label { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; font-weight: 700; }
 .pdp-clear-btn { border: 0; background: transparent; color: #ef4444; font-size: .73rem; font-weight: 700; cursor: pointer; }
 .pdp-input-wrapper { position: relative; display: flex; align-items: center; }
 .pdp-input { width: 100%; height: 42px; border: 1.5px solid #cbd5e1; border-radius: 10px; background: #f8fafc; color: #0f172a; font-weight: 700; padding: 0 3.2rem 0 2.2rem; }
@@ -2667,7 +2667,7 @@ onBeforeUnmount(() => {
 }
 
 .convert-summary-pill {
-  background: #f8fafc;
+  /* background: #f8fafc; */
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 12px;
