@@ -51,6 +51,7 @@ defineEmits(['update:modelValue'])
 .modal-content {
   background: var(--white);
   width: 100%;
+  min-width: 0;
   border-radius: var(--rounded-2xl);
   box-shadow: var(--shadow-xl);
   display: flex;
@@ -91,6 +92,9 @@ defineEmits(['update:modelValue'])
 
 .modal-body {
   padding: var(--space-8);
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 

@@ -87,14 +87,14 @@
       </div>
       <div class="filter-range-note">
         <span class="filter-range-status"><i class="fas fa-chart-simple"></i> {{ filteredProformas.length }} proforma{{ filteredProformas.length > 1 ? 's' : '' }}</span>
-        <span>{{ activeRangeNotice }}</span>
+        <!-- <span>{{ activeRangeNotice }}</span> -->
       </div>
     </div>
 
     <!-- Table -->
     <div class="table-container card">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom: var(--space-4);">
-        <h2 class="table-title" style="margin-bottom:0;">
+        <h2 class="table-title" style="margin-bottom:0; font-size: 20px;">
           Toutes les proformas ({{ loadingProformas ? '...' : filteredProformas.length }})
         </h2>
         <AdminAppTablePagination
@@ -494,8 +494,8 @@
             <div class="form-group">
               <label class="form-label">Type de réservation</label>
               <select v-model="form.booking_type" class="form-select" @change="onBookingTypeChange">
-                <option value="hall">Salle événementielle</option>
-                <option value="room">Hébergement / Chambres</option>
+                <option value="hall">Salles</option>
+                <option value="room">Chambres</option>
               </select>
             </div>
 
@@ -2021,7 +2021,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   margin-top: 0.9rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #e2e8f0;
+  /* border-top: 1px solid #e2e8f0; */
   color: #64748b;
   font-size: 0.85rem;
   font-weight: 700;
@@ -2033,7 +2033,7 @@ onBeforeUnmount(() => {
   gap: 0.4rem;
   padding: 0.3rem 0.65rem;
   border-radius: 999px;
-  background: #eff6ff;
+  background: var(--gray-200);
   color: #1d4ed8;
   font-size: 0.75rem;
   font-weight: 800;
@@ -2130,7 +2130,7 @@ onBeforeUnmount(() => {
   top: calc(100% + 8px);
   right: 0;
   min-width: 220px;
-  background: #ffffff;
+  background: var(--gray-600);
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   box-shadow: 0 14px 35px rgba(15, 23, 42, 0.12);
@@ -2155,13 +2155,13 @@ onBeforeUnmount(() => {
 }
 
 .actions-item:hover {
-  background: #f8fafc;
+  background: var(--gray-600);
   color: #0f172a;
 }
 
 .actions-item.highlight-action {
   color: #15803d;
-  background: #f0fdf4;
+  /* background: var(--gray-200); */
 }
 
 .actions-item.highlight-action:hover {
@@ -2178,9 +2178,34 @@ onBeforeUnmount(() => {
 
 /* Form layout */
 .proforma-form-shell {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  overflow-x: hidden;
+}
+
+.proforma-form-shell,
+.proforma-form-shell * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.proforma-form-shell .form-grid,
+.proforma-form-shell .pdp-body-grid,
+.proforma-form-shell .room-service-flex,
+.proforma-form-shell .room-subservice-flex {
+  width: 100%;
+  min-width: 0;
+}
+
+.proforma-form-shell .form-input,
+.proforma-form-shell .form-select,
+.proforma-form-shell .form-textarea,
+.proforma-form-shell .pdp-input {
+  max-width: 100%;
 }
 
 .booking-form-hero {
@@ -2191,9 +2216,6 @@ onBeforeUnmount(() => {
   padding: 1.15rem 1.2rem;
   border: 1px solid rgba(191, 219, 254, 0.9);
   border-radius: 24px;
-  background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 38%),
-    linear-gradient(135deg, #eff6ff 0%, #ffffff 55%, #f8fafc 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 16px 32px rgba(15, 23, 42, 0.06);
   flex-wrap: wrap;
 }
@@ -2226,7 +2248,7 @@ onBeforeUnmount(() => {
 
 .booking-form-hero-copy p {
   margin: 0;
-  color: #64748b;
+  color: var(--gray-600);
   line-height: 1.6;
   max-width: 44rem;
   font-size: 0.88rem;
@@ -2261,8 +2283,6 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 1rem;
   padding: 1.05rem 1.1rem 1.15rem;
-  background:
-    linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
   border: 1px solid #e2e8f0;
   border-radius: 22px;
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
@@ -2295,7 +2315,7 @@ onBeforeUnmount(() => {
 }
 
 .booking-form-section-head p {
-  color: #64748b;
+  color: var(--gray-600);
   font-size: 0.9rem;
   margin: 0;
   max-width: 28rem;
@@ -2396,7 +2416,7 @@ onBeforeUnmount(() => {
   border: 1px dashed #cbd5e1;
   padding: 14px;
   border-radius: 12px;
-  background: #f8fafc;
+  /* background: #f8fafc; */
 }
 
 .customer-lookup-head {
@@ -2610,8 +2630,8 @@ onBeforeUnmount(() => {
 
 /* Summary Card */
 .summary-breakdown-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  /* background: #f8fafc; */
+  border: 1px solid var(--gray-300);
   border-radius: 12px;
   padding: 16px;
   display: flex;
@@ -2624,7 +2644,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   font-size: 0.92rem;
-  color: #334155;
+  color: var(--gray-600);
 }
 
 .breakdown-row.discount {
@@ -2636,7 +2656,7 @@ onBeforeUnmount(() => {
   padding-top: 8px;
   margin-top: 4px;
   font-size: 1.1rem;
-  color: #0f172a;
+  color: var(--gray-600);
 }
 
 .modal-actions-footer {

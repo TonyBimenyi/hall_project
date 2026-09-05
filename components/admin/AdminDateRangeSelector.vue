@@ -208,7 +208,11 @@ const selectedPeriodHint = computed(() => {
   text-transform: capitalize;
   font-size: 1rem;
   font-weight: 800;
-  color: #0f172a;
+  line-height: 1.3;
+}
+
+:global(html[data-admin-theme="dark"]) .calendar-top strong {
+  color: #f8fafc;
 }
 .calendar-nav {
   display: flex;
@@ -252,7 +256,7 @@ const selectedPeriodHint = computed(() => {
   border: 1px solid #e2e8f0;
   background: #ffffff;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--gray-600);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -276,7 +280,7 @@ const selectedPeriodHint = computed(() => {
 .day-cell.end {
   background: rgba(212, 175, 55, 0.18) !important;
   border-color: rgba(212, 175, 55, 0.35) !important;
-  color: #0f172a !important;
+  color: var(--gray-600) !important;
 }
 .day-cell.inrange {
   background: rgba(212, 175, 55, 0.12);
