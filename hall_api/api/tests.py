@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase
@@ -132,6 +133,93 @@ class BookingAddonsPricingTests(TestCase):
         self.assertEqual(str(addons_total), '51000.00')
         self.assertEqual(normalized_selected[0]['name'], 'Petit-déjeuner')
         self.assertEqual(normalized_selected[1]['name'], 'Navette')
+
+
+class BookingRoomNightPricingTests(TestCase):
+    def setUp(self):
+        self.room = Room.objects.create(
+            name='Chambre Nuit',
+            room_number='201',
+            room_type='double',
+            capacity=2,
+            price_per_night='50000.00',
+        )
+
+    def test_single_night_room_is_billed_one_night(self):
+        start = timezone.localdate() + timedelta(days=10)
+        end = start + timedelta(days=1)  # 1 nuit -> 1 x 50 000
+        base_total, *_ = _compute_booking_totals(self.room, start, end, [], booking_type='room')
+        self.assertEqual(str(base_total), '50000.00')
+
+    def test_same_day_room_is_billed_one_night(self):
+        start = timezone.localdate() + timedelta(days=10)
+        base_total, *_ = _compute_booking_totals(self.room, start, start, [], booking_type='room')
+        self.assertEqual(str(base_total), '50000.00')
+
+    def test_multi_night_room_is_billed_per_night(self):
+        start = timezone.localdate() + timedelta(days=10)
+        end = start + timedelta(days=3)  # 3 nuits -> 3 x 50 000
+        base_total, *_ = _compute_booking_totals(self.room, start, end, [], booking_type='room')
+        self.assertEqual(str(base_total), '150000.00')
+
+    def test_hall_keeps_inclusive_days(self):
+        hall = Hall.objects.create(name='Salle Jours', capacity=80, price_per_day='100000.00')
+        start = timezone.localdate() + timedelta(days=10)
+        same_day, *_ = _compute_booking_totals(hall, start, start, [], booking_type='hall')
+        two_days, *_ = _compute_booking_totals(hall, start, start + timedelta(days=1), [], booking_type='hall')
+        self.assertEqual(str(same_day), '100000.00')
+        self.assertEqual(str(two_days), '200000.00')
+
+
+class BookingRoomNightApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username='reception',
+            password='test-pass-123',
+            is_staff=True,
+        )
+        self.client.force_authenticate(self.user)
+        self.room = Room.objects.create(
+            name='Chambre API',
+            room_number='301',
+            room_type='double',
+            capacity=2,
+            price_per_night='50000.00',
+        )
+        self.start = timezone.localdate() + timedelta(days=20)
+
+    def _create_room_booking(self, end_date):
+        return self.client.post('/api/bookings/', {
+            'booking_type': 'room',
+            'room': self.room.id,
+            'room_ids': [self.room.id],
+            'customer_kind': 'individual',
+            'customer_name': 'Client Une Nuit',
+            'customer_phone': '0788000000',
+            'customer_email': '',
+            'event_type': 'Séjour',
+            'start_date': str(self.start),
+            'end_date': str(end_date),
+            'total_price': '0.00',
+            'discount_amount': '0.00',
+            'additional_services_selected': [],
+        }, format='json')
+
+    def test_single_night_room_booking_is_created_and_billed_once(self):
+        response = self._create_room_booking(self.start + timedelta(days=1))
+        self.assertEqual(response.status_code, 201, getattr(response, 'data', None))
+        booking = Booking.objects.get(id=response.data['id'])
+        # 1 nuit x 50 000 HT + TCSTH 5% (2 500) = 52 500 TTC (et non 2 nuits)
+        self.assertEqual(str(booking.total_price), '52500.00')
+        self.assertEqual(booking.start_date, self.start)
+        self.assertEqual(booking.end_date, self.start + timedelta(days=1))
+
+    def test_same_day_room_booking_is_billed_one_night(self):
+        response = self._create_room_booking(self.start)
+        self.assertEqual(response.status_code, 201, getattr(response, 'data', None))
+        booking = Booking.objects.get(id=response.data['id'])
+        self.assertEqual(str(booking.total_price), '52500.00')
 
 
 class BookingDiscountPricingTests(TestCase):

@@ -397,6 +397,7 @@ class Expense(models.Model):
     paid_by = models.CharField(max_length=100)
     paid_to = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='paid')
+    treasury_account = models.ForeignKey('TreasuryAccount', null=True, blank=True, on_delete=models.SET_NULL, related_name='expenses')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_expenses')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_expenses')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -419,6 +420,7 @@ class Entree(models.Model):
     received_by = models.CharField(max_length=120, blank=True, default='')
     notes = models.TextField(blank=True, default='')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='paid')
+    treasury_account = models.ForeignKey('TreasuryAccount', null=True, blank=True, on_delete=models.SET_NULL, related_name='entrees')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_entrees')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_entrees')
     code = models.CharField(max_length=20, unique=True, editable=False, blank=True)
@@ -450,6 +452,7 @@ class Payment(models.Model):
     method = models.CharField(max_length=50)
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='advance')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='paid')
+    treasury_account = models.ForeignKey('TreasuryAccount', null=True, blank=True, on_delete=models.SET_NULL, related_name='payments')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_payments')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_payments')
     code = models.CharField(max_length=20, unique=True, editable=False, blank=True)
@@ -623,3 +626,104 @@ class Proforma(models.Model):
 
     def __str__(self):
         return f"Proforma {self.code} - {self.customer_name}"
+
+
+
+
+class TreasuryAccount(models.Model):
+    KIND_CHOICES = [
+        ('caisse', 'Caisse'),
+        ('banque', 'Banque'),
+    ]
+    name = models.CharField(max_length=120, unique=True)
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='caisse')
+    bank_name = models.CharField(max_length=120, blank=True, default='')
+    account_number = models.CharField(max_length=80, blank=True, default='')
+    initial_balance = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_treasury_accounts')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_treasury_accounts')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['kind', 'name']
+
+    @property
+    def current_balance(self):
+        from django.db.models import Sum
+        balance = self.initial_balance or Decimal('0.00')
+        ops_in = TreasuryOperation.objects.filter(to_account=self, status='paid').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        ops_out = TreasuryOperation.objects.filter(from_account=self, status='paid').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        linked_in = (
+            (Payment.objects.filter(treasury_account=self, status='paid').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')) +
+            (Entree.objects.filter(treasury_account=self, status='paid').aggregate(total=Sum('amount'))['total'] or Decimal('0.00'))
+        )
+        linked_out = Expense.objects.filter(treasury_account=self, status='paid').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        return balance + ops_in - ops_out + linked_in - linked_out
+
+    def __str__(self):
+        return f"{self.name} ({self.get_kind_display()})"
+
+
+class TreasuryOperation(models.Model):
+    TYPE_CHOICES = [
+        ('funding', 'Approvisionnement'),
+        ('transfer', 'Transfert interne'),
+        ('withdrawal', 'Retrait'),
+    ]
+    STATUS_CHOICES = [
+        ('paid', 'Validé'),
+        ('pending', 'En attente'),
+    ]
+    code = models.CharField(max_length=20, unique=True, editable=False, blank=True)
+    operation_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='funding')
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    date = models.DateField()
+    from_account = models.ForeignKey(TreasuryAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='operations_out')
+    to_account = models.ForeignKey(TreasuryAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='operations_in')
+    reference = models.CharField(max_length=80, blank=True, default='')
+    label = models.CharField(max_length=255)
+    bank_name = models.CharField(max_length=120, blank=True, default='')
+    account_number = models.CharField(max_length=80, blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='paid')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_treasury_operations')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_treasury_operations')
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date', '-id']
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = _next_monthly_code(TreasuryOperation, 'TRS', self.created_at)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.code or 'TRS'} - {self.label} ({self.amount})"
+
+
+class Course(models.Model):
+    course_name = models.CharField(max_length=100)
+    duration = models.IntegerField()
+
+    def __str__(self):
+        return self.course_name
+
+
+class Student(models.Model):
+    name = models.CharField(max_length=100)
+    age = models.IntegerField()
+    course = models.ForeignKey(
+        Course,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL
+    )
+
+    def __str__(self):
+        return self.name
+
+

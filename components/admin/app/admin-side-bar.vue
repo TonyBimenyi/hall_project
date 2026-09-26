@@ -154,6 +154,7 @@ export default {
         { title: 'Paiements', url: '/admin/payments', icon: 'fa-solid fa-credit-card' },
         { title: 'TCSTH', url: '/admin/tva', icon: 'fa-solid fa-file-invoice-dollar' },
         { title: 'Entrees', url: '/admin/entrees', icon: 'fa-solid fa-arrow-down-wide-short' },
+        { title: 'Tresorerie', url: '/admin/tresorerie', icon: 'fa-solid fa-vault' },
         { title: 'Comptabilite', url: '/admin/comptabilite', icon: 'fa-solid fa-book-open' },
         { title: 'Matériel', url: '/admin/materials', icon: 'fa-solid fa-box-open' },
         { title: 'Dépenses', url: '/admin/expenses', icon: 'fa-solid fa-money-bill-transfer' },

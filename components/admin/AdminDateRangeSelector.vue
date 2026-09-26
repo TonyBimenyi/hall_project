@@ -152,16 +152,21 @@ const hasCalendarConflict = (start, end) => {
 const onDayClick = (date) => {
   date.setHours(0, 0, 0, 0)
   
-  if (!props.startDate || props.endDate) {
+  // Premier clic (aucune date) : on sélectionne directement une journée complète
+  // (début = fin) afin de pouvoir réserver même pour un seul jour.
+  if (!props.startDate) {
     emit('update:startDate', formatCalendarYMD(date))
-    emit('update:endDate', '')
+    emit('update:endDate', formatCalendarYMD(date))
     return
   }
 
   const start = new Date(props.startDate)
+  start.setHours(0, 0, 0, 0)
+
+  // Clic avant le début : nouvelle journée sélectionnée.
   if (date < start) {
     emit('update:startDate', formatCalendarYMD(date))
-    emit('update:endDate', '')
+    emit('update:endDate', formatCalendarYMD(date))
     return
   }
 
@@ -170,27 +175,32 @@ const onDayClick = (date) => {
     return
   }
 
+  // Clic après le début : on étend la période jusqu'à cette date.
   emit('update:endDate', formatCalendarYMD(date))
 }
 
 const daysCount = computed(() => {
-  if (!props.startDate || !props.endDate) return 0
+  if (!props.startDate) return 0
   const s = new Date(props.startDate)
-  const e = new Date(props.endDate)
+  const e = props.endDate ? new Date(props.endDate) : new Date(props.startDate)
   const diff = Math.ceil((e - s) / (1000 * 60 * 60 * 24))
-  return props.bookingType === 'hall' ? diff + 1 : diff
+  // Salle: jours inclusifs. Chambre: nuits, une seule journée = 1 nuit.
+  return props.bookingType === 'hall' ? diff + 1 : Math.max(1, diff)
 })
 
 const selectedPeriodLabel = computed(() => {
   if (!props.startDate) return 'Aucune date sélectionnée'
   const s = new Date(props.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-  if (!props.endDate) return `Du ${s} (En attente de fin)`
-  const e = new Date(props.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+  const endValue = props.endDate || props.startDate
+  if (formatCalendarYMD(new Date(props.startDate)) === formatCalendarYMD(new Date(endValue))) {
+    return `Le ${s}`
+  }
+  const e = new Date(endValue).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
   return `Du ${s} au ${e}`
 })
 
 const selectedPeriodHint = computed(() => {
-  if (!props.startDate || !props.endDate) return 'Veuillez choisir les dates de début et de fin.'
+  if (!props.startDate) return 'Cliquez sur une date pour sélectionner une journée.'
   const count = daysCount.value
   const label = props.bookingType === 'hall' ? 'jour' : 'nuit'
   return `Séjour de ${count} ${label}${count > 1 ? 's' : ''}.`

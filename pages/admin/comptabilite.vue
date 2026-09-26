@@ -306,7 +306,7 @@
             <div v-for="entry in paginatedEntries" :key="entry.entryKey" class="admin-card ledger-card">
               <div class="admin-card-head">
                 <div>
-                  <div class="admin-card-title">{{ entry.voucherNumber }}</div>
+                  <div class="admin-card-title">{{ entry.voucherNumber }}<span v-if="entry.entryKey.startsWith('treasury-') && (entry.referenceHint || '').includes('Écritures liées')" class="linked-pair-chip">Paire liée</span></div>
                   <div class="admin-card-subtitle">{{ formatDisplayDate(entry.date) }} • {{ entry.typeLabel }}</div>
                 </div>
                 <span :class="['badge', entry.movementType === 'recette' ? 'badge-success' : 'badge-danger']">{{ entry.typeLabel }}</span>
@@ -390,7 +390,10 @@
             <template v-else>
               <tr v-for="entry in paginatedEntries" :key="entry.entryKey">
                 <td>{{ formatDisplayDate(entry.date) }}</td>
-                <td><code>{{ entry.voucherNumber }}</code></td>
+                <td>
+                  <code>{{ entry.voucherNumber }}</code>
+                  <div v-if="entry.entryKey.startsWith('treasury-') && (entry.referenceHint || '').includes('Écritures liées')" class="linked-pair-chip">Paire liée</div>
+                </td>
                 <td>
                   <div class="cell-main">{{ entry.reference }}</div>
                   <div v-if="entry.referenceHint" class="cell-sub">{{ entry.referenceHint }}</div>
@@ -398,6 +401,10 @@
                 <td>
                   <div class="cell-main">{{ entry.title }}</div>
                   <div v-if="entry.subtitle" class="cell-sub">{{ entry.subtitle }}</div>
+                  <!-- <div v-if="entry.entryKey.startsWith('treasury-') && (entry.referenceHint || '').includes('Écritures liées')" class="treasury-pair-summary">
+                    <span><strong>{{ entry.entryKey.endsWith('-out') ? 'Écriture 1/2 sortie' : 'Écriture 2/2 entrée' }}</strong></span>
+                    <span>{{ entry.typeLabel }}</span>
+                  </div> -->
                 </td>
                 <td>
                   <div class="actor-cell">
@@ -490,6 +497,8 @@ const entryTVARate = (entry) => {
 const payments = ref([])
 const expenses = ref([])
 const entrees = ref([])
+const treasuryAccounts = ref([])
+const treasuryOperations = ref([])
 const currentUser = ref({})
 const exportRef = ref(null)
 const exportingPdf = ref(false)
@@ -684,8 +693,118 @@ const entreeEntries = computed(() => {
     })
 })
 
+const treasuryAccountKindById = computed(() => {
+  const map = new Map()
+  for (const account of (treasuryAccounts.value || [])) {
+    map.set(Number(account?.id), String(account?.kind || ''))
+  }
+  return map
+})
+const treasuryAccountLabelById = computed(() => {
+  const map = new Map()
+  for (const account of (treasuryAccounts.value || [])) {
+    const bank = String(account?.bank_name || '').trim()
+    const number = String(account?.account_number || '').trim()
+    const identity = bank && number ? `${bank} — ${number}` : (bank || number || '')
+    map.set(Number(account?.id), { name: String(account?.name || ''), identity })
+  }
+  return map
+})
+const treasuryEntries = computed(() => {
+  const out = []
+  for (const op of (treasuryOperations.value || [])) {
+    if (String(op?.status || '') !== 'paid') continue
+    const type = String(op?.operation_type || 'funding')
+    const amount = toNumber(op?.amount)
+    if (!amount) continue
+    const date = String(op?.date || '').slice(0, 10)
+    if (!date) continue
+    const createdAt = String(op?.created_at || op?.date || '')
+    const code = String(op?.code || op?.reference || '').trim() || 'Tresorerie'
+    const actor = String(op?.created_by_name || op?.updated_by_name || 'Systeme').trim() || 'Systeme'
+    const fromName = String(op?.from_account_name || treasuryAccountLabelById.value.get(Number(op?.from_account))?.name || '').trim()
+    const toName = String(op?.to_account_name || treasuryAccountLabelById.value.get(Number(op?.to_account))?.name || '').trim()
+    const bankDisplay = String(op?.bank_display || '').trim()
+    if (type === 'transfer') {
+      const fromKind = String(op?.from_account_kind || treasuryAccountKindById.value.get(Number(op?.from_account)) || '')
+      const toKind = String(op?.to_account_kind || treasuryAccountKindById.value.get(Number(op?.to_account)) || '')
+      const isApprovisionnement = fromKind === 'banque' && toKind === 'caisse'
+      const isVersement = fromKind === 'caisse' && toKind === 'banque'
+      const actionLabel = isVersement ? 'Versement (Caisse → Bank)' : 'Approvisionnement (Bank → Caisse)'
+      const baseTitle = String(op?.label || '').trim() || actionLabel
+      const route = `${fromName || '—'} → ${toName || '—'}`
+      const linkHint = `Écritures liées — ${code}`
+      out.push({
+        entryKey: `treasury-${op.id}-out`,
+        sourceType: 'treasury',
+        movementType: 'depense',
+        typeLabel: actionLabel,
+        id: Number(op?.id || 0) * 10,
+        date,
+        createdAt,
+        reference: code,
+        referenceHint: op?.reference ? `Reference: ${op.reference} — ${linkHint} (1/2 sortie)` : `${linkHint} (1/2 sortie)`,
+        title: isVersement ? `${baseTitle} — Sortie Caisse` : `${baseTitle} — Sortie Bank`,
+        subtitle: `${route}${bankDisplay ? ` — ${bankDisplay}` : ''}`,
+        actor,
+        actorHint: route,
+        recette: 0,
+        depense: amount,
+        subtotal_ht: 0,
+        tva_amount: 0,
+        tva_rate: 0,
+      })
+      out.push({
+        entryKey: `treasury-${op.id}-in`,
+        sourceType: 'treasury',
+        movementType: 'recette',
+        typeLabel: actionLabel,
+        id: Number(op?.id || 0) * 10 + 1,
+        date,
+        createdAt,
+        reference: code,
+        referenceHint: op?.reference ? `Reference: ${op.reference} — ${linkHint} (2/2 entrée)` : `${linkHint} (2/2 entrée)`,
+        title: isVersement ? `${baseTitle} — Entrée Bank` : `${baseTitle} — Entrée Caisse`,
+        subtitle: `${route}${bankDisplay ? ` — ${bankDisplay}` : ''}`,
+        actor,
+        actorHint: route,
+        recette: amount,
+        depense: 0,
+        subtotal_ht: 0,
+        tva_amount: 0,
+        tva_rate: 0,
+      })
+      continue
+    }
+    const isOut = type === 'withdrawal'
+    const label = type === 'funding' ? 'Approvisionnement' : 'Retrait'
+    const subtitle = type === 'funding' ? (toName || fromName) : (fromName || toName)
+    out.push({
+        entryKey: `treasury-${op.id}`,
+        sourceType: 'treasury',
+        movementType: isOut ? 'depense' : 'recette',
+        typeLabel: label,
+        id: Number(op?.id || 0),
+        date,
+        createdAt,
+        reference: code,
+        referenceHint: op?.reference ? `Reference: ${op.reference}` : '',
+        title: String(op?.label || '').trim() || label,
+        subtitle: bankDisplay ? `${subtitle} — ${bankDisplay}` : subtitle,
+        actor,
+        actorHint: subtitle,
+        recette: isOut ? 0 : amount,
+        depense: isOut ? amount : 0,
+        subtotal_ht: 0,
+        tva_amount: 0,
+        tva_rate: 0,
+    })
+  }
+  return out
+})
+
 const ledgerEntriesAsc = computed(() => {
-  return [...paymentEntries.value, ...entreeEntries.value, ...expenseEntries.value]
+  return [...paymentEntries.value, ...entreeEntries.value, ...expenseEntries.value, ...treasuryEntries.value]
     .filter(entry => entry.date)
     .sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date)
@@ -892,6 +1011,17 @@ const fetchEntrees = async () => {
   }
 }
 
+const fetchTreasury = async () => {
+  try {
+    const [accRes, opRes] = await Promise.all([api.get('treasury-accounts/'), api.get('treasury-operations/')])
+    treasuryAccounts.value = Array.isArray(accRes.data) ? accRes.data : []
+    treasuryOperations.value = Array.isArray(opRes.data) ? opRes.data : []
+  } catch {
+    treasuryAccounts.value = []
+    treasuryOperations.value = []
+  }
+}
+
 const exportXls = async () => {
   if (!canExportExcel.value || !exportRef.value) return
   exportingXls.value = true
@@ -929,7 +1059,7 @@ const exportPdf = async () => {
 
 onMounted(async () => {
   currentUser.value = getStoredUser()
-  await Promise.all([fetchPayments(), fetchExpenses(), fetchEntrees()])
+  await Promise.all([fetchPayments(), fetchExpenses(), fetchEntrees(), fetchTreasury()])
   if (process.client) {
     const update = () => {
       const nextIsMobile = window.innerWidth <= 992
@@ -1494,6 +1624,30 @@ onMounted(async () => {
 .ledger-card {
   border: 1px solid var(--gray-200);
 }
+.linked-pair-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.72rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+.treasury-pair-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  font-size: 0.85rem;
+}
+.treasury-pair-summary strong { color: var(--gray-900); }
 
 .table-total-row td {
   font-weight: 900;

@@ -1052,7 +1052,8 @@ const calculatedDuration = computed(() => {
     const s = new Date(form.value.start_date)
     const e = new Date(form.value.end_date)
     const diff = Math.ceil((e - s) / (1000 * 60 * 60 * 24))
-    const res = form.value.booking_type === 'hall' ? diff + 1 : diff
+    // Salle: jours inclusifs. Chambre: nuits, une seule journée = 1 nuit.
+    const res = form.value.booking_type === 'hall' ? diff + 1 : Math.max(1, diff)
     return res > 0 ? res : 0
   } catch {
     return 0

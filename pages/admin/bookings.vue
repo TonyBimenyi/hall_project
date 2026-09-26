@@ -2139,7 +2139,11 @@ const calculatePrice = () => {
   const start = new Date(form.value.start_date)
   const end = new Date(form.value.end_date)
   const diffTime = Math.abs(end - start)
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+  const rawDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  // Salle: facturation par jour, jours inclusifs (même jour = 1 jour).
+  // Chambre: facturation par nuit (1 nuit = check-in -> check-out le lendemain).
+  // Une réservation de chambre sur une seule journée compte 1 nuit.
+  const diffDays = form.value.booking_type === 'room' ? Math.max(1, rawDays) : rawDays + 1
   daysCount.value = diffDays
 
   if (form.value.booking_type === 'hall') {

@@ -1,13 +1,20 @@
 from rest_framework import serializers
 from decimal import Decimal, InvalidOperation
 from django.db.models import Q
-from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Room, Notification, Customer, Proforma
+from .models import Course,Hall, Booking, Personnel, Material, Expense, Entree, Payment, Room, Notification, Customer, Proforma, Student, TreasuryAccount, TreasuryOperation
 
 def _user_label(user):
     if not user:
         return ''
     full = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
     return full or getattr(user, 'email', '') or getattr(user, 'username', '')
+
+def _same_account(a, b):
+    if not a or not b:
+        return False
+    a_id = getattr(a, 'id', a)
+    b_id = getattr(b, 'id', b)
+    return a_id == b_id
 
 class HallSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
@@ -607,6 +614,7 @@ class MaterialSerializer(serializers.ModelSerializer):
 class ExpenseSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     updated_by_name = serializers.SerializerMethodField()
+    treasury_account_name = serializers.ReadOnlyField(source='treasury_account.name')
 
     class Meta:
         model = Expense
@@ -621,6 +629,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
 class EntreeSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     updated_by_name = serializers.SerializerMethodField()
+    treasury_account_name = serializers.ReadOnlyField(source='treasury_account.name')
 
     class Meta:
         model = Entree
@@ -677,6 +686,7 @@ class PaymentSerializer(serializers.ModelSerializer):
     )
     created_by_name = serializers.SerializerMethodField()
     updated_by_name = serializers.SerializerMethodField()
+    treasury_account_name = serializers.ReadOnlyField(source='treasury_account.name')
 
     class Meta:
         model = Payment
@@ -746,6 +756,103 @@ class PaymentSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         self._room_action = validated_data.pop('room_action', 'none')
         return super().update(instance, validated_data)
+
+class TreasuryAccountSerializer(serializers.ModelSerializer):
+    current_balance = serializers.ReadOnlyField()
+    kind_label = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TreasuryAccount
+        fields = '__all__'
+
+    def get_kind_label(self, obj):
+        return 'Caisse' if obj.kind == 'caisse' else 'Banque'
+
+    def get_created_by_name(self, obj):
+        return _user_label(getattr(obj, 'created_by', None))
+
+    def get_updated_by_name(self, obj):
+        return _user_label(getattr(obj, 'updated_by', None))
+
+    def validate(self, attrs):
+        kind = attrs.get('kind', getattr(self.instance, 'kind', 'caisse'))
+        if kind == 'banque':
+            bank_name = str(attrs.get('bank_name', getattr(self.instance, 'bank_name', '')) or '').strip()
+            if not bank_name:
+                raise serializers.ValidationError({'bank_name': 'Le nom de la banque est requis'})
+        initial = attrs.get('initial_balance', getattr(self.instance, 'initial_balance', None))
+        if initial is not None and Decimal(str(initial or 0)) < 0:
+            raise serializers.ValidationError({'initial_balance': 'Le solde initial doit être >= 0'})
+        return attrs
+
+
+class TreasuryOperationSerializer(serializers.ModelSerializer):
+    from_account_name = serializers.ReadOnlyField(source='from_account.name')
+    to_account_name = serializers.ReadOnlyField(source='to_account.name')
+    from_account_kind = serializers.ReadOnlyField(source='from_account.kind')
+    to_account_kind = serializers.ReadOnlyField(source='to_account.kind')
+    from_bank_label = serializers.SerializerMethodField()
+    to_bank_label = serializers.SerializerMethodField()
+    bank_display = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TreasuryOperation
+        fields = '__all__'
+
+    def get_created_by_name(self, obj):
+        return _user_label(getattr(obj, 'created_by', None))
+
+    def get_updated_by_name(self, obj):
+        return _user_label(getattr(obj, 'updated_by', None))
+
+    def _bank_label_for(self, account, fallback_bank='', fallback_number=''):
+        bank = str(getattr(account, 'bank_name', '') or fallback_bank or '').strip()
+        number = str(getattr(account, 'account_number', '') or fallback_number or '').strip()
+        if bank and number:
+            return f"{bank} — {number}"
+        return bank or number
+
+    def get_from_bank_label(self, obj):
+        return self._bank_label_for(getattr(obj, 'from_account', None), getattr(obj, 'bank_name', ''), getattr(obj, 'account_number', ''))
+
+    def get_to_bank_label(self, obj):
+        return self._bank_label_for(getattr(obj, 'to_account', None), getattr(obj, 'bank_name', ''), getattr(obj, 'account_number', ''))
+
+    def get_bank_display(self, obj):
+        return self.get_to_bank_label(obj) or self.get_from_bank_label(obj) or ''
+
+    def validate(self, attrs):
+        operation_type = attrs.get('operation_type', getattr(self.instance, 'operation_type', 'funding'))
+        amount = attrs.get('amount', getattr(self.instance, 'amount', None))
+        from_account = attrs.get('from_account', getattr(self.instance, 'from_account', None))
+        to_account = attrs.get('to_account', getattr(self.instance, 'to_account', None))
+        label = str(attrs.get('label', getattr(self.instance, 'label', '')) or '').strip()
+        if amount is not None and Decimal(str(amount or 0)) <= 0:
+            raise serializers.ValidationError({'amount': 'Le montant doit être supérieur à 0'})
+        if not label:
+            raise serializers.ValidationError({'label': "L'intitulé est requis"})
+        if operation_type == 'funding':
+            if not to_account:
+                raise serializers.ValidationError({'to_account': 'Choisissez le compte à approvisionner'})
+            if from_account and _same_account(from_account, to_account):
+                raise serializers.ValidationError({'from_account': 'Le compte source doit être différent du compte destinataire'})
+        elif operation_type == 'transfer':
+            if not from_account or not to_account:
+                raise serializers.ValidationError({'to_account': 'Choisissez le compte source et le compte destinataire'})
+            if _same_account(from_account, to_account):
+                raise serializers.ValidationError({'to_account': 'Le transfert doit se faire entre deux comptes différents'})
+            from_kind = str(getattr(from_account, 'kind', '') or '')
+            to_kind = str(getattr(to_account, 'kind', '') or '')
+            if {from_kind, to_kind} != {'banque', 'caisse'}:
+                raise serializers.ValidationError({'to_account': 'Transfert autorisé uniquement entre une Banque et une Caisse (Bank → Caisse ou Caisse → Bank)'})
+        elif operation_type == 'withdrawal':
+            if not from_account:
+                raise serializers.ValidationError({'from_account': 'Choisissez le compte à débiter'})
+        return attrs
 
 class NotificationSerializer(serializers.ModelSerializer):
     booking_code = serializers.ReadOnlyField(source='booking.code')
@@ -886,3 +993,26 @@ class ProformaSerializer(serializers.ModelSerializer):
             normalized.append(payload)
 
         return normalized
+
+
+class CourseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = ['id', 'course_name', 'duration']
+
+
+class StudentSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(
+        source='course.course_name',
+        read_only=True
+    )
+
+    class Meta:
+        model = Student
+        fields = [
+            'id',
+            'name',
+            'age',
+            'course',
+            'course_name'
+        ]

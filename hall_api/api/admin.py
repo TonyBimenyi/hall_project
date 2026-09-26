@@ -3,7 +3,7 @@ try:
     from unfold.admin import ModelAdmin
 except Exception:
     ModelAdmin = admin.ModelAdmin
-from .models import Hall, Booking, Personnel, Material, Expense, Payment, Notification, MagicLoginToken
+from .models import Hall, Booking, Personnel, Material, Expense, Payment, Notification, MagicLoginToken, TreasuryAccount, TreasuryOperation
 
 admin.site.site_header = 'Hall Management'
 admin.site.site_title = 'Hall Management'
@@ -87,3 +87,20 @@ class MagicLoginTokenAdmin(ModelAdmin):
     list_filter = ('used_at', 'expires_at', 'created_at')
     search_fields = ('user__username', 'user__email', 'token_hash')
     ordering = ('-created_at', '-id')
+
+
+@admin.register(TreasuryAccount)
+class TreasuryAccountAdmin(ModelAdmin):
+    list_display = ('id', 'name', 'kind', 'bank_name', 'initial_balance', 'is_active')
+    list_filter = ('kind', 'is_active')
+    search_fields = ('name', 'bank_name', 'account_number')
+    ordering = ('kind', 'name')
+
+
+@admin.register(TreasuryOperation)
+class TreasuryOperationAdmin(ModelAdmin):
+    list_display = ('id', 'code', 'operation_type', 'date', 'amount', 'from_account', 'to_account', 'bank_name', 'account_number', 'status')
+    list_filter = ('operation_type', 'status', 'date')
+    search_fields = ('code', 'label', 'reference', 'bank_name', 'account_number')
+    date_hierarchy = 'date'
+    ordering = ('-date', '-id')

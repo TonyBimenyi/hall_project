@@ -1,9 +1,10 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
-from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Notification, MagicLoginToken, AccountSecurityProfile, Room, Customer, Proforma
+from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Notification, MagicLoginToken, AccountSecurityProfile, Room, Customer, Proforma, Student, TreasuryAccount, TreasuryOperation
 from .serializers import (
     HallSerializer, BookingSerializer, PersonnelSerializer,
-    MaterialSerializer, ExpenseSerializer, EntreeSerializer, PaymentSerializer, NotificationSerializer, RoomSerializer, CustomerSerializer, ProformaSerializer
+    MaterialSerializer, ExpenseSerializer, EntreeSerializer, PaymentSerializer, NotificationSerializer, RoomSerializer, CustomerSerializer, ProformaSerializer, StudentSerializer,
+    TreasuryAccountSerializer, TreasuryOperationSerializer
 )
 
 from rest_framework.views import APIView
@@ -603,16 +604,22 @@ def _compute_room_addons_total(rooms, selected_services):
 def _compute_booking_totals(item: Hall | Room, start_dt: date, end_dt: date, selected_services, *, booking_type=None, discount_amount=Decimal('0.00')):
     if end_dt < start_dt:
         raise DjangoValidationError('La date fin doit être après la date début')
-    days = (end_dt - start_dt).days + 1
+    diff_days = (end_dt - start_dt).days
     if isinstance(item, Hall):
+        # Salle: facturation par jour, jours inclusifs (meme jour = 1 jour).
+        days = diff_days + 1
         base_total = (Decimal(days) * Decimal(str(item.price_per_day or '0.00'))).quantize(Decimal('0.01'))
         resolved_type = 'hall'
     elif isinstance(item, Room):
+        # Chambre: facturation par nuit (1 nuit = check-in -> check-out le lendemain).
+        # Une reservation sur une seule journee reste facturee 1 nuit.
+        days = max(1, diff_days)
         base_total = (Decimal(days) * Decimal(str(item.price_per_night or '0.00'))).quantize(Decimal('0.01'))
         resolved_type = 'room'
     else:
+        resolved_type = str(booking_type or '').strip().lower()
+        days = max(1, diff_days) if resolved_type == 'room' else diff_days + 1
         base_total = Decimal('0.00')
-        resolved_type = str(booking_type or '')
     addons_total, normalized_selected = _compute_addons_total(item, selected_services)
     final_type = str(booking_type or resolved_type or '').strip().lower()
     tcsth_base, tva_rate, tcsth_amount = _compute_tcsth_from_base_rooms(base_total, booking_type=final_type)
@@ -1309,7 +1316,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
             if end_dt < start_dt:
                 raise DjangoValidationError('La date fin doit être après la date début')
-            days = (end_dt - start_dt).days + 1
+            days = max(1, (end_dt - start_dt).days)
             base_accomodation_ht = (Decimal(days) * sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)).quantize(Decimal('0.01'))
             addons_total, normalized_selected = _compute_room_addons_total(selected_rooms, selected)
             _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
@@ -1394,7 +1401,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
             if end_dt < start_dt:
                 raise DjangoValidationError('La date fin doit être après la date début')
-            days = (end_dt - start_dt).days + 1
+            days = max(1, (end_dt - start_dt).days)
             base_accomodation_ht = (Decimal(days) * sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)).quantize(Decimal('0.01'))
             addons_total, normalized_selected = _compute_room_addons_total(selected_rooms, selected)
             _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
@@ -2108,6 +2115,59 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return response
 
 
+class TreasuryAccountViewSet(viewsets.ModelViewSet):
+    queryset = TreasuryAccount.objects.all().order_by('kind', 'name')
+    serializer_class = TreasuryAccountSerializer
+
+    @action(detail=True, methods=['get'])
+    def balance(self, request, pk=None):
+        account = self.get_object()
+        return Response({
+            'id': account.id,
+            'name': account.name,
+            'kind': account.kind,
+            'initial_balance': str(account.initial_balance),
+            'current_balance': str(account.current_balance),
+        })
+
+    @action(detail=False, methods=['get'])
+    def overview(self, request):
+        accounts = list(self.get_queryset())
+        total = Decimal('0.00')
+        payload = []
+        for account in accounts:
+            balance = account.current_balance
+            total += balance
+            payload.append({
+                'id': account.id,
+                'name': account.name,
+                'kind': account.kind,
+                'bank_name': account.bank_name,
+                'account_number': account.account_number,
+                'is_active': account.is_active,
+                'initial_balance': str(account.initial_balance),
+                'current_balance': str(balance),
+            })
+        return Response({'total': str(total), 'accounts': payload})
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=_actor(self.request))
+
+
+class TreasuryOperationViewSet(viewsets.ModelViewSet):
+    queryset = TreasuryOperation.objects.select_related('from_account', 'to_account').all().order_by('-date', '-id')
+    serializer_class = TreasuryOperationSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=_actor(self.request), updated_by=_actor(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=_actor(self.request))
+
+
 class ProformaViewSet(viewsets.ModelViewSet):
     queryset = Proforma.objects.all()
     serializer_class = ProformaSerializer
@@ -2138,7 +2198,7 @@ class ProformaViewSet(viewsets.ModelViewSet):
             selected_rooms = _get_rooms_by_ids(room_ids, fallback_room=room)
             if end_dt and start_dt and end_dt < start_dt:
                 raise DjangoValidationError('La date fin doit être après la date début')
-            days = ((end_dt - start_dt).days + 1) if (end_dt and start_dt) else 1
+            days = (max(1, (end_dt - start_dt).days)) if (end_dt and start_dt) else 1
             base_accomodation_ht = (Decimal(days) * sum(Decimal(str(item.price_per_night or '0.00')) for item in selected_rooms)).quantize(Decimal('0.01'))
             addons_total, normalized_selected = _compute_room_addons_total(selected_rooms, selected)
             _, tva_rate, tva_amount = _compute_tcsth_from_base_rooms(base_accomodation_ht, booking_type='room')
@@ -2317,3 +2377,19 @@ class ProformaViewSet(viewsets.ModelViewSet):
             'booking': BookingSerializer(booking).data,
             'proforma': ProformaSerializer(proforma).data,
         }, status=status.HTTP_201_CREATED)
+
+
+class StudentViewSet(viewsets.ModelViewSet):
+    queryset = Student.objects.all().order_by('id')
+    serializer_class = StudentSerializer
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+from .models import Course
+from .serializers import CourseSerializer
+
+
+
+class CourseViewSet(viewsets.ModelViewSet):
+    queryset = Course.objects.all()
+    serializer_class = CourseSerializer

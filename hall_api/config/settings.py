@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-1n@x%q^nl73*ywg879wh2!x!uvmn2wpt)3(c-1iit46!l(=c&p
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost','api.labertha-villa.com','testapi.labertha-villa.com']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost','api.labertha-villa.com','testapi.labertha-villa.com','lying-schnapps-doorknob.ngrok-free.dev']
 
 
 # Application definition
@@ -68,6 +68,12 @@ CSRF_TRUSTED_ORIGINS = [
     'https://www.labertha-villa.com',
     'https://test.labertha-villa.com',
     'https://www.test.labertha-villa.com',
+    'http://localhost:5173',
+
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://lying-schnapps-doorknob.ngrok-free.dev",
+
 ]
 
 REST_FRAMEWORK = {

@@ -296,6 +296,13 @@
             </select>
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label">Payé depuis (Caisse / Banque)</label>
+          <select v-model="form.treasury_account" class="form-select">
+            <option :value="null">Non affecte</option>
+            <option v-for="a in treasuryAccounts" :key="a.id" :value="a.id">{{ a.name }} ({{ formatMoney(a.current_balance) }})</option>
+          </select>
+        </div>
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showFormModal = false">Annuler</button>
@@ -380,6 +387,7 @@ const { buildHashSequenceMap } = useDisplayIds()
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
 
 const expenses = ref([])
+const treasuryAccounts = ref([])
 const currentUser = ref({})
 const tableRef = ref(null)
 const exportingPdf = ref(false)
@@ -535,9 +543,19 @@ const fetchExpenses = async () => {
   }
 }
 
+const fetchTreasuryAccounts = async () => {
+  try {
+    const { data } = await api.get('treasury-accounts/')
+    treasuryAccounts.value = Array.isArray(data) ? data : []
+  } catch {
+    treasuryAccounts.value = []
+  }
+}
+
 onMounted(() => {
   currentUser.value = getStoredUser()
   fetchExpenses()
+  fetchTreasuryAccounts()
   if (process.client) {
     const update = () => {
       const nextIsMobile = window.innerWidth <= 992
@@ -659,6 +677,7 @@ const form = ref({
   amount: 0,
   paid_by: '',
   paid_to: '',
+  treasury_account: null,
   status: 'paid'
 })
 const amountInput = moneyInputModel(form, 'amount')
@@ -673,6 +692,7 @@ const resetForm = () => {
     amount: 0,
     paid_by: currentExpenseUserLabel.value,
     paid_to: '',
+    treasury_account: null,
     status: 'paid'
   }
 }

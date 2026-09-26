@@ -454,6 +454,14 @@
           <input v-model="form.reference" type="text" class="form-input" required />
         </div>
 
+        <div class="form-group">
+          <label class="form-label">Encaisse sur (Caisse / Banque)</label>
+          <select v-model="form.treasury_account" class="form-select">
+            <option :value="null">Non affecte</option>
+            <option v-for="a in treasuryAccounts" :key="a.id" :value="a.id">{{ a.name }} ({{ formatMoney(a.current_balance) }})</option>
+          </select>
+        </div>
+
       </form>
       <template #footer>
         <button class="btn btn-outline" @click="showFormModal = false">Annuler</button>
@@ -586,6 +594,7 @@ const paymentBookingTVARate = (obj) => {
 
 const payments = ref([])
 const bookings = ref([])
+const treasuryAccounts = ref([])
 const currentUser = ref({})
 const exportRef = ref(null)
 const exportingPdf = ref(false)
@@ -876,6 +885,7 @@ const form = ref({
   method: 'Virement',
   kind: 'advance',
   status: 'paid',
+  treasury_account: null,
 })
 const amountInput = moneyInputModel(form, 'amount')
 
@@ -1062,6 +1072,15 @@ const fetchBookings = async () => {
   }
 }
 
+const fetchTreasuryAccounts = async () => {
+  try {
+    const { data } = await api.get('treasury-accounts/')
+    treasuryAccounts.value = Array.isArray(data) ? data : []
+  } catch {
+    treasuryAccounts.value = []
+  }
+}
+
 const resetForm = () => {
   form.value = {
     booking: actionableBookings.value[0]?.id || null,
@@ -1071,6 +1090,7 @@ const resetForm = () => {
     method: 'Virement',
     kind: 'advance',
     status: 'paid',
+    treasury_account: null,
   }
 }
 
@@ -1249,7 +1269,7 @@ watch(() => `${route.query.view || ''}:${route.query.focus || ''}:${payments.val
 
 onMounted(async () => {
   currentUser.value = getStoredUser()
-  await Promise.all([fetchPayments(), fetchBookings()])
+  await Promise.all([fetchPayments(), fetchBookings(), fetchTreasuryAccounts()])
   if (route.query.booking) openAddModal()
   openPaymentFromQuery()
   if (process.client) {

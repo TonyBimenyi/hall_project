@@ -291,6 +291,13 @@
           </select>
         </div>
         <div class="form-group">
+          <label class="form-label">Encaisse sur (Caisse / Banque)</label>
+          <select v-model="form.treasury_account" class="form-select">
+            <option :value="null">Non affecte</option>
+            <option v-for="a in treasuryAccounts" :key="a.id" :value="a.id">{{ a.name }} ({{ formatMoney(a.current_balance) }})</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label class="form-label">Note</label>
           <textarea v-model="form.notes" rows="3" class="form-textarea" placeholder="Commentaire ou justification..."></textarea>
         </div>
@@ -381,6 +388,7 @@ const { escapeHtml, documentBranding } = useDocumentBranding()
 const { getSanitizedExportHtml, buildPdfDocumentHtml, downloadHtmlAsXls, downloadPdfHtml, buildExportFileName } = useAdminExportDocuments()
 
 const entrees = ref([])
+const treasuryAccounts = ref([])
 const currentUser = ref({})
 const exportRef = ref(null)
 const exportingPdf = ref(false)
@@ -414,6 +422,7 @@ const form = ref({
   amount: 0,
   received_from: '',
   received_by: '',
+  treasury_account: null,
   notes: '',
   status: 'paid',
 })
@@ -696,6 +705,7 @@ const resetForm = () => {
     amount: 0,
     received_from: '',
     received_by: currentEntreeUserLabel.value,
+    treasury_account: null,
     notes: '',
     status: 'paid',
   }
@@ -719,6 +729,15 @@ const fetchEntrees = async () => {
     notify('Erreur lors du chargement des entrees', 'danger')
   } finally {
     loadingEntrees.value = false
+  }
+}
+
+const fetchTreasuryAccounts = async () => {
+  try {
+    const { data } = await api.get('treasury-accounts/')
+    treasuryAccounts.value = Array.isArray(data) ? data : []
+  } catch {
+    treasuryAccounts.value = []
   }
 }
 
@@ -836,6 +855,7 @@ const exportPdf = async () => {
 onMounted(() => {
   currentUser.value = getStoredUser()
   fetchEntrees()
+  fetchTreasuryAccounts()
   if (process.client) {
     const update = () => {
       const nextIsMobile = window.innerWidth <= 992
