@@ -1,6 +1,99 @@
 /* components.css - Modern & Elegant Components */
 
-/* Cards */
+/* Modern hero header for admin pages */
+.hero-header {
+  background: linear-gradient(135deg, var(--primary-light), var(--primary-dark));
+  color: var(--white);
+  border-radius: var(--rounded-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Summary cards – modern look (same as reports) */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--white);
+  border-radius: var(--rounded-lg);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-all);
+}
+.summary-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.summary-icon {
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+}
+.summary-icon.primary { background: var(--primary); color: var(--white); }
+.summary-icon.success { background: var(--success); color: var(--white); }
+.summary-icon.warning { background: var(--warning); color: var(--white); }
+.summary-icon.danger { background: var(--danger); color: var(--white); }
+
+/* Dark mode overrides */
+html[data-admin-theme="dark"] .hero-header { background: linear-gradient(135deg, #1a3a7a, #170b02); }
+html[data-admin-theme="dark"] .summary-card { background: var(--gray-800); color: var(--gray-200); }
+html[data-admin-theme="dark"] .summary-icon { opacity: 0.9; }
+
+/* Modern tab navigation */
+.ctrl-tabs {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--gray-200);
+}
+.ctrl-tab-btn {
+  padding: var(--space-2) var(--space-4);
+  font-weight: 600;
+  color: var(--gray-600);
+  border-bottom: 2px solid transparent;
+  transition: var(--transition-fast);
+}
+.ctrl-tab-btn.active {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.ctrl-tab-btn:hover {
+  color: var(--primary-dark);
+}
+
+/* Progress bar modern style */
+.ctrl-progress {
+  background: var(--gray-100);
+  border-radius: var(--rounded-lg);
+  padding: var(--space-2);
+}
+.progress-bar-track {
+  background: var(--gray-200);
+  border-radius: var(--rounded-md);
+  height: 0.75rem;
+}
+.progress-bar-fill {
+  background: var(--primary);
+  height: 100%;
+  border-radius: var(--rounded-md);
+  transition: width var(--transition-fast);
+}
+
+/* Ensure inputs have consistent width */
+.meta-bar .ctrl-input,
+.ctrl-section .ctrl-input {
+  max-width: 260px;
+}
+
 .card {
   background-color: var(--white);
   border-radius: var(--rounded-2xl);

@@ -159,7 +159,8 @@ export default {
         { title: 'Matériel', url: '/admin/materials', icon: 'fa-solid fa-box-open' },
         { title: 'Dépenses', url: '/admin/expenses', icon: 'fa-solid fa-money-bill-transfer' },
         { title: 'Personnel', url: '/admin/personnel', icon: 'fa-solid fa-users' },
-        { title: 'Rapports', url: '/admin/reports', icon: 'fa-solid fa-chart-line' }
+        { title: 'Rapports', url: '/admin/reports', icon: 'fa-solid fa-chart-line' },
+        { title: 'Contrôle', url: '/admin/controle', icon: 'fa-solid fa-clipboard-list' }
       ]
     }
   },

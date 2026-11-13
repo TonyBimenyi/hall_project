@@ -362,13 +362,13 @@
           </div>
           <div class="guide-step">
             <strong>3. Check-out</strong>
-            <span>Occupée → Nettoyage</span>
-            <small>Facture soldée, départ validé, séjour clôturé.</small>
+            <span>Occupée → Disponible</span>
+            <small>Facture soldée, départ validé, chambre remise en disponible.</small>
           </div>
           <div class="guide-step">
-            <strong>4. Chambre prête</strong>
-            <span>Nettoyage → Disponible</span>
-            <small>Le ménage confirme que la chambre peut repartir en vente.</small>
+            <strong>4. Remise en vente</strong>
+            <span>Disponible</span>
+            <small>La chambre est directement prête pour le prochain client.</small>
           </div>
         </div>
       </section>
@@ -867,7 +867,7 @@
           </div>
           <div class="stay-modal-checkout">
             <h3>Confirmer le départ</h3>
-            <p>Cette action clôture le séjour pour la chambre sélectionnée et la place en nettoyage.</p>
+            <p>Cette action clôture le séjour pour la chambre sélectionnée et la remet en disponible.</p>
             <div class="stay-modal-guest-line">
               <strong>Occupants:</strong>
               <span>{{ roomStayGuestNames(selectedRoomStay) || 'Aucune personne enregistrée' }}</span>

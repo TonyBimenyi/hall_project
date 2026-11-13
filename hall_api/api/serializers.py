@@ -288,7 +288,7 @@ class BookingSerializer(serializers.ModelSerializer):
             if checked_in_at and not checked_out_at:
                 stay_status = 'occupied'
             elif checked_out_at:
-                stay_status = 'cleaning'
+                stay_status = 'available'
             elif str(obj.status or '') == 'paid':
                 stay_status = 'reserved'
             else:

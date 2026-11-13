@@ -835,7 +835,7 @@ def _sync_room_status_for_booking(booking, room_action='none'):
         if checked_in_at and not checked_out_at:
             next_status = 'occupied'
         elif checked_out_at:
-            next_status = 'cleaning'
+            next_status = 'available'
         elif getattr(booking, 'status', '') in ('pending', 'confirmed', 'paid'):
             next_status = 'reserved'
         else:
@@ -850,7 +850,6 @@ def _refresh_room_reservation_state(room):
         return
 
     desired = 'available'
-    latest_checked_out_at = None
     candidate_bookings = Booking.objects.filter(
         booking_type='room',
         status__in=['pending', 'confirmed', 'paid'],
@@ -865,13 +864,10 @@ def _refresh_room_reservation_state(room):
             desired = 'occupied'
             break
         if checked_out_at:
-            parsed = parse_datetime(str(checked_out_at))
-            if parsed and (latest_checked_out_at is None or parsed > latest_checked_out_at):
-                latest_checked_out_at = parsed
+            continue
+        if booking.end_date and booking.end_date < timezone.localdate():
             continue
         desired = 'reserved'
-    if desired == 'available' and latest_checked_out_at is not None:
-        desired = 'cleaning'
     if room.status != desired:
         room.status = desired
         room.save(update_fields=['status', 'updated_at'])
@@ -915,6 +911,7 @@ def _check_out_booking_room(booking, room):
         raise DjangoValidationError("Cette chambre n'appartient pas à la réservation")
     booking.room_stays = stays
     _sync_room_status_for_booking(booking, 'check_out')
+    _refresh_room_reservation_state(room)
 
 def _normalize_role_label(value):
     text = str(value or '').strip().lower()

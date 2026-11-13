@@ -876,7 +876,7 @@ export default defineNuxtConfig({
       }
     }]
   ],
-   app: {
+  app: {
     head: {
       title: 'LaBertha Villa',
       meta: [
@@ -905,10 +905,10 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      // apiBase: "http://127.0.0.1:8000/api/",
-      apiBase: "https://api.labertha-villa.com/api/", 
+      apiBase: "http://127.0.0.1:8000/api/",
+      // apiBase: "https://api.labertha-villa.com/api/", 
       // apiBase: "https://testapi.labertha-villa.com/api/",
-         },
+    },
   },
 
   css: [
