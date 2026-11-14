@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from decimal import Decimal, InvalidOperation
 from django.db.models import Q
-from .models import Course,Hall, Booking, Personnel, Material, Expense, Entree, Payment, Room, Notification, Customer, Proforma, Student, TreasuryAccount, TreasuryOperation
+from .models import Controle, Course,Hall, Booking, Personnel, Material, Expense, Entree, Payment, Room, Notification, Customer, Proforma, Student, TreasuryAccount, TreasuryOperation
 
 def _user_label(user):
     if not user:
@@ -548,6 +548,17 @@ class PersonnelSerializer(serializers.ModelSerializer):
 
     def get_updated_by_name(self, obj):
         return _user_label(getattr(obj, 'updated_by', None))
+
+class ControleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Controle
+        fields = '__all__'
+        read_only_fields = ('controleur', 'created_by', 'created_at', 'updated_at')
+
+    def validate_data(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('Les données du contrôle doivent être un objet.')
+        return value
 
 class MaterialSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()

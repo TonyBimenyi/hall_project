@@ -22,6 +22,7 @@ router.register(r'treasury-accounts', views.TreasuryAccountViewSet)
 router.register(r'treasury-operations', views.TreasuryOperationViewSet)
 router.register(r'students', views.StudentViewSet)
 router.register(r'courses', views.CourseViewSet)
+router.register(r'controles', views.ControleViewSet)
 
 
 urlpatterns = [

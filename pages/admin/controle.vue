@@ -13,6 +13,10 @@
           </div>
         </div>
         <div class="hero-actions no-print">
+          <button class="btn btn-brass" type="button" :disabled="saving" @click="saveControle">
+            <i :class="saving ? 'fas fa-spinner fa-spin' : 'fas fa-floppy-disk'"></i>
+            {{ saving ? 'Enregistrement...' : 'Enregistrer' }}
+          </button>
           <button class="btn btn-ghost" @click="resetAll"><i class="fas fa-rotate-left"></i> Réinitialiser</button>
           <button class="btn btn-brass" @click="printPage"><i class="fas fa-print"></i> Imprimer</button>
         </div>
@@ -39,7 +43,7 @@
       </label>
       <label class="field grow">
         <span><i class="fas fa-user-pen"></i> Contrôleur</span>
-        <input v-model="form.controleur" type="text" class="input" placeholder="Nom du contrôleur" />
+        <input :value="controleurName" type="text" class="input" readonly />
       </label>
       <label class="field">
         <span><i class="fas fa-clock"></i> Session</span>
@@ -50,6 +54,103 @@
           <option value="journee">Journée complète</option>
         </select>
       </label>
+    </section>
+
+    <section class="panel history no-print">
+      <header class="history-head">
+        <div>
+          <h2>Historique des contrôles</h2>
+          <p>Rechercher les contrôles par date ou par contrôleur.</p>
+        </div>
+        <button class="btn btn-ghost history-refresh" type="button" :disabled="loadingHistory" @click="fetchHistory">
+          <i :class="loadingHistory ? 'fas fa-spinner fa-spin' : 'fas fa-rotate'"></i>
+          Actualiser
+        </button>
+      </header>
+      <form class="history-filters" @submit.prevent="fetchHistory">
+        <label class="field">
+          <span><i class="fas fa-calendar-day"></i> Date</span>
+          <input v-model="historyFilters.date" type="date" class="input" />
+        </label>
+        <label class="field grow">
+          <span><i class="fas fa-user-pen"></i> Contrôleur</span>
+          <input v-model="historyFilters.controleur" type="search" class="input" placeholder="Nom du contrôleur" />
+        </label>
+        <div class="history-filter-actions">
+          <button class="btn btn-brass" type="submit" :disabled="loadingHistory">
+            <i class="fas fa-magnifying-glass"></i> Rechercher
+          </button>
+          <button class="btn btn-outline" type="button" :disabled="loadingHistory" @click="clearHistoryFilters">
+            Effacer
+          </button>
+        </div>
+      </form>
+
+      <p v-if="loadingHistory" class="history-empty">Chargement de l’historique…</p>
+      <p v-else-if="!historyRecords.length" class="history-empty">Aucun contrôle trouvé.</p>
+      <div v-else class="history-list">
+        <details v-for="record in historyRecords" :key="record.id" class="history-record">
+          <summary>
+            <span class="history-record-date">{{ record.date }}</span>
+            <span>{{ record.controleur || 'Contrôleur inconnu' }}</span>
+            <span class="history-session">{{ sessionLabel(record.session) }}</span>
+            <i class="fas fa-chevron-down"></i>
+          </summary>
+          <div class="history-details">
+            <div v-for="(groups, section) in record.data?.checklists || {}" :key="section" class="history-section">
+              <h3>{{ sectionLabel(section) }}</h3>
+              <div v-for="(items, group) in groups" :key="group" class="history-group">
+                <h4>{{ group }}</h4>
+                <ul>
+                  <li v-for="(item, index) in items" :key="index">
+                    <i :class="item.done ? 'fas fa-circle-check history-done' : 'far fa-circle'"></i>
+                    {{ item.label }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <div v-if="record.data?.chambres?.length" class="history-section">
+              <h3>Chambres</h3>
+              <p v-for="room in record.data.chambres" :key="room.number">
+                <strong>{{ room.number }} :</strong>
+                {{ Object.values(room.checks || {}).filter(Boolean).length }} / {{ Object.keys(room.checks || {}).length }} points validés
+              </p>
+            </div>
+            <div v-if="record.data?.qualite" class="history-section">
+              <h3>Qualité et propreté</h3>
+              <p v-if="record.data.qualite.appreciation">
+                Appréciation : {{ record.data.qualite.appreciation }}
+              </p>
+              <p v-for="(zone, key) in record.data.qualite.zones || {}" :key="key">
+                <strong>{{ key }} :</strong> {{ zone.etat || 'Non renseigné' }}
+                <span v-if="zone.obs"> — {{ zone.obs }}</span>
+              </p>
+              <p v-for="(etat, zone) in record.data.qualite.proprete || {}" :key="zone">
+                <strong>{{ zone }} :</strong> {{ etat || 'Non renseigné' }}
+              </p>
+            </div>
+            <div v-if="record.data?.satisfaction" class="history-section">
+              <h3>Satisfaction</h3>
+              <p>Note : {{ record.data.satisfaction.note || 'Non renseignée' }}</p>
+              <p v-if="record.data.satisfaction.service">Service : {{ record.data.satisfaction.service }}</p>
+              <p v-if="record.data.satisfaction.remarques">Remarques : {{ record.data.satisfaction.remarques }}</p>
+              <p v-if="record.data.satisfaction.responsable">Responsable : {{ record.data.satisfaction.responsable }}</p>
+            </div>
+            <div v-if="record.data?.rapport" class="history-section">
+              <h3>Rapport</h3>
+              <p v-for="field in rapportFields" :key="field.key">
+                <strong>{{ field.label }} :</strong> {{ record.data.rapport[field.key] || '—' }}
+              </p>
+              <p v-if="record.data.rapport.situation">
+                <strong>Situation :</strong> {{ record.data.rapport.situation }}
+              </p>
+              <p v-if="record.data.rapport.decisions">
+                <strong>Décisions :</strong> {{ record.data.rapport.decisions }}
+              </p>
+            </div>
+          </div>
+        </details>
+      </div>
     </section>
 
     <!-- ═════════ ZONE STRIP (navigation + progression) ═════════ -->
@@ -235,13 +336,60 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { api } from '~/composables/useApi'
+import { notify } from '~/composables/useNotification'
+import { useUser } from '~/composables/useUser'
 
 definePageMeta({ layout: 'admin' })
 
 // ─── Meta ────────────────────────────────────────────────────────────────────
 const today = new Date().toISOString().slice(0, 10)
 const form = reactive({ date: today, controleur: '', session: 'journee' })
+const saving = ref(false)
+const currentUser = ref({})
+const controleurName = computed(() => (
+  `${currentUser.value.first_name || ''} ${currentUser.value.last_name || ''}`.trim() ||
+  currentUser.value.full_name ||
+  currentUser.value.username ||
+  currentUser.value.email ||
+  'Utilisateur connecté'
+))
+const historyFilters = reactive({ date: '', controleur: '' })
+const historyRecords = ref([])
+const loadingHistory = ref(false)
+
+const fetchHistory = async () => {
+  if (loadingHistory.value) return
+  loadingHistory.value = true
+  try {
+    const { data } = await api.get('controles/', {
+      params: {
+        ...(historyFilters.date ? { date: historyFilters.date } : {}),
+        ...(historyFilters.controleur.trim() ? { controleur: historyFilters.controleur.trim() } : {}),
+      },
+    })
+    historyRecords.value = Array.isArray(data) ? data : (data.results || [])
+  } catch (error) {
+    notify(error?.response?.data?.detail || 'Impossible de charger l’historique des contrôles', 'danger')
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+const clearHistoryFilters = () => {
+  historyFilters.date = ''
+  historyFilters.controleur = ''
+  fetchHistory()
+}
+
+const sessionLabel = (session) => ({
+  matin: 'Matin',
+  apres_midi: 'Après-midi',
+  soir: 'Soir',
+  journee: 'Journée complète',
+})[session] || session || '—'
+const sectionLabel = (section) => tabs.find(tab => tab.id === section)?.label || section
 
 // ─── Onglets ─────────────────────────────────────────────────────────────────
 const tabs = [
@@ -431,7 +579,48 @@ const resetAll = () => {
   Object.assign(satForm, { note: '', service: '', remarques: '', responsable: '' })
   Object.assign(rapportForm, emptyRapport())
 }
+
+const saveControle = async () => {
+  if (saving.value) return
+  if (!form.date) {
+    notify('Veuillez renseigner la date du contrôle', 'warning')
+    return
+  }
+
+  saving.value = true
+  try {
+    await api.post('controles/', {
+      date: form.date,
+      controleur: controleurName.value,
+      session: form.session,
+      data: JSON.parse(JSON.stringify({
+        checklists,
+        chambres: hkRooms,
+        qualite: {
+          zones: qualiteForm,
+          appreciation: qualiteGlobal.value,
+          proprete: propreteForm,
+        },
+        satisfaction: satForm,
+        rapport: rapportForm,
+      })),
+    })
+    notify('Contrôle enregistré avec succès')
+    await fetchHistory()
+  } catch (error) {
+    notify(error?.response?.data?.detail || 'Erreur lors de l’enregistrement du contrôle', 'danger')
+  } finally {
+    saving.value = false
+  }
+}
+
 const printPage = () => window.print()
+
+onMounted(() => {
+  currentUser.value = useUser().getUser()
+  form.controleur = controleurName.value
+  fetchHistory()
+})
 </script>
 
 <style scoped>
@@ -452,9 +641,7 @@ const printPage = () => window.print()
   --edge: var(--gray-400, #94a3b8);
   --hover: color-mix(in srgb, var(--gray-500, #64748b) 13%, transparent);
 
-  max-width: 1360px;
   margin: 0 auto;
-  padding: 1.25rem 1.5rem 3rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -540,6 +727,34 @@ const printPage = () => window.print()
 }
 .input:focus { outline: none; border-color: var(--brass); box-shadow: 0 0 0 3px var(--brass-soft); }
 textarea.input { resize: vertical; min-height: 4.5rem; }
+.history { padding: 1rem 1.25rem; }
+.history-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.history-head h2 { font-size: 1.1rem; font-weight: 700; }
+.history-head p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.history-refresh { color: var(--fg); border-color: var(--line); }
+.history-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 0.8rem; margin-top: 1rem; }
+.history-filters .field { flex: 1; }
+.history-filter-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.history .btn-outline { color: var(--fg); border-color: var(--line); background: transparent; }
+.history-empty { margin: 1rem 0 0; color: var(--muted); font-size: 0.9rem; }
+.history-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+.history-record { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.history-record summary { display: flex; align-items: center; gap: 1rem; padding: 0.8rem 1rem; cursor: pointer; list-style: none; }
+.history-record summary::-webkit-details-marker { display: none; }
+.history-record summary > span:nth-child(2) { flex: 1; }
+.history-record summary > i { color: var(--muted); transition: transform 0.15s; }
+.history-record[open] summary > i { transform: rotate(180deg); }
+.history-record-date { font-weight: 700; font-variant-numeric: tabular-nums; }
+.history-session { color: var(--muted); font-size: 0.85rem; }
+.history-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.9rem; padding: 0.2rem 1rem 1rem; }
+.history-section { min-width: 0; padding: 0.75rem; background: var(--hover); border-radius: 9px; }
+.history-section h3 { margin-bottom: 0.5rem; font-size: 0.9rem; }
+.history-group + .history-group { margin-top: 0.65rem; }
+.history-group h4 { margin-bottom: 0.25rem; font-size: 0.82rem; }
+.history-section ul { display: grid; gap: 0.25rem; margin: 0; padding: 0; list-style: none; }
+.history-section li, .history-section p { margin: 0.2rem 0; font-size: 0.82rem; line-height: 1.4; overflow-wrap: anywhere; }
+.history-section li i { width: 1rem; color: var(--muted); }
+.history-section li .history-done { color: var(--ok); }
 
 /* ───────── Bande de zones (navigation + progression) ───────── */
 .strip {

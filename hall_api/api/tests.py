@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from .models import Booking, Hall, Payment, Room
+from .models import Booking, Controle, Hall, Payment, Room
 from .views import _compute_booking_totals, _compute_room_addons_total
 
 
@@ -62,6 +62,66 @@ class PendingBookingAutomationTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Annulation automatique', mail.outbox[0].subject)
         self.assertIn(str(booking.id), mail.outbox[0].body)
+
+
+class ControleApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username='controleur',
+            password='test-pass-123',
+            first_name='Alice',
+            last_name='Test',
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_saves_control_data_and_records_creator(self):
+        control_data = {
+            'checklists': {'salle': {'avant': [{'label': 'Salle prête', 'done': True}]}},
+            'rapport': {'nb_clients': '12', 'decisions': 'Suivi requis'},
+        }
+
+        response = self.client.post('/api/controles/', {
+            'date': str(timezone.localdate()),
+            'controleur': 'A. Test',
+            'session': 'matin',
+            'data': control_data,
+        }, format='json')
+
+        self.assertEqual(response.status_code, 201, getattr(response, 'data', None))
+        controle = Controle.objects.get(id=response.data['id'])
+        self.assertEqual(controle.date, timezone.localdate())
+        self.assertEqual(controle.controleur, 'Alice Test')
+        self.assertEqual(controle.session, 'matin')
+        self.assertEqual(controle.data, control_data)
+        self.assertEqual(controle.created_by, self.user)
+
+    def test_filters_control_history_by_date_and_controller(self):
+        today = timezone.localdate()
+        response = self.client.post('/api/controles/', {
+            'date': str(today),
+            'session': 'matin',
+            'data': {},
+        }, format='json')
+        self.assertEqual(response.status_code, 201, getattr(response, 'data', None))
+
+        Controle.objects.create(
+            date=today - timedelta(days=1),
+            controleur='Other Controller',
+            session='matin',
+            data={},
+            created_by=self.user,
+        )
+
+        date_response = self.client.get('/api/controles/', {'date': str(today)})
+        self.assertEqual(date_response.status_code, 200)
+        self.assertEqual(len(date_response.data), 1)
+        self.assertEqual(date_response.data[0]['date'], str(today))
+
+        controller_response = self.client.get('/api/controles/', {'controleur': 'alice'})
+        self.assertEqual(controller_response.status_code, 200)
+        self.assertEqual(len(controller_response.data), 1)
+        self.assertEqual(controller_response.data[0]['controleur'], 'Alice Test')
 
 
 class BookingAddonsPricingTests(TestCase):

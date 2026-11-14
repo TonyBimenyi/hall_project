@@ -1,8 +1,8 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
-from .models import Hall, Booking, Personnel, Material, Expense, Entree, Payment, Notification, MagicLoginToken, AccountSecurityProfile, Room, Customer, Proforma, Student, TreasuryAccount, TreasuryOperation
+from .models import Controle, Hall, Booking, Personnel, Material, Expense, Entree, Payment, Notification, MagicLoginToken, AccountSecurityProfile, Room, Customer, Proforma, Student, TreasuryAccount, TreasuryOperation
 from .serializers import (
-    HallSerializer, BookingSerializer, PersonnelSerializer,
+    ControleSerializer, HallSerializer, BookingSerializer, PersonnelSerializer,
     MaterialSerializer, ExpenseSerializer, EntreeSerializer, PaymentSerializer, NotificationSerializer, RoomSerializer, CustomerSerializer, ProformaSerializer, StudentSerializer,
     TreasuryAccountSerializer, TreasuryOperationSerializer
 )
@@ -18,7 +18,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
 from django.conf import settings
@@ -26,7 +26,7 @@ from django.core.mail import send_mail
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.password_validation import validate_password
 from datetime import timedelta, date
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_date, parse_datetime
 import hashlib
 import secrets
 import unicodedata
@@ -2390,3 +2390,31 @@ from .serializers import CourseSerializer
 class CourseViewSet(viewsets.ModelViewSet):
     queryset = Course.objects.all()
     serializer_class = CourseSerializer
+
+
+class ControleViewSet(viewsets.ModelViewSet):
+    queryset = Controle.objects.all().order_by('-date', '-id')
+    serializer_class = ControleSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        date_filter = self.request.query_params.get('date', '').strip()
+        if date_filter:
+            parsed_date = parse_date(date_filter)
+            if parsed_date is None:
+                raise ValidationError({'date': 'Format de date invalide (YYYY-MM-DD)'})
+            queryset = queryset.filter(date=parsed_date)
+
+        controleur_filter = self.request.query_params.get('controleur', '').strip()
+        if controleur_filter:
+            queryset = queryset.filter(controleur__icontains=controleur_filter)
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        full_name = f'{user.first_name} {user.last_name}'.strip()
+        serializer.save(
+            created_by=_actor(self.request),
+            controleur=full_name or user.get_username(),
+        )

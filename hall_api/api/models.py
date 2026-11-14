@@ -435,6 +435,31 @@ class Entree(models.Model):
     def __str__(self):
         return self.title or self.reference
 
+class Controle(models.Model):
+    SESSION_CHOICES = [
+        ('matin', 'Matin'),
+        ('apres_midi', 'Après-midi'),
+        ('soir', 'Soir'),
+        ('journee', 'Journée complète'),
+    ]
+
+    date = models.DateField()
+    controleur = models.CharField(max_length=100, blank=True, default='')
+    session = models.CharField(max_length=20, choices=SESSION_CHOICES, default='journee')
+    data = models.JSONField(default=dict)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='controles',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Contrôle du {self.date} - {self.controleur}"
+
 class Payment(models.Model):
     STATUS_CHOICES = [
         ('paid', 'Complété'),
